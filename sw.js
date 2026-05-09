@@ -1,7 +1,7 @@
 // ─── SERVICE WORKER — Christ Media PWA ───
-// Version 2.1 — Correction clone error + Firebase exclus du cache
+// Version 2.2 — Cache v5 : force mise à jour sur tous les appareils
 
-const CACHE_NAME = 'christ-media-v4';
+const CACHE_NAME = 'christ-media-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -58,7 +58,6 @@ self.addEventListener('fetch', event => {
   // 2. Firebase et APIs externes → toujours réseau, jamais de cache
   const isNetworkOnly = NETWORK_ONLY_DOMAINS.some(domain => url.includes(domain));
   if (isNetworkOnly) {
-    // Laisser passer sans interception (pas de event.respondWith)
     return;
   }
 
@@ -70,10 +69,8 @@ self.addEventListener('fetch', event => {
     caches.match(event.request).then(cached => {
       if (cached) return cached;
 
-      // Pas en cache → fetch réseau puis mettre en cache
       return fetch(event.request)
         .then(response => {
-          // Vérifier que la réponse est valide avant de cloner
           if (
             !response ||
             response.status !== 200 ||
@@ -82,7 +79,6 @@ self.addEventListener('fetch', event => {
             return response;
           }
 
-          // Cloner AVANT toute utilisation
           const responseToCache = response.clone();
 
           caches.open(CACHE_NAME).then(cache => {
@@ -92,7 +88,6 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // Hors ligne et pas en cache → page offline si disponible
           if (event.request.destination === 'document') {
             return caches.match('./index.html');
           }
