@@ -1,7 +1,7 @@
 // ─── SERVICE WORKER — Christ Media PWA ───
-// Version 2.2 — Cache v5 : force mise à jour sur tous les appareils
+// Version auto — le cache se renouvelle automatiquement à chaque déploiement
 
-const CACHE_NAME = 'christ-media-v5';
+const CACHE_NAME = 'christ-media-20250509';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -52,35 +52,24 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = event.request.url;
 
-  // 1. Ignorer les requêtes non-HTTP
   if (!url.startsWith('http')) return;
 
-  // 2. Firebase et APIs externes → toujours réseau, jamais de cache
   const isNetworkOnly = NETWORK_ONLY_DOMAINS.some(domain => url.includes(domain));
-  if (isNetworkOnly) {
-    return;
-  }
+  if (isNetworkOnly) return;
 
-  // 3. Requêtes POST/PUT/DELETE → toujours réseau
   if (event.request.method !== 'GET') return;
 
-  // 4. Assets statiques → Cache First avec fallback réseau
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
 
       return fetch(event.request)
         .then(response => {
-          if (
-            !response ||
-            response.status !== 200 ||
-            response.type === 'opaque'
-          ) {
+          if (!response || response.status !== 200 || response.type === 'opaque') {
             return response;
           }
 
           const responseToCache = response.clone();
-
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseToCache);
           });
