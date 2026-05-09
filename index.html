@@ -7909,12 +7909,8 @@ function connexionEmail(){
     return;
   }
 
-  // ── DEBUG : afficher l'état au moment du clic ──
-  const nbUsersLocal = (S.utilisateurs||[]).length;
-  const nbUsersDefault = (defaultData.utilisateurs||[]).length;
+  // ── DEBUG léger ──
   const fbStatus = fbReady ? 'Firebase OK' : 'Firebase non prêt';
-  console.log('[LOGIN] email:', email, '| users local:', nbUsersLocal, '| default:', nbUsersDefault, '| fb:', fbStatus);
-  // Afficher brièvement dans l'UI pour diagnostic
   if(errEl){
     errEl.style.color='var(--text3)';
     errEl.textContent=`Connexion en cours… (${fbStatus})`;
@@ -7930,7 +7926,7 @@ function connexionEmail(){
     });
   }
 
-  // Si Firebase est disponible ET en ligne → toujours vérifier Firebase en premier
+  // Si Firebase disponible ET en ligne → toujours vérifier Firebase en premier
   // (garantit la synchro même si localStorage est vide sur un nouvel appareil)
   if(fbReady && navigator.onLine){
     const btnLogin=document.querySelector('.login-btn');
@@ -7939,13 +7935,9 @@ function connexionEmail(){
     return;
   }
 
-  // Hors ligne : chercher dans les sources locales uniquement
-  // 1. S.utilisateurs (localStorage)
+  // Hors ligne : sources locales uniquement
   let u=_trouverUser(S.utilisateurs);
-  console.log('[LOGIN] trouvé dans S.utilisateurs:', !!u);
-  // 2. defaultData intégré (compte admin de secours)
   if(!u) u=_trouverUser(defaultData.utilisateurs);
-  console.log('[LOGIN] trouvé dans defaultData:', !!u);
 
   if(!u){
     if(errEl){errEl.style.color='';errEl.textContent='Email ou mot de passe incorrect.';errEl.style.display='block';}
@@ -7965,7 +7957,7 @@ async function _connexionViaFirebase(email, password, errEl, btnLogin){
     if(fbReady && db){
       if(errEl){errEl.textContent='Connexion Firebase… (réseau lent possible)';errEl.style.display='block';}
       const fbPromise=db.ref('christmedia/data/utilisateurs').once('value');
-      // Timeout porté à 15s pour les connexions lentes (Togo)
+      // Timeout 15s pour connexions lentes (Togo)
       const snap=await Promise.race([fbPromise, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),15000))]);
       const fbUsers=snap.val();
       if(Array.isArray(fbUsers)&&fbUsers.length>0){
@@ -7979,7 +7971,7 @@ async function _connexionViaFirebase(email, password, errEl, btnLogin){
     }
   }catch(e){
     console.warn('Firebase login:',e.message);
-    // Si timeout → tenter le compte admin intégré en dernier recours
+    // Timeout → fallback compte admin intégré
     if(e.message==='timeout'){
       const adminSecours=defaultData.utilisateurs.find(x=>{
         if((x.email||'').toLowerCase()!==email) return false;
