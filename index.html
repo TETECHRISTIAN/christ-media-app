@@ -1140,6 +1140,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><path d="M8 11V2M5 5l3-3 3 3M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Importer données
     </div>
+    <div class="ni admin-only" onclick="masterSave()" id="master-save-btn" style="color:#fff;background:linear-gradient(135deg,#b8860b,#daa520);border-radius:var(--rs);margin-bottom:4px;font-weight:700;letter-spacing:.3px;box-shadow:0 2px 8px rgba(184,134,11,.4);transition:all .2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px rgba(184,134,11,.55)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(184,134,11,.4)'">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      ⚡ Master Save
+    </div>
     <div class="ni" onclick="doLogout()" style="color:rgba(255,100,100,.8);margin-top:4px">
       <svg viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 11l3-3-3-3M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Déconnecter
@@ -2193,6 +2197,8 @@ async function startFirebaseSync(){
         // (permet une vraie synchronisation en temps réel sans crash mémoire)
         activerListenerVentesOnly();
       }
+      // Activer le listener Master Save sur TOUS les appareils
+      activerListenerMasterSave();
     }else{
       await initAuth(); // session locale
       setSyncStatus('offline','Mode hors ligne');
@@ -2285,6 +2291,8 @@ window.addEventListener('online', async()=>{
       } else {
         activerListenerVentesOnly();
       }
+      // Réactiver le listener Master Save après reconnexion
+      activerListenerMasterSave();
     }
   }
 });
@@ -15818,7 +15826,93 @@ async function envoyerCoachIA(question, btn){
   if(btn) btn.style.opacity='1';
   chat.scrollTop = chat.scrollHeight;
 }
-// ─── DIAGNOSTIC LOGIN ───
+// ─── MASTER SAVE ───
+// L'admin pousse ses données comme référence absolue.
+// Tous les autres appareils reçoivent le signal et rechargent immédiatement.
+async function masterSave(){
+  if(S.session?.role !== 'admin'){ toast('⛔ Réservé à l\'admin'); return; }
+  if(!fbReady || !db){ toast('⚠️ Firebase non disponible'); return; }
+  if(!navigator.onLine){ toast('⚠️ Connexion internet requise pour Master Save'); return; }
+
+  const btn = document.getElementById('master-save-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if(btn){ btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/></svg> Envoi...'; btn.style.opacity='0.7'; }
+
+  // Générer une version maître (timestamp)
+  genVersion();
+  S.version = Date.now();
+  saveLocal(S);
+
+  // 1. Écrire toutes les données dans Firebase
+  const ok = await saveToFirebase(S);
+  if(!ok){
+    toast('❌ Échec de l\'écriture Firebase');
+    if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
+    return;
+  }
+
+  // 2. Écrire le signal master_save avec timestamp + auteur
+  const signal = {
+    ts: S.version,
+    par: S.session?.nom || 'Admin',
+    email: S.session?.email || '',
+    at: new Date().toISOString()
+  };
+  await db.ref('christmedia/master_save').set(signal);
+
+  toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
+  if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
+}
+
+// ─── LISTENER MASTER SAVE (tous les appareils) ───
+// Dès qu'un master_save est détecté sur Firebase, recharger les données locales
+let _masterSaveListener = null;
+let _dernierMasterSaveTs = 0;
+
+function activerListenerMasterSave(){
+  if(!fbReady || !db) return;
+  if(_masterSaveListener) return; // déjà actif
+
+  _masterSaveListener = db.ref('christmedia/master_save').on('value', async (snap) => {
+    const signal = snap.val();
+    if(!signal || !signal.ts) return;
+    // Ignorer si c'est notre propre Master Save (admin sur le même appareil)
+    if(signal.ts <= _dernierMasterSaveTs) return;
+    // Ignorer si c'est nous qui venons de l'émettre (même session + moins de 3s)
+    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 3000);
+    _dernierMasterSaveTs = signal.ts;
+    if(estEmetteur) return;
+
+    // Signal reçu d'un autre appareil → recharger depuis Firebase
+    console.log('[MASTER SAVE] Signal reçu de', signal.par, 'à', signal.at);
+    toast(`⚡ Master Save de ${signal.par} — Synchronisation en cours...`, 4000);
+
+    // Attendre 1.5s pour laisser Firebase propager les données
+    await new Promise(r => setTimeout(r, 1500));
+
+    const remote = await loadFromFirebase();
+    if(!remote){ toast('⚠️ Impossible de charger les données maître'); return; }
+
+    // Conserver la session en cours (ne pas déconnecter l'utilisateur)
+    const session = S.session;
+    const boutiqueActive = S.boutique_active || remote.boutique_active;
+
+    // Écraser toutes les données locales avec les données maître
+    Object.assign(S, remote);
+    S.session = session;
+    S.boutique_active = boutiqueActive;
+    saveLocal(S);
+
+    toast('✅ Synchronisation Master Save terminée !', 3000);
+
+    // Recharger l'interface
+    setTimeout(() => {
+      renderAll();
+      if(typeof majDashboard === 'function') majDashboard();
+    }, 500);
+  });
+}
+
 function afficherDiag(){
   const p = document.getElementById('diag-panel');
   if(!p) return;
