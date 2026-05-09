@@ -1554,8 +1554,6 @@ const defaultData={
   },
   utilisateurs:[
     {id:1,nom:'Christian',role:'admin',pin:'1234',email:'christmedia176@gmail.com',password:'admin1234',emoji:'👑',actif:true,boutique_id:null}
-    // Rôles disponibles: 'admin', 'caissier', 'vendeur'
-    // boutique_id: null = admin (accès toutes boutiques), ou id de boutique pour vendeur/caissier
   ],
   session:{uid:null,role:null,nom:null}
 };
@@ -7919,7 +7917,7 @@ function connexionEmail(){
   // Afficher brièvement dans l'UI pour diagnostic
   if(errEl){
     errEl.style.color='var(--text3)';
-    errEl.textContent=`Recherche… (${nbUsersLocal} users local, ${fbStatus})`;
+    errEl.textContent=`Connexion en cours… (${fbStatus})`;
     errEl.style.display='block';
   }
 
@@ -7932,6 +7930,16 @@ function connexionEmail(){
     });
   }
 
+  // Si Firebase est disponible ET en ligne → toujours vérifier Firebase en premier
+  // (garantit la synchro même si localStorage est vide sur un nouvel appareil)
+  if(fbReady && navigator.onLine){
+    const btnLogin=document.querySelector('.login-btn');
+    if(btnLogin){btnLogin.disabled=true;}
+    _connexionViaFirebase(email, password, errEl, btnLogin);
+    return;
+  }
+
+  // Hors ligne : chercher dans les sources locales uniquement
   // 1. S.utilisateurs (localStorage)
   let u=_trouverUser(S.utilisateurs);
   console.log('[LOGIN] trouvé dans S.utilisateurs:', !!u);
@@ -7940,12 +7948,10 @@ function connexionEmail(){
   console.log('[LOGIN] trouvé dans defaultData:', !!u);
 
   if(!u){
-    // Toujours tenter Firebase si l'auth locale échoue
-    // (les données locales peuvent être obsolètes sur un autre appareil)
-    if(errEl){errEl.style.color='';errEl.textContent='Vérification en cours…';errEl.style.display='block';}
-    const btnLogin=document.querySelector('.login-btn');
-    if(btnLogin){btnLogin.disabled=true;}
-    _connexionViaFirebase(email, password, errEl, btnLogin);
+    if(errEl){errEl.style.color='';errEl.textContent='Email ou mot de passe incorrect.';errEl.style.display='block';}
+    const pwEl=document.getElementById('login-password');
+    if(pwEl){pwEl.value='';pwEl.focus();}
+    setTimeout(()=>{if(errEl)errEl.style.display='none';},4000);
     return;
   }
 
@@ -7957,8 +7963,10 @@ async function _connexionViaFirebase(email, password, errEl, btnLogin){
   let u=null;
   try{
     if(fbReady && db){
+      if(errEl){errEl.textContent='Connexion Firebase… (réseau lent possible)';errEl.style.display='block';}
       const fbPromise=db.ref('christmedia/data/utilisateurs').once('value');
-      const snap=await Promise.race([fbPromise, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))]);
+      // Timeout porté à 15s pour les connexions lentes (Togo)
+      const snap=await Promise.race([fbPromise, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),15000))]);
       const fbUsers=snap.val();
       if(Array.isArray(fbUsers)&&fbUsers.length>0){
         S.utilisateurs=fbUsers; saveLocal(S);
@@ -7969,7 +7977,24 @@ async function _connexionViaFirebase(email, password, errEl, btnLogin){
         });
       }
     }
-  }catch(e){console.warn('Firebase login:',e.message);}
+  }catch(e){
+    console.warn('Firebase login:',e.message);
+    // Si timeout → tenter le compte admin intégré en dernier recours
+    if(e.message==='timeout'){
+      const adminSecours=defaultData.utilisateurs.find(x=>{
+        if((x.email||'').toLowerCase()!==email) return false;
+        return String(x.password||'')===password||String(x.pin||'')===password;
+      });
+      if(adminSecours){
+        console.log('[LOGIN] Timeout Firebase — connexion via compte admin intégré');
+        if(btnLogin){btnLogin.disabled=false;}
+        if(errEl){errEl.style.color='var(--amber)';errEl.textContent='⚠️ Firebase lent — connexion locale.';errEl.style.display='block';}
+        setTimeout(()=>{if(errEl)errEl.style.display='none';},3000);
+        _ouvrirSession(adminSecours);
+        return;
+      }
+    }
+  }
   if(btnLogin){btnLogin.disabled=false;}
   if(!u){
     const msg = (S.utilisateurs&&S.utilisateurs.some(x=>(x.email||'').toLowerCase()===email))
