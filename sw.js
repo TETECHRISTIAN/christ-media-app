@@ -1,7 +1,7 @@
 // ─── SERVICE WORKER — Christ Media PWA ───
 // Version auto — le cache se renouvelle automatiquement à chaque déploiement
 
-const CACHE_NAME = 'christ-media-20250509';
+const CACHE_NAME = 'christ-media-20250511';
 const STATIC_ASSETS = [
   './',
   './index.html',
