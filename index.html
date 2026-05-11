@@ -2086,7 +2086,9 @@ let S=loadData();
 // On limite donc le temps réel sur mobile et on privilégie la sync manuelle/auto.
 const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const IS_LOW_RAM = (typeof navigator.deviceMemory === 'number') && navigator.deviceMemory <= 2;
-const DISABLE_HEAVY_REALTIME = IS_MOBILE || IS_LOW_RAM;
+// FIX SYNCHRO : listener complet activé sur TOUS les appareils (mobile inclus)
+// L'ancien mode "ventes-only" sur mobile empêchait la sync des dettes, stock, achats...
+const DISABLE_HEAVY_REALTIME = false;
 
 // ─── ANDROID SAFE REALTIME (VENTES ONLY) ───
 // Sur Android/low-RAM, on évite le listener global (trop lourd)
@@ -2186,14 +2188,12 @@ async function startFirebaseSync(){
         setSyncStatus('online','Synchronisé ✓');
       }
       // Activer la sync temps réel après le chargement initial
-      // FIX anti-crash mobile : sur mobile on évite le listener global (trop lourd)
+      // FIX SYNCHRO : listener complet sur tous les appareils (mobile inclus)
       if(!DISABLE_HEAVY_REALTIME){
         activerListenerTempsReel();
       } else {
-        console.warn('[SYNC] Temps réel global désactivé (mobile/low-ram). Mode ventes-only activé.');
-        // Android/low-RAM : activer un listener léger uniquement sur les ventes
-        // (permet une vraie synchronisation en temps réel sans crash mémoire)
-        activerListenerVentesOnly();
+        console.warn('[SYNC] Mode complet forcé sur tous appareils.');
+        activerListenerTempsReel();
       }
       // Activer le listener Master Save sur TOUS les appareils
       activerListenerMasterSave();
@@ -2287,7 +2287,7 @@ window.addEventListener('online', async()=>{
       if(!DISABLE_HEAVY_REALTIME){
         activerListenerTempsReel();
       } else {
-        activerListenerVentesOnly();
+        activerListenerTempsReel();
       }
       // Réactiver le listener Master Save après reconnexion
       activerListenerMasterSave();
@@ -15895,8 +15895,10 @@ function activerListenerMasterSave(){
     if(!signal || !signal.ts) return;
     // Ignorer si c'est notre propre Master Save (admin sur le même appareil)
     if(signal.ts <= _dernierMasterSaveTs) return;
-    // Ignorer si c'est nous qui venons de l'émettre (même session + moins de 3s)
-    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 3000);
+    // Ignorer uniquement si c'est nous qui venons de l'émettre ET on est admin
+    // FIX : la vérification par email était trop large (les portables partageant parfois le même compte)
+    // On ignore seulement si même session + même ts exact
+    const estEmetteur = (S.session?.role === 'admin') && (S.session?.email === signal.email) && (Date.now() - signal.ts < 2000);
     _dernierMasterSaveTs = signal.ts;
     if(estEmetteur) return;
 
