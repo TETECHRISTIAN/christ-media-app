@@ -5187,10 +5187,18 @@ function rTresorerie(){
   const dep=depensesB.reduce((s,d)=>s+d.mt,0);
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const detteFour=S.fournisseurs.reduce((s,f)=>s+f.dette,0);
-  const creanceClients=S.clients.reduce((s,c)=>s+c.solde,0)+vi;
+  // Emprunts perso non soldés (argent qu'on doit rembourser)
+  const empruntsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
+  const totalEmpruntsPerso=empruntsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
+  // Prêts perso non soldés (argent qu'on doit récupérer)
+  const pretsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
+  const totalPretsPerso=pretsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
+  // Total dettes = fournisseurs + emprunts perso
+  const totalDettes=detteFour+totalEmpruntsPerso;
+  const creanceClients=S.clients.reduce((s,c)=>s+c.solde,0)+vi+totalPretsPerso;
   const tresorerie=vp-dep;
   const sv=stockB.reduce((s,a)=>s+(sa(a)*a.pv),0);
-  const patrimoine=tresorerie+sv-detteFour;
+  const patrimoine=tresorerie+sv-totalDettes;
 
   const clientsDebiteurs=S.clients.filter(c=>c.solde>0);
   const ventesCredit=ventesB.filter(v=>v.statut==='Non payé');
@@ -5213,9 +5221,9 @@ function rTresorerie(){
         <div class="ms">${ventesCredit.length} ventes crédit + soldes clients</div>
       </div>
       <div class="card" style="border-left:3px solid var(--red)">
-        <div class="ct">Dettes fournisseurs</div>
-        <div class="fin-amount" style="color:var(--red)">${F(detteFour)}</div>
-        <div class="ms">${foursDette.length} fournisseur(s) à régler</div>
+        <div class="ct">Total dettes</div>
+        <div class="fin-amount" style="color:var(--red)">${F(totalDettes)}</div>
+        <div class="ms">${foursDette.length} fournisseur(s) + ${empruntsPerso.length} emprunt(s) perso</div>
       </div>
       <div class="card" style="border-left:3px solid var(--navy)">
         <div class="ct">Patrimoine net</div>
@@ -5241,21 +5249,36 @@ function rTresorerie(){
               <div><div class="fin-name">${v.client||'Client anonyme'}</div><div style="font-size:11px;color:var(--text3)">${v.date} · ${a?a.nom:'?'}</div></div>
               <div class="fin-val" style="color:var(--amber)">${F(v.mt)}</div>
             </div>`}).join('')}</div>`:''}
+          ${pretsPerso.length>0?`<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin:12px 0 8px">Prêts perso</div>
+          <div class="fin-list">${pretsPerso.map(d=>{const reste=d.montant-(d.rembourse||0);return`
+            <div class="fin-row">
+              <div><div class="fin-name">${d.personne}</div><div style="font-size:11px;color:var(--teal)">📤 Prêt${d.echeance?' · Éch: '+d.echeance:''}</div></div>
+              <div class="fin-val" style="color:var(--teal)">${F(reste)}</div>
+            </div>`;}).join('')}</div>`:''}
         </div>
       </div>
 
       <div>
-        <p class="st">Débiteurs — Ce que tu dois (${F(detteFour)})</p>
+        <p class="st">Débiteurs — Ce que tu dois (${F(totalDettes)})</p>
         <div class="fin-card">
-          ${foursDette.length===0?'<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">✅ Aucune dette en cours</div>':
+          ${foursDette.length===0&&empruntsPerso.length===0?'<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">✅ Aucune dette en cours</div>':
           `<div class="fin-list">${foursDette.map(f=>`
             <div class="fin-row">
-              <div><div class="fin-name">${f.nom}</div><div style="font-size:11px;color:var(--text3)">${f.tel||''} · ${f.secteur}</div></div>
+              <div><div class="fin-name">${f.nom}</div><div style="font-size:11px;color:var(--text3)">${f.tel||''} · ${f.secteur} · Fournisseur</div></div>
               <div>
                 <div class="fin-val" style="color:var(--red)">${F(f.dette)}</div>
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="reglerDette(${f.id})">Régler</button>
               </div>
-            </div>`).join('')}</div>`}
+            </div>`).join('')}
+          ${empruntsPerso.map(d=>{const reste=d.montant-(d.rembourse||0);return`
+            <div class="fin-row">
+              <div><div class="fin-name">${d.personne}</div><div style="font-size:11px;color:var(--amber)">📥 Emprunt${d.echeance?' · Éch: '+d.echeance:''}</div></div>
+              <div>
+                <div class="fin-val" style="color:var(--amber)">${F(reste)}</div>
+                <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="nav(document.querySelector('[data-page=dettes]'),\'dettes\')">Gérer</button>
+              </div>
+            </div>`;}).join('')}
+          </div>`}
         </div>
       </div>
     </div>
