@@ -8759,18 +8759,24 @@ function saveTrancheAchat(acid){
   // Mettre à jour dettesAchats
   if(S.dettesAchats){
     const dette=S.dettesAchats.find(d=>d.id==acid);
-    if(dette){dette.reste=Math.max(0,(dette.reste||ac.mt)-mt);}
+    if(dette){
+      const totalPayeTmp = ac.tranches.reduce((s,t)=>s+(+t.mt||0),0);
+      dette.reste = Math.max(0, (+ac.mt||0) - totalPayeTmp);
+      if(dette.reste === 0) dette.statut = 'Soldé';
+    }
   }
   // Mettre à jour dette fournisseur
   const f=S.fournisseurs&&S.fournisseurs.find(f=>f.id==ac.fid);
   if(f) f.dette=Math.max(0,(f.dette||0)-mt);
   const totalPaye=ac.tranches.reduce((s,t)=>s+t.mt,0);
-  if(totalPaye>=ac.mt){
+  const restant = Math.max(0, (ac.mt||0) - totalPaye);
+  if(restant===0){
     ac.statut='Payé';
+    ac.solde=true;
     if(S.dettesAchats) S.dettesAchats=S.dettesAchats.filter(d=>d.id!=acid);
     toast(`✅ Achat soldé ! ${F(mt)} débité sur "${mode}"`);
   } else {
-    toast(`✅ ${F(mt)} débité sur "${mode}" · Reste: ${F(ac.mt-totalPaye)}`);
+    toast(`✅ ${F(mt)} débité sur "${mode}" · Reste: ${F(restant)}`);
   }
   saveData();closeModal();rAchats();
 }
@@ -8840,7 +8846,8 @@ function rDettes(){
         dettesF.slice().reverse().map(a=>{
           const art=ga(a.aid);const f=gf(a.fid);
           const paye=a.tranches?a.tranches.reduce((s,t)=>s+t.mt,0):0;
-          const reste=a.mt-paye;const pct=Math.round(paye/a.mt*100);
+          const reste=Math.max(0, a.mt-paye);
+          const pct=a.mt>0?Math.min(100,Math.round((paye/a.mt)*100)):0;
           return`<tr>
             <td style="font-size:11px;font-family:'DM Mono',monospace">${a.date}</td>
             <td class="tdm">${f?f.nom:'—'}</td><td>${art?art.nom:'—'}</td>
@@ -9396,6 +9403,30 @@ function confirmerModele(id){
   const cid=document.getElementById('app-cid').value;
   const date=document.getElementById('app-date').value||D();
   const notes=document.getElementById('app-notes').value||m.notes||'';
+
+  // Anti-duplication : empêcher d'enregistrer plusieurs fois la même opération
+  // (même date + même modèle + même montant + même compte + mêmes notes)
+  if(m.type==='depense'){
+    const existe = (S.depenses||[]).some(d =>
+      d.date === date &&
+      d.four === m.nom &&
+      (+d.mt) === (+mt) &&
+      (d.cid||'') == (cid||'') &&
+      (d.notes||'') === (notes||'')
+    );
+    if(existe){ toast('⚠️ Cette dépense existe déjà pour cette date.'); return; }
+  }
+  if(m.type==='revenu'){
+    const existe = (S.revenus||[]).some(r =>
+      r.date === date &&
+      r.desc === m.nom &&
+      (+r.mt) === (+mt) &&
+      (r.cid||'') == (cid||'') &&
+      (r.notes||'') === (notes||'')
+    );
+    if(existe){ toast('⚠️ Ce revenu existe déjà pour cette date.'); return; }
+  }
+
   if(m.type==='depense'){
     S.depenses.push({id:genId(),date,four:m.nom,cat:m.cat||'Modèle',mt,mode:nomCompte(cid),cid,notes,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
     debiterCompte(cid,mt);
