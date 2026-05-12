@@ -2086,77 +2086,56 @@ let S=loadData();
 // On limite donc le temps réel sur mobile et on privilégie la sync manuelle/auto.
 const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const IS_LOW_RAM = (typeof navigator.deviceMemory === 'number') && navigator.deviceMemory <= 2;
-// FIX SYNCHRO : listener complet activé sur TOUS les appareils (mobile inclus)
-// L'ancien mode "ventes-only" sur mobile empêchait la sync des dettes, stock, achats...
-const DISABLE_HEAVY_REALTIME = false;
+const DISABLE_HEAVY_REALTIME = IS_MOBILE || IS_LOW_RAM;
 
-// ─── ANDROID SAFE REALTIME (VENTES ONLY) ───
-// Sur Android/low-RAM, on évite le listener global (trop lourd)
-// mais on garde un temps réel léger uniquement sur les ventes.
-let _ventesOnlyListener = null;
-let _ventesOnlyLastHash = '';
-
-function _hashVentes(arr){
-  try{
-    if(!Array.isArray(arr)) return '';
-    const n = arr.length;
-    const last = n>0 ? arr[n-1] : null;
-    return String(n)+'|'+String(last?.id||'')+'|'+String(last?.ts||last?.updatedAt||'');
-  }catch(e){
-    return '';
-  }
-}
+// ─── ANDROID SAFE REALTIME (MULTI-COLLECTIONS) ───
+// Un listener leger par collection : ventes, dettes, stock, clients, fournisseurs, achats, depenses
 
 function activerListenerVentesOnly(){
   if(!fbReady||!db) return;
-  if(_ventesOnlyListener) return; // éviter double listener
-  try{
-    _ventesOnlyListener = db.ref('christmedia/data/ventes').on('value', snap=>{
-      const ventesFirebase = snap.val();
-      if(!ventesFirebase) return;
-      const ventes = Array.isArray(ventesFirebase) ? ventesFirebase : Object.values(ventesFirebase);
-      const newHash = _hashVentes(ventes);
-      if(newHash === _ventesOnlyLastHash) return;
-      _ventesOnlyLastHash = newHash;
-
-      // Fusion légère : on ajoute seulement les nouvelles ventes manquantes
-      const local = Array.isArray(S.ventes) ? S.ventes : [];
-      const localIds = new Set(local.map(v=>String(v.id)));
-      const merged = [...local];
-      ventes.forEach(v=>{
-        if(!v || v.id==null) return;
-        if(v._deleted) return;
-        if(!localIds.has(String(v.id))) merged.push(v);
-      });
-      // En cas de même ID, garder le plus récent
-      const map = new Map();
-      const tsOf = x => x?.ts || x?.updatedAt || x?.date_ts || 0;
-      merged.forEach(v=>{
-        const k = String(v.id);
-        if(!map.has(k) || tsOf(v) > tsOf(map.get(k))) map.set(k, v);
-      });
-      S.ventes = Array.from(map.values()).filter(v=>!v._deleted);
-      saveLocal(S);
-
-      // Rafraîchir uniquement si on est sur des pages liées aux ventes
-      if(['vente','transactions','dashboard','live','rapports'].includes(currentPage)){
-        try{ rafraichirPageCourante(); }catch(e){}
-      }
-    }, err=>{
-      console.warn('Ventes-only listener error:', err);
-    });
-  }catch(e){
-    console.warn('activerListenerVentesOnly:', e);
-  }
+  if(Object.keys(_mobileListeners).length > 0) return; // deja actif
+  const tsOf = x => x?.ts || x?.updatedAt || x?.date_ts || x?.created_at || 0;
+  const pagesParCol = {
+    ventes:['vente','transactions','dashboard','live','rapports'],
+    dettes:['dettes','dashboard','finance'],
+    stock:['stock','dashboard'],
+    clients:['clients','vente'],
+    fournisseurs:['fournisseurs','achats'],
+    achats:['achats','stock','dashboard'],
+    depenses:['depenses','finance','dashboard']
+  };
+  MOBILE_SYNC_COLLECTIONS.forEach(col=>{
+    try{
+      const ref = db.ref('christmedia/data/'+col);
+      const listener = ref.on('value', snap=>{
+        const fbVal = snap.val();
+        if(!fbVal) return;
+        const fbArr = Array.isArray(fbVal) ? fbVal : Object.values(fbVal);
+        // Detecter s'il y a vraiment du nouveau
+        const local = Array.isArray(S[col]) ? S[col] : [];
+        const localMap = new Map(local.map(x=>[String(x.id), tsOf(x)]));
+        const hasNew = fbArr.some(x=>{
+          if(!x||x.id==null||x._deleted) return false;
+          const k = String(x.id);
+          return !localMap.has(k) || tsOf(x) > (localMap.get(k)||0);
+        });
+        if(!hasNew) return;
+        S[col] = _fusionnerCollection(col, fbArr);
+        saveLocal(S);
+        if((pagesParCol[col]||[]).includes(currentPage)){
+          try{ rafraichirPageCourante(); }catch(e){}
+        }
+      }, err=>{ console.warn('Mobile listener ['+col+'] error:', err); });
+      _mobileListeners[col] = { ref, listener };
+    }catch(e){ console.warn('activerListenerVentesOnly ['+col+']:', e); }
+  });
 }
 
 function desactiverListenerVentesOnly(){
-  try{
-    if(_ventesOnlyListener && db){
-      db.ref('christmedia/data/ventes').off('value', _ventesOnlyListener);
-    }
-  }catch(e){}
-  _ventesOnlyListener = null;
+  Object.entries(_mobileListeners).forEach(([col, {ref, listener}])=>{
+    try{ if(ref && listener) ref.off('value', listener); }catch(e){}
+  });
+  _mobileListeners = {};
 }
 
 // Rendu initial de la barre de raccourcis personnalisables
@@ -2188,12 +2167,14 @@ async function startFirebaseSync(){
         setSyncStatus('online','Synchronisé ✓');
       }
       // Activer la sync temps réel après le chargement initial
-      // FIX SYNCHRO : listener complet sur tous les appareils (mobile inclus)
+      // FIX anti-crash mobile : sur mobile on évite le listener global (trop lourd)
       if(!DISABLE_HEAVY_REALTIME){
         activerListenerTempsReel();
       } else {
-        console.warn('[SYNC] Mode complet forcé sur tous appareils.');
-        activerListenerTempsReel();
+        console.warn('[SYNC] Temps réel global désactivé (mobile/low-ram). Mode ventes-only activé.');
+        // Android/low-RAM : activer un listener léger uniquement sur les ventes
+        // (permet une vraie synchronisation en temps réel sans crash mémoire)
+        activerListenerVentesOnly();
       }
       // Activer le listener Master Save sur TOUS les appareils
       activerListenerMasterSave();
@@ -2287,7 +2268,7 @@ window.addEventListener('online', async()=>{
       if(!DISABLE_HEAVY_REALTIME){
         activerListenerTempsReel();
       } else {
-        activerListenerTempsReel();
+        activerListenerVentesOnly();
       }
       // Réactiver le listener Master Save après reconnexion
       activerListenerMasterSave();
@@ -15895,10 +15876,8 @@ function activerListenerMasterSave(){
     if(!signal || !signal.ts) return;
     // Ignorer si c'est notre propre Master Save (admin sur le même appareil)
     if(signal.ts <= _dernierMasterSaveTs) return;
-    // Ignorer uniquement si c'est nous qui venons de l'émettre ET on est admin
-    // FIX : la vérification par email était trop large (les portables partageant parfois le même compte)
-    // On ignore seulement si même session + même ts exact
-    const estEmetteur = (S.session?.role === 'admin') && (S.session?.email === signal.email) && (Date.now() - signal.ts < 2000);
+    // Ignorer si c'est nous qui venons de l'émettre (même session + moins de 3s)
+    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 3000);
     _dernierMasterSaveTs = signal.ts;
     if(estEmetteur) return;
 
