@@ -11283,7 +11283,7 @@ function effacerHistoriqueConnexions(){
 // Pas de SDK externe nécessaire - utilise le flux OAuth2 natif du navigateur
 
 const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const GDRIVE_CLIENT_ID = ''; // Optionnel - fonctionne via méthode de téléchargement sinon
+const GDRIVE_CLIENT_ID = '245287761519-fr5d7sgfs4ufmolgrd5s9metu5v8oi46.apps.googleusercontent.com';
 let _gdriveToken = null;
 
 // Méthode principale : génère le fichier et propose l'upload
@@ -11319,14 +11319,20 @@ async function sauvegarderGoogleDrive(){
     '<button class="btn" style="width:100%" onclick="ouvrirGDrive()">🌐 Ouvrir Google Drive</button>' +
     '</div>';
 
-  const authOpt = '<div style="background:var(--navy-bg);border:1.5px solid var(--navy-light);border-radius:var(--rs);padding:14px">' +
-    '<div style="font-size:13px;font-weight:700;margin-bottom:6px">🔗 Upload direct (avancé)</div>' +
-    '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Connectez Google pour envoyer automatiquement sans téléchargement manuel.</div>' +
-    '<button class="btn btn-primary" style="width:100%" onclick="initGoogleAuth()">Connecter mon compte Google</button>' +
+  const authOpt = '<div style="background:var(--navy-bg);border:1.5px solid var(--navy-light);border-radius:var(--rs);padding:14px;margin-bottom:10px">' +
+    '<div style="font-size:13px;font-weight:700;margin-bottom:6px">🔗 Upload direct (automatique)</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Envoie automatiquement le fichier vers votre Google Drive sans téléchargement manuel.</div>' +
+    '<button class="btn btn-primary" style="width:100%" onclick="initGoogleAuth()">☁️ Connecter et envoyer vers Drive</button>' +
     '</div>';
 
-  modal('<div class="mft">☁️ Sauvegarder vers Google Drive</div>' +
-    infoHtml + opt1 + opt2 + authOpt +
+  const importOpt = '<div style="background:var(--green-bg);border:1.5px solid var(--green-light);border-radius:var(--rs);padding:14px">' +
+    '<div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--green)">📂 Restaurer depuis Drive</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Récupérez une sauvegarde existante depuis votre Google Drive.</div>' +
+    '<button class="btn" style="width:100%;border-color:var(--green-light);color:var(--green)" onclick="closeModal();restaurerDepuisGoogleDrive()">📥 Choisir une sauvegarde Drive</button>' +
+    '</div>';
+
+  modal('<div class="mft">☁️ Google Drive — Sauvegarde & Restauration</div>' +
+    infoHtml + opt1 + opt2 + authOpt + importOpt +
     '<div class="mff"><button class="btn" onclick="closeModal()">Fermer</button></div>');
 }
 
@@ -11350,34 +11356,117 @@ function initGoogleAuth(){
   }
 }
 
-function lancerTokenClient(){
+function lancerTokenClient(modeImport){
   try {
-    // Client ID Google OAuth2 — à configurer dans Paramètres avancés
-    const clientId = (S.parametres && S.parametres.googleClientId) || '';
+    const clientId = (S.parametres && S.parametres.googleClientId) || GDRIVE_CLIENT_ID;
     if(!clientId){
       modal('<div class="mft">⚙️ Configuration Google OAuth</div>' +
-        '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Pour l\'upload direct, entrez votre Client ID Google OAuth2. Créez-le sur <a href="https://console.cloud.google.com" target="_blank" style="color:var(--navy)">console.cloud.google.com</a>.</div>' +
+        '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Entrez votre Client ID Google OAuth2.</div>' +
         '<div class="fg"><label class="fl">Google Client ID</label>' +
         '<input class="fi" id="g-clientid" placeholder="...apps.googleusercontent.com"></div>' +
         '<div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>' +
         '<button class="btn btn-primary" onclick="sauvegarderGoogleClientId()">Enregistrer</button></div>');
       return;
     }
+    const scopeFinal = modeImport
+      ? 'https://www.googleapis.com/auth/drive.readonly'
+      : GDRIVE_SCOPE;
     const client = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: GDRIVE_SCOPE,
+      scope: scopeFinal,
       callback: async (resp) => {
         if(resp.error){ toast('❌ Auth Google annulée'); return; }
         _gdriveToken = resp.access_token;
         closeModal();
-        const nomF = 'ChristMedia_backup_' + D() + '.json';
-        await uploadVersDrive(_gdriveToken, nomF, JSON.stringify(S, null, 2));
+        if(modeImport){
+          await importerDepuisDrive(_gdriveToken);
+        } else {
+          const nomF = 'ChristMedia_backup_' + D() + '.json';
+          await uploadVersDrive(_gdriveToken, nomF, JSON.stringify(S, null, 2));
+        }
       }
     });
     client.requestAccessToken();
   } catch(e) {
     toast('❌ Erreur Auth : ' + e.message);
-    exportData();
+    if(!modeImport) exportData();
+  }
+}
+
+// ─── IMPORT DEPUIS GOOGLE DRIVE ───
+function restaurerDepuisGoogleDrive(){
+  if(!window.google || !window.google.accounts){
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.onload = () => lancerTokenClient(true);
+    script.onerror = () => toast('❌ Impossible de charger Google Auth');
+    document.head.appendChild(script);
+    toast('⏳ Chargement Google Auth...', 2000);
+  } else {
+    lancerTokenClient(true);
+  }
+}
+
+async function importerDepuisDrive(token){
+  setSyncStatus('syncing', 'Recherche Drive...');
+  toast('🔍 Recherche de sauvegardes dans Drive...', 3000);
+  try {
+    const r = await fetch(
+      'https://www.googleapis.com/drive/v3/files?q=name+contains+%27ChristMedia_backup%27+and+mimeType%3D%27application%2Fjson%27&orderBy=modifiedTime+desc&pageSize=10&fields=files(id,name,modifiedTime,size)',
+      { headers: { 'Authorization': 'Bearer ' + token } }
+    );
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const files = data.files || [];
+    if(!files.length){
+      setSyncStatus('online', 'Synchronisé ✓');
+      toast('⚠️ Aucune sauvegarde ChristMedia trouvée dans Drive');
+      return;
+    }
+    // Afficher liste des sauvegardes
+    const listeHtml = files.map((f, i) => {
+      const d = new Date(f.modifiedTime).toLocaleString('fr-FR');
+      const ko = f.size ? Math.round(f.size/1024) + ' Ko' : '';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px;cursor:pointer;transition:all .15s" ' +
+        'onmouseover="this.style.background=\'var(--navy-bg)\'" onmouseout="this.style.background=\'\'" ' +
+        'onclick="confirmerRestaurDrive(\'' + f.id + '\',\'' + f.name.replace(/'/g,'') + '\')">' +
+        '<div><div style="font-size:13px;font-weight:600">' + f.name + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + d + (ko?' · '+ko:'') + '</div></div>' +
+        '<span style="font-size:18px">📥</span></div>';
+    }).join('');
+    setSyncStatus('online', 'Synchronisé ✓');
+    modal('<div class="mft">📂 Restaurer depuis Drive</div>' +
+      '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Sélectionnez une sauvegarde à restaurer :</div>' +
+      listeHtml +
+      '<div class="mff"><button class="btn" onclick="closeModal()">Annuler</button></div>');
+    // Stocker token pour usage dans confirmerRestaurDrive
+    window._driveTokenImport = token;
+  } catch(e) {
+    setSyncStatus('online', 'Synchronisé ✓');
+    toast('❌ Erreur Drive : ' + e.message);
+  }
+}
+
+async function confirmerRestaurDrive(fileId, fileName){
+  closeModal();
+  if(!confirm('Restaurer "' + fileName + '" ?\n\nAttention : toutes les données actuelles seront remplacées !')) return;
+  setSyncStatus('syncing', 'Téléchargement...');
+  toast('⏳ Téléchargement de la sauvegarde...', 3000);
+  try {
+    const token = window._driveTokenImport || _gdriveToken;
+    const r = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
+      { headers: { 'Authorization': 'Bearer ' + token } });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if(!data || typeof data !== 'object') throw new Error('Fichier invalide');
+    Object.assign(S, data);
+    saveData();
+    setSyncStatus('online', 'Synchronisé ✓');
+    toast('✅ Restauration réussie depuis Drive !', 4000);
+    setTimeout(()=>location.reload(), 1500);
+  } catch(e) {
+    setSyncStatus('online', 'Synchronisé ✓');
+    toast('❌ Erreur restauration : ' + e.message);
   }
 }
 
@@ -11410,7 +11499,7 @@ function authGoogleDrive(nomFichier, contenuPreview){
 function lancerAuthGdrive(nomFichier){
   try {
     const client = google.accounts.oauth2.initTokenClient({
-      client_id: '577902596845-0p8r6o9q9q9q9q9q9q9q9q9q9q9q9q9.apps.googleusercontent.com',
+      client_id: GDRIVE_CLIENT_ID,
       scope: GDRIVE_SCOPE,
       callback: async (resp) => {
         if(resp.error){ toast('❌ Connexion Google annulée'); return; }
