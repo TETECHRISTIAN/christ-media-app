@@ -2001,8 +2001,19 @@ function fusionnerDonnees(local, remote){
       if(!map.has(key)){
         map.set(key, item);
       } else {
-        // Garder le plus récent (par timestamp)
-        if(tsOf(item) > tsOf(map.get(key))){
+        const existing = map.get(key);
+        const itemTs = tsOf(item);
+        const existingTs = tsOf(existing);
+        // Règle anti-régression paiement : 'Payé' ne peut jamais être écrasé par 'À payer'
+        // même si les timestamps sont identiques (cas de sync multi-appareils)
+        const STATUTS_FINALS = ['Payé','Soldé'];
+        if(STATUTS_FINALS.includes(existing.statut) && !STATUTS_FINALS.includes(item.statut)){
+          // Garder l'existant (déjà dans un état final)
+        } else if(!STATUTS_FINALS.includes(existing.statut) && STATUTS_FINALS.includes(item.statut)){
+          // L'item entrant est dans un état final → le prendre
+          map.set(key, item);
+        } else if(itemTs > existingTs){
+          // Sinon garder le plus récent par timestamp
           map.set(key, item);
         }
       }
@@ -8801,7 +8812,11 @@ function saveTrancheAchat(acid){
   } else {
     toast(`✅ ${F(mt)} débité sur "${mode}" · Reste: ${F(restant)}`);
   }
-  saveData();closeModal();rAchats();
+  // IMPORTANT : mettre à jour le timestamp pour que la fusion multi-appareils
+  // respecte ce changement de statut (évite la réapparition après sync Firebase)
+  ac.ts = Date.now();
+  saveData();closeModal();
+  if(currentPage==='dettes') rDettes(); else rAchats();
 }
 
 // ════════════════════════════════════════════════════
