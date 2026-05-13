@@ -1954,11 +1954,10 @@ async function saveData(){
     clearTimeout(_ignorerTimer);
     _ignorerTimer=setTimeout(()=>{ _ignorerProchainUpdate=false; }, 10000);
     await saveToFirebase(S).then(()=>{
-      // Attendre 2s après le save réussi avant de réactiver le listener
-      // pour laisser le temps aux autres appareils de recevoir notre version
-      // et de réécrire Firebase avec nos données fusionnées
+      // Attendre 15s après le save réussi avant de réactiver le listener
+      // (connexion lente Togo : Firebase peut mettre plusieurs secondes à propager)
       clearTimeout(_ignorerTimer);
-      _ignorerTimer=setTimeout(()=>{ _ignorerProchainUpdate=false; }, 2500);
+      _ignorerTimer=setTimeout(()=>{ _ignorerProchainUpdate=false; }, 15000);
     }).catch(()=>{
       // En cas d'erreur on laisse le timer expirer naturellement
     });
@@ -2014,7 +2013,14 @@ function fusionnerDonnees(local, remote){
           map.set(key, item);
         } else if(itemTs > existingTs){
           // Sinon garder le plus récent par timestamp
-          map.set(key, item);
+          // PROTECTION STOCK : pour les articles, jamais rétrograder ea (entrées achat)
+          if(col === 'stock'){
+            const merged = Object.assign({}, item);
+            if((existing.ea||0) > (merged.ea||0)) merged.ea = existing.ea;
+            map.set(key, merged);
+          } else {
+            map.set(key, item);
+          }
         }
       }
     });
@@ -2098,6 +2104,45 @@ let S=loadData();
 const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const IS_LOW_RAM = (typeof navigator.deviceMemory === 'number') && navigator.deviceMemory <= 2;
 const DISABLE_HEAVY_REALTIME = IS_MOBILE || IS_LOW_RAM;
+
+// Collections synchronisées sur mobile (listener léger)
+const MOBILE_SYNC_COLLECTIONS = ['ventes','achats','stock','clients','fournisseurs','depenses','dettes'];
+
+// Fusion d'une collection Firebase avec la collection locale
+// Règle : pour chaque item, on garde la version avec le ts le plus récent
+// Pour stock : jamais rétrograder ea (entrées) ni si (stock initial) si le ts remote est plus vieux
+function _fusionnerCollection(col, fbArr){
+  const local = Array.isArray(S[col]) ? S[col] : [];
+  const tsOf = x => x?.ts || x?.updatedAt || x?.date_ts || 0;
+  const map = new Map();
+  // Charger le local d'abord
+  local.forEach(item => { if(item&&item.id!=null) map.set(String(item.id), item); });
+  // Fusionner avec Firebase : ne prendre un item Firebase que s'il est plus récent
+  fbArr.forEach(fbItem => {
+    if(!fbItem || fbItem.id==null || fbItem._deleted) return;
+    const k = String(fbItem.id);
+    if(!map.has(k)){
+      map.set(k, fbItem);
+    } else {
+      const localItem = map.get(k);
+      const fbTs = tsOf(fbItem);
+      const localTs = tsOf(localItem);
+      if(fbTs > localTs){
+        // Pour le stock : protéger ea contre la régression
+        if(col === 'stock'){
+          const merged = Object.assign({}, fbItem);
+          // Garder le ea local s'il est plus grand (on a reçu plus de marchandises)
+          if((localItem.ea||0) > (merged.ea||0)) merged.ea = localItem.ea;
+          map.set(k, merged);
+        } else {
+          map.set(k, fbItem);
+        }
+      }
+      // Si fbTs <= localTs : on garde le local (plus récent ou même timestamp)
+    }
+  });
+  return Array.from(map.values()).filter(x => !x._deleted);
+}
 
 // ─── ANDROID SAFE REALTIME (MULTI-COLLECTIONS) ───
 // Un listener leger par collection : ventes, dettes, stock, clients, fournisseurs, achats, depenses
