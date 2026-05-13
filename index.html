@@ -9535,6 +9535,16 @@ let agendaFiltreCompte='tout';
 
 function rAgenda(){
   if(!S.agenda)S.agenda=[];
+
+  // Nettoyer les doublons d'opérations récurrentes non-faites (même titre + recurrence + date)
+  const seen=new Set();
+  S.agenda=S.agenda.filter(a=>{
+    if(a.fait) return true; // garder les opérations faites
+    const key=`${a.titre}|${a.recurrence||''}|${a.date}`;
+    if(seen.has(key)) return false; // doublon → supprimer
+    seen.add(key);
+    return true;
+  });
   const today=D();
   const demain=new Date();demain.setDate(demain.getDate()+1);
   const demainStr=demain.toISOString().split('T')[0];
@@ -9851,11 +9861,16 @@ function confirmerFait(id){
   // Marquer comme fait et gérer récurrence
   op.fait=true;op.dateFait=date;
   if(op.recurrence){
-    const next=new Date(op.date);
+    // Utiliser la date effective (aujourd'hui) comme base, jamais la date passée de l'opération
+    const base=new Date(Math.max(new Date(op.date).getTime(), new Date(D()).getTime()));
+    const next=new Date(base);
     if(op.recurrence==='Quotidien') next.setDate(next.getDate()+1);
     else if(op.recurrence==='Hebdomadaire') next.setDate(next.getDate()+7);
     else if(op.recurrence==='Mensuel') next.setMonth(next.getMonth()+1);
-    S.agenda.push({...op,id:genId(),date:next.toISOString().split('T')[0],fait:false,dateFait:null});
+    // Ne créer l'occurrence suivante que si elle n'existe pas déjà (évite les doublons)
+    const nextStr=next.toISOString().split('T')[0];
+    const dejaExiste=S.agenda.some(a=>!a.fait&&a.titre===op.titre&&a.recurrence===op.recurrence&&a.date===nextStr);
+    if(!dejaExiste) S.agenda.push({...op,id:genId(),date:nextStr,fait:false,dateFait:null});
   }
   saveData();closeModal();
   if(op.type!=='transfert') toast(`✅ ${op.titre}${mt?` — ${F(mt)}`:''} enregistré`);
