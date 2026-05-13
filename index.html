@@ -3860,7 +3860,7 @@ function saveAchatMulti(){
 
   panier.forEach(l=>{
     const art=ga(l.aid);
-    if(art){ art.ea=(art.ea||0)+l.qte; if(l.pu>0) art.pa=l.pu; }
+    if(art){ art.ea=(art.ea||0)+l.qte; if(l.pu>0) art.pa=l.pu; art.ts=Date.now(); }
     const achatId=genId();
     S.achats.push({id:achatId,date,fid,aid:l.aid,qte:l.qte,pu:l.pu,mt:l.mt,mode,cid,notes,statut:statut_achat,bid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
     if(statut_achat==='Payé'){
@@ -3887,7 +3887,7 @@ function delAchat(id){
   if(ac){
     // 1. Déduire du stock (annuler les entrées liées à cet achat)
     const art=ga(ac.aid);
-    if(art) art.ea=Math.max(0,(art.ea||0)-ac.qte);
+    if(art){ art.ea=Math.max(0,(art.ea||0)-ac.qte); art.ts=Date.now(); }
 
     if(ac.statut==='Payé'){
       // 2a. Achat entièrement payé → rembourser le compte débité
@@ -4297,6 +4297,7 @@ function ajustStockDelta(id,delta){
   const nouveau=Math.max(0,actuel+delta*(delta<0?qte:qte));
   // Recalculer si pour que sa(a) == nouveau
   a.si=nouveau+Math.max(0,a.qv||0)-(a.ea||0);
+  a.ts=Date.now();
   saveData();
   // Mettre à jour l'affichage du stock actuel dans le modal
   const span=document.querySelector('.mft')?.parentElement?.querySelector('span[style*="22px"]');
@@ -4309,6 +4310,7 @@ function ajustStockExact(id){
   const val=+document.getElementById('ajust-exact')?.value;
   if(isNaN(val)||val<0)return toast('❌ Valeur invalide');
   a.si=val+Math.max(0,a.qv||0)-(a.ea||0);
+  a.ts=Date.now();
   saveData();closeModal();toast(`✅ Stock défini à ${val}`);rStock();
 }
 
