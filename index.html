@@ -5334,6 +5334,7 @@ function rTresorerie(){
               <div>
                 <div class="fin-val" style="color:var(--red)">${F(f.dette)}</div>
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="reglerDette(${f.id})">Régler</button>
+                <button class="btn btn-sm" style="margin-top:4px;font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜</button>
               </div>
             </div>`).join('')}
           ${empruntsPerso.map(d=>{const reste=d.montant-(d.rembourse||0);return`
@@ -5362,22 +5363,51 @@ function rTresorerie(){
 
 function reglerDette(fid){
   const f=S.fournisseurs.find(f=>f.id==fid);if(!f)return;
-  modal(`<div class="mft">Régler dette — ${f.nom}</div>
-    <div class="fg"><label class="fl">Montant à régler (FCFA) — Dette actuelle : ${F(f.dette)}</label>
-      <input class="fi" type="number" id="mmt" value="${f.dette}" max="${f.dette}"></div>
+  modal(`<div class="mft">💳 Régler dette — ${f.nom}</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">Solde actuel</span><strong style="color:var(--red)">${F(f.dette)}</strong></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">${(f.historiquePaiementsFour&&f.historiquePaiementsFour.length)?`${f.historiquePaiementsFour.length} paiement(s) déjà effectué(s) · Total payé : ${F(f.historiquePaiementsFour.reduce((s,p)=>s+p.montantPaye,0))}`:''}</div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Montant à payer (FCFA)</label>
+        <input class="fi" type="number" id="mmt" value="${f.dette}" max="${f.dette}" min="1"></div>
+      <div class="fg"><label class="fl">Date</label>
+        <input class="fi" type="date" id="mmt-date" value="${D()}"></div>
+    </div>
     <div class="fg"><label class="fl">Compte débit</label>
       ${selectComptes('mmo', premierCompteId())}</div>
+    <div class="fg"><label class="fl">Note / Justificatif (optionnel)</label>
+      <input class="fi" id="mmt-note" placeholder="Ex: paiement partiel, solde reçu le..., reçu N°..."></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-success" onclick="saveReglementDette(${fid})">Confirmer paiement</button></div>`);
+      <button class="btn btn-success" onclick="saveReglementDette(${fid})">✅ Confirmer paiement</button></div>`);
 }
 function saveReglementDette(fid){
   const f=S.fournisseurs.find(f=>f.id==fid);if(!f)return;
   const mt=+document.getElementById('mmt').value||0;
   const cid_d=document.getElementById('mmo').value;
+  const note=(document.getElementById('mmt-note')||{}).value||'';
+  const dateP=(document.getElementById('mmt-date')||{}).value||D();
+  if(!mt||mt<=0)return toast('❌ Montant invalide');
+  const avantDette=f.dette||0;
   f.dette=Math.max(0,f.dette-mt);
-  S.depenses.push({id:genId(),date:D(),four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+  const apresDette=f.dette;
+  // ── Historique traçabilité paiements ──
+  if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
+  f.historiquePaiementsFour.push({
+    id:genId(),
+    date:dateP,
+    montantPaye:mt,
+    avant:avantDette,
+    apres:apresDette,
+    compte:nomCompte(cid_d),
+    cid:cid_d,
+    note:note||'—',
+    ts:Date.now()
+  });
+  S.depenses.push({id:genId(),date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
   debiterCompte(cid_d,mt);
-  saveData();closeModal();toast(`✅ Dette réglée : ${F(mt)}`);
+  saveData();closeModal();
+  toast(`✅ ${F(mt)} payé · Reste : ${F(apresDette)}${apresDette===0?' — Compte soldé !':''}`);
   if(currentPage==='dettes') rDettes(); else rTresorerie();
 }
 
@@ -8964,7 +8994,7 @@ function rDettes(){
           <td style="display:flex;gap:4px;flex-wrap:wrap">
             <button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)" onclick="augmenterDette(${f.id})">➕ Ajouter</button>
             <button class="btn btn-sm btn-success" onclick="reglerDette(${f.id})">💳 Régler</button>
-            ${(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length)?`<button class="btn btn-sm" style="font-size:10px;color:var(--text3)" onclick="voirHistoDette(${f.id})">📋 Historique</button>`:''}
+            <button class="btn btn-sm" style="font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜 Relevé${((f.historiquePaiementsFour&&f.historiquePaiementsFour.length)||(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length))?` (${((f.historiquePaiementsFour||[]).length)+(( f.historiqueDetteAjouts||[]).length)})`:''}</button>
           </td>
         </tr>`).join('')}
       </tbody></table></div>`:``}
@@ -9121,30 +9151,61 @@ function saveAugmentDette(fid){
 
 function voirHistoDette(fid){
   const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
-  const hist=f.historiqueDetteAjouts||[];
-  modal(`<div class="mft">📋 Historique ajouts — ${f.nom}</div>
+  const ajouts=f.historiqueDetteAjouts||[];
+  const paiements=f.historiquePaiementsFour||[];
+  // Fusionner et trier chronologiquement
+  const lignes=[];
+  ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt,avant:h.avant,apres:h.apres,note:h.notes,ts:h.ts||0}));
+  paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye,avant:p.avant,apres:p.apres,note:p.note,compte:p.compte,ts:p.ts||0}));
+  lignes.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
+  const totalAjoute=ajouts.reduce((s,h)=>s+h.mt,0);
+  const totalPaye=paiements.reduce((s,p)=>s+p.montantPaye,0);
+  modal(`<div class="mft">📜 Relevé de compte — ${f.nom}</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:110px;background:var(--red-bg);border-radius:var(--rs);padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total mis en dette</div>
+        <div style="font-size:15px;font-weight:800;color:var(--red)">+${F(totalAjoute)}</div>
+      </div>
+      <div style="flex:1;min-width:110px;background:var(--green-bg);border-radius:var(--rs);padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total payé</div>
+        <div style="font-size:15px;font-weight:800;color:var(--green)">−${F(totalPaye)}</div>
+      </div>
+      <div style="flex:1;min-width:110px;background:${f.dette>0?'var(--amber-bg)':'var(--green-bg)'};border-radius:var(--rs);padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Solde actuel</div>
+        <div style="font-size:15px;font-weight:800;color:${f.dette>0?'var(--amber)':'var(--green)'}">${F(f.dette)}</div>
+      </div>
+    </div>
     <div style="max-height:360px;overflow-y:auto">
-    ${hist.length===0?'<div style="text-align:center;color:var(--text3);padding:20px">Aucun ajout enregistré</div>':
+    ${lignes.length===0?'<div style="text-align:center;color:var(--text3);padding:20px">Aucun mouvement enregistré</div>':
     `<table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--border)">
-        <th style="padding:6px 8px;text-align:left">Date</th>
-        <th style="padding:6px 8px;text-align:right">Ajouté</th>
-        <th style="padding:6px 8px;text-align:right">Avant</th>
-        <th style="padding:6px 8px;text-align:right">Après</th>
-        <th style="padding:6px 8px;text-align:left">Remarque</th>
+      <thead><tr style="border-bottom:2px solid var(--border);background:var(--surface2)">
+        <th style="padding:7px 8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Date</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Type</th>
+        <th style="padding:7px 8px;text-align:right;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Ancien solde</th>
+        <th style="padding:7px 8px;text-align:right;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Mouvement</th>
+        <th style="padding:7px 8px;text-align:right;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Nouveau solde</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Note / Compte</th>
       </tr></thead>
-      <tbody>${hist.slice().reverse().map(h=>`
+      <tbody>${lignes.map(l=>`
         <tr style="border-bottom:1px solid var(--surface2)">
-          <td style="padding:6px 8px;font-family:'DM Mono',monospace;color:var(--text3)">${h.date}</td>
-          <td style="padding:6px 8px;text-align:right;color:var(--amber);font-weight:600">+${F(h.mt)}</td>
-          <td style="padding:6px 8px;text-align:right;color:var(--text3)">${F(h.avant)}</td>
-          <td style="padding:6px 8px;text-align:right;color:var(--red);font-weight:600">${F(h.apres)}</td>
-          <td style="padding:6px 8px;color:var(--text2)">${h.notes}</td>
+          <td style="padding:7px 8px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap">${l.date}</td>
+          <td style="padding:7px 8px">
+            ${l.type==='ajout'
+              ?'<span style="background:var(--red-bg);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">📈 Ajout</span>'
+              :`<span style="background:var(--green-bg);color:var(--green);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">💳 Paiement</span>${l.compte?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+l.compte+'</div>':''}`}
+          </td>
+          <td style="padding:7px 8px;text-align:right;color:var(--text3)">${F(l.avant)}</td>
+          <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.type==='ajout'?'var(--red)':'var(--green)'}">${l.type==='ajout'?'+':'−'}${F(l.mt)}</td>
+          <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.apres>0?'var(--amber)':'var(--green)'}">${F(l.apres)}</td>
+          <td style="padding:7px 8px;color:var(--text2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.note}">${l.note}</td>
         </tr>`).join('')}
       </tbody>
     </table>`}
     </div>
-    <div style="text-align:right;margin-top:12px"><button class="btn" onclick="closeModal()">Fermer</button></div>`);
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <div style="font-size:11px;color:var(--text3)">${lignes.length} mouvement(s) · ${ajouts.length} ajout(s) · ${paiements.length} paiement(s)</div>
+      <button class="btn" onclick="closeModal()">Fermer</button>
+    </div>`);
 }
 
 // ─── MODULE : FLUX FINANCIER ───
