@@ -1,6 +1,6 @@
 // ─── CHRIST MEDIA SERVICE WORKER ───
 // Incrémenter CACHE_VERSION à chaque déploiement force le remplacement du cache
-const CACHE_VERSION = 'v11-' + '20260515';
+const CACHE_VERSION = 'v11-20260515b';
 const CACHE_NAME = 'christmedia-' + CACHE_VERSION;
 
 const ASSETS_TO_CACHE = [
