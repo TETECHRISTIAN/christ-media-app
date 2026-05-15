@@ -1,86 +1,88 @@
-// ─── SERVICE WORKER — Christ Media PWA ───
-// Version auto — le cache se renouvelle automatiquement à chaque déploiement
+// ─── CHRIST MEDIA SERVICE WORKER ───
+// Incrémenter CACHE_VERSION à chaque déploiement force le remplacement du cache
+const CACHE_VERSION = 'v11-' + '20260515';
+const CACHE_NAME = 'christmedia-' + CACHE_VERSION;
 
-const CACHE_NAME = 'christ-media-20250516';
-const STATIC_ASSETS = [
+const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192x192.png',
-  './icons/icon-512x512.png',
 ];
 
-// Domaines à NE JAMAIS mettre en cache (toujours réseau)
-const NETWORK_ONLY_DOMAINS = [
-  'firebaseio.com',
-  'firebase.googleapis.com',
-  'googleapis.com',
-  'gstatic.com',
-  'firebaseapp.com',
-  'anthropic.com',
-  'api.cloudinary.com',
-  'res.cloudinary.com',
-];
-
-// ─── INSTALL ───
+// ─── INSTALLATION : mise en cache des assets de base ───
 self.addEventListener('install', event => {
+  console.log('[SW] Install — cache:', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS).catch(err => {
-        console.warn('SW: Certains assets non mis en cache:', err);
+      return cache.addAll(ASSETS_TO_CACHE).catch(err => {
+        console.warn('[SW] Certains assets non mis en cache:', err);
       });
     })
   );
-  self.skipWaiting();
+  // Ne PAS appeler skipWaiting ici — on attend le message de index.html
 });
 
-// ─── ACTIVATE ───
+// ─── ACTIVATION : supprimer les anciens caches ───
 self.addEventListener('activate', event => {
+  console.log('[SW] Activate — cache:', CACHE_NAME);
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
+    caches.keys().then(keys => {
+      return Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      )
-    )
+          .map(key => {
+            console.log('[SW] Suppression ancien cache:', key);
+            return caches.delete(key);
+          })
+      );
+    }).then(() => self.clients.claim()) // Prendre le contrôle de tous les onglets ouverts
   );
-  self.clients.claim();
 });
 
-// ─── FETCH ───
+// ─── MESSAGE : skipWaiting déclenché depuis index.html ───
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] skipWaiting demandé');
+    self.skipWaiting();
+  }
+});
+
+// ─── FETCH : stratégie Network First pour index.html, Cache First pour le reste ───
 self.addEventListener('fetch', event => {
-  const url = event.request.url;
+  const url = new URL(event.request.url);
 
-  if (!url.startsWith('http')) return;
-
-  const isNetworkOnly = NETWORK_ONLY_DOMAINS.some(domain => url.includes(domain));
-  if (isNetworkOnly) return;
-
+  // Ignorer les requêtes non-GET et Firebase/Cloudinary
   if (event.request.method !== 'GET') return;
+  if (url.hostname.includes('firebase') || url.hostname.includes('cloudinary')) return;
+  if (url.hostname.includes('googleapis') || url.hostname.includes('gstatic')) return;
 
+  // Network First pour index.html — toujours essayer d'avoir la dernière version
+  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request)) // Fallback cache si hors ligne
+    );
+    return;
+  }
+
+  // Cache First pour les autres assets (icons, manifest…)
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-
-      return fetch(event.request)
-        .then(response => {
-          if (!response || response.status !== 200 || response.type === 'opaque') {
-            return response;
-          }
-
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-
-          return response;
-        })
-        .catch(() => {
-          if (event.request.destination === 'document') {
-            return caches.match('./index.html');
-          }
-        });
+      return fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => cached);
     })
   );
 });

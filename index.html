@@ -9689,7 +9689,7 @@ function rAgenda(){
       ${comptesOpts?`<div style="display:flex;flex-direction:column;gap:3px">
         <label style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase">Compte</label>
         <select class="fs" style="min-width:140px" onchange="agendaFiltreCompte=this.value;rAgenda()">
-          <option value="tout"${agendaFiltreCompte==='tout'?' selected':''}>Tous les comptes</option>
+          <option value="tout">Tous les comptes</option>
           ${comptesOpts}
         </select>
       </div>`:''}
@@ -10080,17 +10080,31 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js')
       .then(reg => {
         console.log('SW enregistré:', reg.scope);
-        // Vérifier les mises à jour
+
+        // Forcer la vérification de mise à jour à chaque chargement
+        reg.update().catch(()=>{});
+
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker.addEventListener('statechange', () => {
             if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
-              toast('🔄 Mise à jour disponible — rechargez l\'app');
+              // Forcer le nouveau SW à prendre le contrôle immédiatement
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+            if(newWorker.state === 'activated'){
+              // Recharger la page pour charger la nouvelle version
+              toast('🔄 Mise à jour installée — rechargement...', 2000);
+              setTimeout(() => window.location.reload(true), 2200);
             }
           });
         });
       })
       .catch(err => console.warn('SW échec:', err));
+  });
+
+  // Écouter quand le SW change de contrôleur (skipWaiting activé)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload(true);
   });
 }
 
