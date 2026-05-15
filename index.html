@@ -16179,8 +16179,11 @@ function activerListenerMasterSave(){
 
     // Recharger l'interface
     setTimeout(() => {
-      renderAll();
-      if(typeof majDashboard === 'function') majDashboard();
+      try {
+        const renderers = {dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach};
+        const fn = renderers[currentPage];
+        if(typeof fn === 'function') fn();
+      } catch(e) { console.warn('[MasterSave] Erreur rendu page:', e); }
     }, 500);
   });
 }
