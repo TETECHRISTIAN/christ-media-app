@@ -9689,7 +9689,7 @@ function rAgenda(){
       ${comptesOpts?`<div style="display:flex;flex-direction:column;gap:3px">
         <label style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase">Compte</label>
         <select class="fs" style="min-width:140px" onchange="agendaFiltreCompte=this.value;rAgenda()">
-          <option value="tout">Tous les comptes</option>
+          <option value="tout"${agendaFiltreCompte==='tout'?' selected':''}>Tous les comptes</option>
           ${comptesOpts}
         </select>
       </div>`:''}
