@@ -108,7 +108,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .btn-icon:hover{background:var(--surface2);color:var(--text)}
 
 /* ─── PAGE ─── */
-.page{padding:24px;flex:1;overflow-y:auto;padding-bottom:80px}
+.page{padding:24px;flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:80px}
 
 /* ─── GRIDS ─── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -136,7 +136,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .st:first-child{margin-top:0}
 
 /* ─── TABLES ─── */
-.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow-x:auto;overflow-y:hidden;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow-x:auto;overflow-y:visible;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch;max-width:100%}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);vertical-align:middle}
@@ -229,7 +229,8 @@ tr:hover .td-actions{opacity:1}
   .sidebar{display:none}
   .menu-btn{display:flex}
   .mobile-nav{display:block}
-  .page{padding:16px;overflow-y:auto;padding-bottom:90px}
+  .page{padding:16px;overflow-y:auto;overflow-x:hidden;padding-bottom:75px}
+  .tbl-wrap{max-width:calc(100vw - 32px)}
   .g4{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr}
   .g2{grid-template-columns:1fr}
