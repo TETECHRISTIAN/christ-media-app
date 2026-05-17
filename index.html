@@ -1239,41 +1239,7 @@ body.dark th{background:var(--surface3)}
 
 <!-- ─── MOBILE BOTTOM NAV ─── -->
 <div class="mobile-nav">
-  <div class="mn-bar">
-
-    <!-- Comptes -->
-    <div class="mn-item admin-only" id="mn-comptes" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes');mnActivate('mn-comptes')">
-      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M1 7h14" stroke="currentColor" stroke-width="1"/><circle cx="4" cy="10.5" r="1" fill="currentColor"/></svg>
-      <span>Comptes</span>
-    </div>
-
-    <!-- Fournisseurs -->
-    <div class="mn-item" id="mn-fournisseurs" onclick="nav(document.querySelector('[data-page=fournisseurs]'),'fournisseurs');mnActivate('mn-fournisseurs')">
-      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M11 7h2.5l1.5 3v3h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="14" r="1.5" fill="currentColor"/><circle cx="11" cy="14" r="1.5" fill="currentColor"/></svg>
-      <span>Fourniss.</span>
-    </div>
-
-    <!-- VENTE RAPIDE — bouton central surélevé -->
-    <div class="mn-center" id="mn-vente-center" onclick="nav(document.querySelector('[data-page=vente]'),'vente');mnActivate('mn-vente-center')">
-      <div class="mn-center-bubble" id="mn-center-bubble">
-        <svg viewBox="0 0 16 16" fill="none"><circle cx="6" cy="12" r="1.5" fill="white"/><circle cx="11" cy="12" r="1.5" fill="white"/><path d="M1 2h2l2.4 7h5.6l1.6-5H5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-      </div>
-      <span>Vente</span>
-    </div>
-
-    <!-- Santé financière (tresorerie) -->
-    <div class="mn-item admin-only" id="mn-tresorerie" onclick="nav(document.querySelector('[data-page=tresorerie]'),'tresorerie');mnActivate('mn-tresorerie')">
-      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor" opacity=".6"/><path d="M1 6h14" stroke="currentColor" stroke-width="1"/></svg>
-      <span>Santé fin.</span>
-    </div>
-
-    <!-- Calculatrice -->
-    <div class="mn-item" id="mn-calculatrice" onclick="nav(document.querySelector('[data-page=calculatrice]'),'calculatrice');mnActivate('mn-calculatrice')">
-      <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 4h8M4 7.5h2M7 7.5h2M10 7.5h2M4 10h2M7 10h2M10 10h2M4 12.5h2M7 12.5h2M10 12.5h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      <span>Calc.</span>
-    </div>
-
-  </div>
+  <div class="mn-bar" id="mn-bar-dynamic"><!-- renderMobileNav() --></div>
 
   <!-- Dropdown "Plus" — conservé pour accès complet -->
   <div class="mn-dropdown" id="mn-dropdown">
@@ -2292,9 +2258,9 @@ async function startFirebaseSync(){
 }
 
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', startFirebaseSync);
+  document.addEventListener('DOMContentLoaded',()=>{startFirebaseSync();renderMobileNav();});
 } else {
-  setTimeout(startFirebaseSync, 100);
+  setTimeout(()=>{startFirebaseSync();renderMobileNav();},100);
 }
 
 // ─── MODE HORS LIGNE AMÉLIORÉ ───
@@ -2814,6 +2780,74 @@ function resetQBConfig(){
   ouvrirQBManager();
   toast('✅ Raccourcis réinitialisés');
 }
+// ══════════════════════════════════════════
+// BARRE MOBILE BAS — PERSONNALISABLE
+// ══════════════════════════════════════════
+const MN_DEFAULT=[
+  {page:'comptes',center:false},
+  {page:'fournisseurs',center:false},
+  {page:'vente',center:true},
+  {page:'dettes',center:false},
+  {page:'calculatrice',center:false}
+];
+function getMNC(){try{const r=localStorage.getItem('cm_mobilebar');if(r)return JSON.parse(r);}catch(e){}return JSON.parse(JSON.stringify(MN_DEFAULT));}
+function setMNC(cfg){localStorage.setItem('cm_mobilebar',JSON.stringify(cfg));}
+
+function renderMobileNav(){
+  const bar=document.getElementById('mn-bar-dynamic');
+  if(!bar)return;
+  const cfg=getMNC().slice(0,5);
+  bar.innerHTML=cfg.map((item,i)=>{
+    const def=QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',labelCourt:item.page,label:item.page};
+    const id='mnd-'+i;
+    const oc=item.page==='__caisse_rapide__'?'ouvrirCaisseRapide()':`nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');mnDynActivate('${id}')`;
+    if(item.center)return `<div class="mn-center" id="${id}" onclick="${oc}"><div class="mn-center-bubble" id="mn-center-bubble"><span style="font-size:22px;line-height:1">${def.emoji}</span></div><span style="font-size:9px;color:var(--text3);font-weight:500;margin-top:2px">${def.labelCourt}</span></div>`;
+    return `<div class="mn-item" id="${id}" onclick="${oc}"><span style="font-size:19px;line-height:1">${def.emoji}</span><span>${def.labelCourt}</span></div>`;
+  }).join('')+`<button class="mn-item" onclick="ouvrirMNManager()" style="font-size:16px"><span style="font-size:17px">✏️</span><span>Modifier</span></button>`;
+}
+
+function mnDynActivate(id){
+  document.querySelectorAll('#mn-bar-dynamic .mn-item,#mn-bar-dynamic .mn-center').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById(id);if(el)el.classList.add('active');
+  const b=document.getElementById('mn-center-bubble');
+  if(b){const p=b.closest('.mn-center');if(p&&p.id===id)b.classList.add('active');else b.classList.remove('active');}
+}
+
+function _mnSlotsHTML(){
+  return getMNC().map((item,i)=>{
+    const def=QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',label:item.page};
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--surface2)"><span style="font-size:22px">${def.emoji}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${def.label}${item.center?'<span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:6px">Principal</span>':''}</div></div><button class="btn btn-sm" style="font-size:10px;white-space:nowrap;color:var(--navy);border-color:var(--navy-light)" onclick="mnToggleCenter(${i})">${item.center?'&#8595; Normal':'&#9733; Principal'}</button><button class="btn-icon" style="color:var(--red);font-size:16px" onclick="mnRemoveSlot(${i})">&#x2715;</button></div>`;
+  }).join('')||'<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">Aucun raccourci</div>';
+}
+function _mnPagesHTML(){
+  const cfg=getMNC();
+  return QB_PAGES.map(p=>{
+    const on=cfg.some(c=>c.page===p.page);
+    return `<div onclick="mnTogglePage('${p.page}')" style="display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--surface2);background:${on?'var(--navy-bg)':'transparent'}"><span style="font-size:20px">${p.emoji}</span><span style="font-size:13px;flex:1;color:var(--text)">${p.label}</span>${on?'<span style="font-size:11px;color:var(--navy);font-weight:700">&#10003; Ajout\u00e9</span>':''}</div>`;
+  }).join('');
+}
+
+function ouvrirMNManager(){
+  const html=`<div id="mn-mgr" onclick="if(event.target===this)fermerMNManager()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:flex-end"><div style="background:var(--surface);width:100%;max-height:92dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden"><div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><div><div style="font-size:15px;font-weight:700">&#9998; Personnaliser la barre</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Max 5 ic\u00f4nes &bull; &#9733; pour choisir l&rsquo;ic\u00f4ne principale</div></div><button class="btn-icon" onclick="fermerMNManager()">&#x2715;</button></div><div style="overflow-y:auto;flex:1"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:12px 16px 4px">Raccourcis actifs</div><div id="mn-slots">${_mnSlotsHTML()}</div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:16px 16px 4px">Ajouter un menu</div><div id="mn-pages">${_mnPagesHTML()}</div></div><div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0"><button class="btn" onclick="mnReset()">&#8635; R\u00e9initialiser</button><button class="btn btn-primary" style="flex:1" onclick="fermerMNManager()">&#10003; Enregistrer</button></div></div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function fermerMNManager(){const el=document.getElementById('mn-mgr');if(el)el.remove();renderMobileNav();}
+function _mnRefresh(){
+  const s=document.getElementById('mn-slots');if(s)s.innerHTML=_mnSlotsHTML();
+  const p=document.getElementById('mn-pages');if(p)p.innerHTML=_mnPagesHTML();
+}
+function mnTogglePage(page){
+  let cfg=getMNC();
+  const idx=cfg.findIndex(c=>c.page===page);
+  if(idx>=0){cfg.splice(idx,1);}
+  else{if(cfg.length>=5){toast('\u26a0\ufe0f Maximum 5 ic\u00f4nes dans la barre');return;}cfg.push({page,center:false});}
+  setMNC(cfg);_mnRefresh();
+}
+function mnRemoveSlot(i){let cfg=getMNC();cfg.splice(i,1);setMNC(cfg);_mnRefresh();}
+function mnToggleCenter(i){let cfg=getMNC();cfg.forEach((c,j)=>{c.center=(j===i?!c.center:false);});setMNC(cfg);_mnRefresh();}
+function mnReset(){if(!confirm('Remettre la barre par d\u00e9faut ?'))return;localStorage.removeItem('cm_mobilebar');_mnRefresh();toast('\u2705 R\u00e9initialis\u00e9');}
+
+
 function mnActivate(id){
   document.querySelectorAll('.mn-item,.mn-center').forEach(i=>i.classList.remove('active'));
   const bubble=document.getElementById('mn-center-bubble');
