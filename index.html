@@ -2497,7 +2497,7 @@ const actionsMap={
   depenses:()=>'<button class="btn btn-danger" onclick="addDep()">+ Dépense</button>',
   tresorerie:()=>'',revenus:()=>'<button class="btn btn-success" onclick="addRevenu()">+ Revenu</button> <button class="btn" onclick="addCharge()">+ Charge</button>',rapports:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',
   historique:()=>'<button class="btn" onclick="clearHistorique()">🗑️ Vider</button>',inventaire:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',workspace:()=>'',comptes:()=>'<button class="btn btn-primary" onclick="addCompte()">+ Compte</button>',devis:()=>'<button class="btn" onclick="_devisFiltreStatut=\'Envoyé\';rDevis()">📤 En attente</button> <button class="btn btn-primary" onclick="addDevis()">+ Devis</button>',planning:()=>'<button class="btn btn-primary" onclick="addPlanning()">+ Tâche</button>',calculatrice:()=>'',parametres:()=>'',
-  dettes:()=>'',
+  dettes:()=>'<button class="btn" onclick="confirmerMigration()" title="Reconstruire l\'historique des relevés de compte">🔄 Reconstruire historique</button>',
   flux:()=>'',
   limites:()=>'<button class="btn btn-primary" onclick="addLimite()">+ Limite</button>',
   modeles:()=>'<button class="btn btn-primary" onclick="addModele()">+ Modèle</button>',
@@ -9161,6 +9161,90 @@ function saveAugmentDette(fid){
   f.historiqueDetteAjouts.push({id:genId(),date,mt,avant:avantDette,apres:f.dette,notes:notes||'—'});
   saveData();closeModal();toast(`➕ ${F(mt)} ajouté · Nouvelle dette : ${F(f.dette)}`);rDettes();
 }
+
+// ════════════════════════════════════════════════════
+// ─── MIGRATION : Reconstruction historique dettes ───
+// ════════════════════════════════════════════════════
+function migrerHistoriqueDettes(){
+  if(!S.fournisseurs||!S.achats) return toast('❌ Données manquantes');
+  let nbAjouts=0, nbPaiements=0;
+
+  // Grouper les achats à crédit par fournisseur, triés par date
+  const achatsCreditParFour={};
+  (S.achats||[]).filter(a=>a.statut==='À payer'||a.statut==='Payé').forEach(a=>{
+    if(!a.fid) return;
+    // Ignorer les achats "Payé" sans tranches (payés cash, pas à crédit)
+    const estCredit = a.statut==='À payer' || (a.tranches&&a.tranches.length>0);
+    if(!estCredit) return;
+    if(!achatsCreditParFour[a.fid]) achatsCreditParFour[a.fid]={ajouts:[],paiements:[]};
+    achatsCreditParFour[a.fid].ajouts.push(a);
+    // Récupérer les tranches de paiement
+    if(a.tranches&&a.tranches.length>0){
+      a.tranches.forEach(t=>{
+        achatsCreditParFour[a.fid].paiements.push({date:t.date,mt:t.mt,mode:t.mode,cid:t.cid,achatId:a.id,aid:a.aid});
+      });
+    }
+  });
+
+  S.fournisseurs.forEach(f=>{
+    const data=achatsCreditParFour[f.id];
+    if(!data) return;
+
+    // Fusionner ajouts + paiements triés par date
+    const evenements=[];
+    data.ajouts.forEach(a=>{
+      const art=S.stock&&S.stock.find(s=>s.id==a.aid);
+      evenements.push({date:a.date,type:'ajout',mt:a.mt,id:a.id,label:'Achat — '+(art?art.nom:(a.aid||'Article'))+(a.notes?' · '+a.notes:''),ts:a.ts||0});
+    });
+    data.paiements.forEach(p=>{
+      const art=S.stock&&S.stock.find(s=>s.id==p.aid);
+      evenements.push({date:p.date,type:'paiement',mt:p.mt,id:p.achatId+'_t_'+p.date,label:'Paiement achat — '+(art?art.nom:'Article'),mode:p.mode,cid:p.cid,ts:p.ts||0});
+    });
+    evenements.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
+
+    // Reconstruire l'historique avec soldes cumulatifs
+    // On repart de 0 et on reconstruit jusqu'au solde actuel
+    let solde=0;
+    const nouveauxAjouts=[];
+    const nouveauxPaiements=[];
+
+    evenements.forEach(ev=>{
+      const avant=solde;
+      if(ev.type==='ajout'){
+        solde+=ev.mt;
+        nouveauxAjouts.push({id:ev.id,date:ev.date,mt:ev.mt,avant,apres:solde,notes:ev.label,ts:ev.ts||Date.now()});
+        nbAjouts++;
+      } else {
+        solde=Math.max(0,solde-ev.mt);
+        nouveauxPaiements.push({id:genId(),date:ev.date,montantPaye:ev.mt,avant,apres:solde,compte:ev.mode||'—',cid:ev.cid||'',note:ev.label,ts:ev.ts||Date.now()});
+        nbPaiements++;
+      }
+    });
+
+    // Remplacer uniquement si le fournisseur n'a pas encore d'historique
+    const aDejaAjouts=(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length>0);
+    const aDejaPaiements=(f.historiquePaiementsFour&&f.historiquePaiementsFour.length>0);
+    if(!aDejaAjouts && nouveauxAjouts.length>0) f.historiqueDetteAjouts=nouveauxAjouts;
+    if(!aDejaPaiements && nouveauxPaiements.length>0) f.historiquePaiementsFour=nouveauxPaiements;
+  });
+
+  saveData();
+  toast('✅ Migration terminée — '+nbAjouts+' achat(s) et '+nbPaiements+' paiement(s) reconstruits');
+  if(currentPage==='dettes') rDettes();
+}
+
+function confirmerMigration(){
+  const html=`<div class="mft">🔄 Reconstruire l’historique des dettes</div>
+    <p style="margin:12px 0;color:var(--text2);font-size:13px;">Cette opération analyse tous vos achats à crédit existants et reconstitue automatiquement le relevé de compte de chaque fournisseur.<br><br>
+    <strong>Elle ne modifie pas vos soldes</strong> — uniquement l’historique des mouvements.<br><br>
+    <span style="color:var(--text3);font-size:12px;">ℹ️ Les fournisseurs qui ont déjà un historique ne seront pas modifiés.</span></p>
+    <div class="mff">
+    <button class="btn" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-primary" onclick="closeModal();migrerHistoriqueDettes()">🔄 Lancer la migration</button>
+    </div>`;
+  modal(html);
+}
+
 
 function voirHistoDette(fid){
   const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
