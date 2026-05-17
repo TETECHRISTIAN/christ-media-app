@@ -170,7 +170,7 @@ tr:hover .td-actions{opacity:1}
 
 /* ─── MODAL ─── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(2px)}
-.modal{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:24px;width:500px;max-width:95vw;max-height:90dvh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:24px;width:500px;max-width:95vw;max-height:90dvh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);transition:all .2s}.modal.fullscreen{width:100vw!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;margin:0!important;padding:20px!important}.modal.fullscreen .releve-table-wrap{max-height:calc(100dvh - 220px)!important}
 .mft{font-size:16px;font-weight:600;margin-bottom:18px}
 .mff{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
 
@@ -9203,6 +9203,16 @@ function saveAugmentDette(fid){
   saveData();closeModal();toast(`➕ ${F(mt)} ajouté · Nouvelle dette : ${F(f.dette)}`);rDettes();
 }
 
+function toggleReleveFullscreen(){
+  const m=document.querySelector('#modal-root .modal');
+  const btn=document.getElementById('btn-releve-fs');
+  if(!m||!btn)return;
+  m.classList.toggle('fullscreen');
+  const isFs=m.classList.contains('fullscreen');
+  btn.textContent=isFs?'⊠ Réduire':'⛶ Agrandir';
+  btn.title=isFs?'Réduire le relevé':'Agrandir en plein écran';
+}
+
 function voirHistoDette(fid){
   const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
   const ajouts=f.historiqueDetteAjouts||[];
@@ -9229,7 +9239,7 @@ function voirHistoDette(fid){
         <div style="font-size:15px;font-weight:800;color:${f.dette>0?'var(--amber)':'var(--green)'}">${F(f.dette)}</div>
       </div>
     </div>
-    <div style="max-height:360px;overflow-y:auto">
+    <div class="releve-table-wrap" style="max-height:360px;overflow-y:auto;overflow-x:auto">
     ${lignes.length===0?'<div style="text-align:center;color:var(--text3);padding:20px">Aucun mouvement enregistré</div>':
     `<table style="width:100%;font-size:12px;border-collapse:collapse">
       <thead><tr style="border-bottom:2px solid var(--border);background:var(--surface2)">
@@ -9256,9 +9266,12 @@ function voirHistoDette(fid){
       </tbody>
     </table>`}
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:var(--text3)">${lignes.length} mouvement(s) · ${ajouts.length} ajout(s) · ${paiements.length} paiement(s)</div>
-      <button class="btn" onclick="closeModal()">Fermer</button>
+      <div style="display:flex;gap:8px">
+        <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
+        <button class="btn" onclick="closeModal()">Fermer</button>
+      </div>
     </div>`);
 }
 
