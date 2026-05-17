@@ -108,7 +108,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .btn-icon:hover{background:var(--surface2);color:var(--text)}
 
 /* ─── PAGE ─── */
-.page{padding:24px;flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:80px}
+.page{padding:24px;flex:1;overflow-y:auto;padding-bottom:80px}
 
 /* ─── GRIDS ─── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -136,7 +136,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .st:first-child{margin-top:0}
 
 /* ─── TABLES ─── */
-.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow-x:auto;overflow-y:visible;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch;max-width:100%}
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow-x:auto;overflow-y:hidden;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);vertical-align:middle}
@@ -229,8 +229,7 @@ tr:hover .td-actions{opacity:1}
   .sidebar{display:none}
   .menu-btn{display:flex}
   .mobile-nav{display:block}
-  .page{padding:16px;overflow-y:auto;overflow-x:hidden;padding-bottom:75px}
-  .tbl-wrap{max-width:calc(100vw - 32px)}
+  .page{padding:16px;overflow-y:auto;padding-bottom:90px}
   .g4{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr}
   .g2{grid-template-columns:1fr}
@@ -1879,19 +1878,35 @@ function activerListenerTempsReel(){
       }
       setSyncStatus('online','Synchronisé ✓');
 
-    // CAS 3 : Remote plus vieux que local → fusionner quand même les nouveaux IDs
-    // (même si la version Firebase est plus ancienne, elle peut contenir des ventes
-    // d'un autre appareil qui n'ont pas encore été fusionnées localement)
+    // CAS 3 : Remote plus vieux que local → fusionner les nouveaux IDs des deux côtés
+    // CORRECTIF : on fusionne proprement sans écraser — on ne republie QUE si on a ajouté qqch
     } else {
+      const tsOf3 = item => item.ts || item.updatedAt || 0;
       const merged3 = Object.assign({}, S);
       let changed3 = false;
       FB_COLLECTIONS.forEach(col=>{
         const remoteArr = Array.isArray(remote[col]) ? remote[col] : [];
         const localArr  = Array.isArray(S[col])      ? S[col]      : [];
-        const localIds  = new Set(localArr.map(x=>String(x.id)));
-        const nouveaux  = remoteArr.filter(x => !localIds.has(String(x.id)) && !x._deleted);
-        if(nouveaux.length > 0){
-          merged3[col] = [...localArr, ...nouveaux];
+        const localMap  = new Map(localArr.map(x=>[String(x.id), x]));
+        let colChanged = false;
+        remoteArr.forEach(x=>{
+          if(!x || x._deleted) return;
+          const key = String(x.id);
+          if(!localMap.has(key)){
+            // Nouvel item dans remote absent du local → ajouter
+            localMap.set(key, x);
+            colChanged = true;
+          } else {
+            // Item existant → garder le plus récent
+            const existing = localMap.get(key);
+            if(tsOf3(x) > tsOf3(existing)){
+              localMap.set(key, x);
+              colChanged = true;
+            }
+          }
+        });
+        if(colChanged){
+          merged3[col] = Array.from(localMap.values());
           changed3 = true;
         }
       });
@@ -1904,7 +1919,9 @@ function activerListenerTempsReel(){
         saveLocal(S);
         rafraichirPageCourante();
         toast('🔄 Nouvelles données reçues', 1800);
-        // Republier la fusion vers Firebase pour mettre à jour sa version
+        // Republier la fusion vers Firebase — version montée pour éviter boucle
+        S.version = Date.now();
+        saveLocal(S);
         _ignorerProchainUpdate = true;
         clearTimeout(_ignorerTimer);
         _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 8000);
@@ -2215,14 +2232,37 @@ async function startFirebaseSync(){
       setSyncStatus('syncing','Chargement cloud...');
       const remote=await loadFromFirebase();
       if(remote){
-        // FUSION au lieu de remplacement aveugle
-        const merged = fusionnerDonnees(S, remote);
+        // FUSION au démarrage : toujours fusionner local+remote
+        // mais si remote est plus récent OU plus riche, il prend la base
+        const remoteVer = remote.version || 0;
+        const localVer  = S.version  || 0;
+        // Compter les items totaux pour détecter quel appareil a les données les plus complètes
+        const tsOf = item => item.ts || item.updatedAt || 0;
+        const remoteLatestTs = FB_COLLECTIONS.reduce((max,col)=>{
+          const arr = Array.isArray(remote[col]) ? remote[col] : [];
+          return arr.reduce((m,x)=>Math.max(m, tsOf(x)), max);
+        }, remoteVer);
+        const localLatestTs = FB_COLLECTIONS.reduce((max,col)=>{
+          const arr = Array.isArray(S[col]) ? S[col] : [];
+          return arr.reduce((m,x)=>Math.max(m, tsOf(x)), max);
+        }, localVer);
+        // Si remote a des données plus récentes → le prendre comme base (anti-écrasement mobile)
+        let merged;
+        if(remoteLatestTs >= localLatestTs){
+          // Remote est la source de vérité → fusionner remote+local
+          merged = fusionnerDonnees(remote, S);
+        } else {
+          // Local est plus récent (travail hors ligne) → fusionner local+remote
+          merged = fusionnerDonnees(S, remote);
+        }
         appliquerEtatFusionne(merged);
         setSyncStatus('online','Synchronisé ✓');
         await initAuth(); // vérifie session → cache ou affiche l'écran de login
         rafraichirPageCourante();
-        // Pousser la fusion vers Firebase pour que tous les appareils en bénéficient
-        await saveToFirebase(S);
+        // Pousser la fusion vers Firebase uniquement si local avait des données plus récentes
+        if(localLatestTs > remoteLatestTs){
+          await saveToFirebase(S);
+        }
       }else{
         // Aucune donnée cloud → premier appareil, on pousse le local
         await initAuth();
