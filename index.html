@@ -2793,17 +2793,46 @@ const MN_DEFAULT=[
 function getMNC(){try{const r=localStorage.getItem('cm_mobilebar');if(r)return JSON.parse(r);}catch(e){}return JSON.parse(JSON.stringify(MN_DEFAULT));}
 function setMNC(cfg){localStorage.setItem('cm_mobilebar',JSON.stringify(cfg));}
 
+function getMNSvg(page){
+  const svgs={
+    comptes:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M2 8h16"/><circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none"/><path d="M9 12h6" stroke-linecap="round"/></svg>',
+    fournisseurs:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="6" width="11" height="10" rx="1.5"/><path d="M13 9h3l2 4v4h-5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5.5" cy="17" r="1.8" fill="currentColor" stroke="none"/><circle cx="13.5" cy="17" r="1.8" fill="currentColor" stroke="none"/></svg>',
+    vente:'<svg viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="1.7"><circle cx="7" cy="15" r="1.8" fill="white" stroke="none"/><circle cx="14" cy="15" r="1.8" fill="white" stroke="none"/><path d="M1 2h3l3 9h7l2-6H6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    dettes:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    calculatrice:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="2" width="14" height="16" rx="2"/><path d="M6 6h8M6 10h3M11 10h3M6 13h3M11 13h3M6 16h3M11 16h3" stroke-linecap="round"/></svg>',
+    dashboard:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>',
+    transactions:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14M3 10h9M3 15h6" stroke-linecap="round"/></svg>',
+    stock:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="8" width="16" height="10" rx="1.5"/><path d="M6 8V5a4 4 0 018 0v3" stroke-linecap="round"/></svg>',
+    clients:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="7" r="3.5"/><path d="M1 18c0-4 3-6 7-6s7 2 7 6"/><circle cx="15" cy="7" r="2.5"/><path d="M19 18c0-3-2-5-4-5" stroke-linecap="round"/></svg>',
+    depenses:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M6 7l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17h12" stroke-linecap="round"/></svg>',
+    tresorerie:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="16" height="12" rx="2"/><circle cx="10" cy="10" r="3"/><path d="M2 8h16" stroke-width="1"/></svg>',
+    revenus:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 15l4-5 4 3 5-7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    rapports:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="2" width="14" height="16" rx="1.5"/><path d="M7 7h6M7 11h6M7 15h4" stroke-linecap="round"/></svg>',
+    agenda:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="14" height="14" rx="1.5"/><path d="M7 2v4M13 2v4M3 9h14" stroke-linecap="round"/></svg>',
+    rh:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="7" r="3.5"/><path d="M3 18c0-4 3-6 7-6s7 2 7 6"/></svg>',
+    achats:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h2l2.5 8h8l2-6H7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="17" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1.5" fill="currentColor" stroke="none"/></svg>',
+    comptabilite:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="16" height="14" rx="1.5"/><path d="M2 8h16M7 8v9" stroke-linecap="round"/></svg>',
+    kpis:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16l5-5 4 3 7-9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    live:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3" fill="currentColor" opacity=".5" stroke="none"/><circle cx="10" cy="10" r="3"/><circle cx="10" cy="10" r="7"/></svg>',
+    coach:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="2" width="14" height="12" rx="2"/><path d="M7 18l3-4 3 4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    parametres:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4" stroke-linecap="round"/></svg>',
+    __caisse_rapide__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M5 8l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  };
+  return svgs[page]||'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M10 7v3l2 2" stroke-linecap="round"/></svg>';
+}
+
 function renderMobileNav(){
   const bar=document.getElementById('mn-bar-dynamic');
   if(!bar)return;
   const cfg=getMNC().slice(0,5);
   bar.innerHTML=cfg.map((item,i)=>{
-    const def=QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',labelCourt:item.page,label:item.page};
+    const def=QB_PAGES.find(p=>p.page===item.page)||{labelCourt:item.page,label:item.page};
     const id='mnd-'+i;
     const oc=item.page==='__caisse_rapide__'?'ouvrirCaisseRapide()':`nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');mnDynActivate('${id}')`;
-    if(item.center)return `<div class="mn-center" id="${id}" onclick="${oc}"><div class="mn-center-bubble" id="mn-center-bubble"><span style="font-size:22px;line-height:1">${def.emoji}</span></div><span style="font-size:9px;color:var(--text3);font-weight:500;margin-top:2px">${def.labelCourt}</span></div>`;
-    return `<div class="mn-item" id="${id}" onclick="${oc}"><span style="font-size:19px;line-height:1">${def.emoji}</span><span>${def.labelCourt}</span></div>`;
-  }).join('')+`<button class="mn-item" onclick="ouvrirMNManager()" style="font-size:16px"><span style="font-size:17px">✏️</span><span>Modifier</span></button>`;
+    const svg=getMNSvg(item.page);
+    if(item.center)return `<div class="mn-center" id="${id}" onclick="${oc}"><div class="mn-center-bubble" id="mn-center-bubble">${getMNSvg('vente')}</div><span style="font-size:9px;color:var(--text3);font-weight:500;margin-top:2px">${def.labelCourt}</span></div>`;
+    return `<div class="mn-item" id="${id}" onclick="${oc}">${svg}<span>${def.labelCourt}</span></div>`;
+  }).join('')+`<div class="mn-item" onclick="ouvrirMNManager()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h14M3 10h14M3 14h14" stroke-linecap="round"/><circle cx="7" cy="6" r="2" fill="var(--surface)" stroke="currentColor"/><circle cx="13" cy="10" r="2" fill="var(--surface)" stroke="currentColor"/><circle cx="7" cy="14" r="2" fill="var(--surface)" stroke="currentColor"/></svg><span>Modifier</span></div>`;
 }
 
 function mnDynActivate(id){
