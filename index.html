@@ -9705,6 +9705,7 @@ let agendaFiltreCompte='tout';
 
 function rAgenda(){
   if(!S.agenda)S.agenda=[];
+  dedupAgenda();
   const today=D();
   const demain=new Date();demain.setDate(demain.getDate()+1);
   const demainStr=demain.toISOString().split('T')[0];
@@ -10025,7 +10026,10 @@ function confirmerFait(id){
     if(op.recurrence==='Quotidien') next.setDate(next.getDate()+1);
     else if(op.recurrence==='Hebdomadaire') next.setDate(next.getDate()+7);
     else if(op.recurrence==='Mensuel') next.setMonth(next.getMonth()+1);
-    S.agenda.push({...op,id:genId(),date:next.toISOString().split('T')[0],fait:false,dateFait:null});
+    const nextDateStr=next.toISOString().split('T')[0];
+    // Anti-doublon : ne pas créer si une occurrence identique (même titre+date+type) existe déjà
+    const dejaPlanifie=S.agenda.some(a=>!a.fait&&a.titre===op.titre&&a.date===nextDateStr&&a.type===op.type&&a.recurrence===op.recurrence);
+    if(!dejaPlanifie) S.agenda.push({...op,id:genId(),date:nextDateStr,fait:false,dateFait:null});
   }
   saveData();closeModal();
   if(op.type!=='transfert') toast(`✅ ${op.titre}${mt?` — ${F(mt)}`:''} enregistré`);
@@ -10039,6 +10043,26 @@ function delAgenda(id){
 }
 
 // Vérifier les opérations en retard au démarrage
+function dedupAgenda(){
+  if(!S.agenda||S.agenda.length===0) return;
+  // Grouper par clé unique : titre+date+type+recurrence (non faits seulement)
+  const seen=new Set();
+  const dedup=[];
+  // Garder tous les faits intacts
+  S.agenda.filter(a=>a.fait).forEach(a=>dedup.push(a));
+  // Pour les non-faits, dédupliquer par titre+date+type
+  S.agenda.filter(a=>!a.fait).forEach(a=>{
+    const key=`${a.titre}|${a.date}|${a.type}|${a.recurrence||''}`;
+    if(!seen.has(key)){ seen.add(key); dedup.push(a); }
+  });
+  if(dedup.length!==S.agenda.length){
+    const nb=S.agenda.length-dedup.length;
+    S.agenda=dedup;
+    saveData();
+    console.log(`[Agenda] ${nb} doublon(s) supprimé(s)`);
+  }
+}
+
 function checkAgendaRetard(){
   if(!S.agenda)return;
   const today=D();
@@ -14537,6 +14561,7 @@ function aperçuTicket(){ /* appelé en temps réel — pas d\'action pour l\'in
 function initAméliorations(){
   initAutoBackup();
   checkAlertesStock();
+  dedupAgenda();
   checkAgendaRetard();
   initAutocomplete();
 }
