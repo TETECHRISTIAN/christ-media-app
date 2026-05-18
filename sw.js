@@ -1,88 +1,130 @@
-// ─── CHRIST MEDIA SERVICE WORKER ───
-// Incrémenter CACHE_VERSION à chaque déploiement force le remplacement du cache
-const CACHE_VERSION = 'v11-20260515b';
-const CACHE_NAME = 'christmedia-' + CACHE_VERSION;
+// ─── SERVICE WORKER — Christ Media PWA ───
+// Version dynamique : le cache se renouvelle automatiquement à chaque déploiement
+// Ne PAS modifier CACHE_VERSION manuellement — il est mis à jour par l'app
 
-const ASSETS_TO_CACHE = [
+const APP_VERSION = '2.0';
+// CACHE_VERSION est injecté dynamiquement via postMessage depuis l'app
+// Valeur par défaut = date du jour (fallback si pas encore de version reçue)
+let CACHE_NAME = 'christ-media-' + APP_VERSION + '-' + new Date().toISOString().slice(0,10);
+
+const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './icons/icon-192x192.png',
+  './icons/icon-512x512.png',
 ];
 
-// ─── INSTALLATION : mise en cache des assets de base ───
+// Domaines à NE JAMAIS mettre en cache (toujours réseau)
+const NETWORK_ONLY_DOMAINS = [
+  'firebaseio.com',
+  'firebase.googleapis.com',
+  'googleapis.com',
+  'gstatic.com',
+  'firebaseapp.com',
+  'anthropic.com',
+  'api.cloudinary.com',
+  'res.cloudinary.com',
+];
+
+// ─── MESSAGE : mise à jour de version depuis l'app ───
+self.addEventListener('message', event => {
+  if(event.data && event.data.type === 'SET_CACHE_VERSION'){
+    const newCache = 'christ-media-' + APP_VERSION + '-' + event.data.version;
+    if(newCache !== CACHE_NAME){
+      const oldCache = CACHE_NAME;
+      CACHE_NAME = newCache;
+      // Supprimer l'ancien cache immédiatement
+      caches.delete(oldCache).then(() => {
+        // Pré-cacher les assets avec la nouvelle version
+        caches.open(CACHE_NAME).then(cache => {
+          cache.addAll(STATIC_ASSETS).catch(err => {
+            console.warn('SW: Pré-cache nouvelle version échoué:', err);
+          });
+        });
+      });
+      // Notifier tous les clients qu'une nouvelle version est active
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'CACHE_UPDATED', version: event.data.version });
+        });
+      });
+    }
+  }
+});
+
+// ─── INSTALL ───
 self.addEventListener('install', event => {
-  console.log('[SW] Install — cache:', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(err => {
-        console.warn('[SW] Certains assets non mis en cache:', err);
+      return cache.addAll(STATIC_ASSETS).catch(err => {
+        console.warn('SW: Certains assets non mis en cache:', err);
       });
     })
   );
-  // Ne PAS appeler skipWaiting ici — on attend le message de index.html
+  self.skipWaiting();
 });
 
-// ─── ACTIVATION : supprimer les anciens caches ───
+// ─── ACTIVATE ───
 self.addEventListener('activate', event => {
-  console.log('[SW] Activate — cache:', CACHE_NAME);
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
+    caches.keys().then(keys =>
+      Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
           .map(key => {
-            console.log('[SW] Suppression ancien cache:', key);
+            console.log('SW: Suppression ancien cache:', key);
             return caches.delete(key);
           })
-      );
-    }).then(() => self.clients.claim()) // Prendre le contrôle de tous les onglets ouverts
+      )
+    )
   );
+  self.clients.claim();
 });
 
-// ─── MESSAGE : skipWaiting déclenché depuis index.html ───
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('[SW] skipWaiting demandé');
-    self.skipWaiting();
-  }
-});
-
-// ─── FETCH : stratégie Network First pour index.html, Cache First pour le reste ───
+// ─── FETCH ───
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+  const url = event.request.url;
 
-  // Ignorer les requêtes non-GET et Firebase/Cloudinary
+  if (!url.startsWith('http')) return;
+
+  const isNetworkOnly = NETWORK_ONLY_DOMAINS.some(domain => url.includes(domain));
+  if (isNetworkOnly) return;
+
   if (event.request.method !== 'GET') return;
-  if (url.hostname.includes('firebase') || url.hostname.includes('cloudinary')) return;
-  if (url.hostname.includes('googleapis') || url.hostname.includes('gstatic')) return;
 
-  // Network First pour index.html — toujours essayer d'avoir la dernière version
-  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname === '/') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request)) // Fallback cache si hors ligne
-    );
-    return;
-  }
-
-  // Cache First pour les autres assets (icons, manifest…)
   event.respondWith(
     caches.match(event.request).then(cached => {
+      // Toujours essayer le réseau d'abord pour index.html (évite cache périmé)
+      if(event.request.destination === 'document'){
+        return fetch(event.request)
+          .then(response => {
+            if(!response || response.status !== 200) return cached || response;
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            return response;
+          })
+          .catch(() => cached || caches.match('./index.html'));
+      }
+
       if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => cached);
+
+      return fetch(event.request)
+        .then(response => {
+          if (!response || response.status !== 200 || response.type === 'opaque') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          if (event.request.destination === 'document') {
+            return caches.match('./index.html');
+          }
+        });
     })
   );
 });

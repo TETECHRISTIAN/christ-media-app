@@ -10248,22 +10248,45 @@ function installPWA(){
 }
 
 // ─── SERVICE WORKER (PWA offline) ───
+// Envoie la version de l'app au SW pour invalidation automatique du cache
+function swEnvoyerVersion(){
+  if(!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+  // Version = parametre stocké dans Firebase (mis à jour à chaque Master Save / Prise de service)
+  const version = (S.parametres && S.parametres.sw_version) || S.version || Date.now();
+  navigator.serviceWorker.controller.postMessage({
+    type: 'SET_CACHE_VERSION',
+    version: String(version)
+  });
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
       .then(reg => {
         console.log('SW enregistré:', reg.scope);
+        // Envoyer la version dès que le SW est prêt
+        if(navigator.serviceWorker.controller){
+          swEnvoyerVersion();
+        }
         // Vérifier les mises à jour
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker.addEventListener('statechange', () => {
             if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
-              toast('🔄 Mise à jour disponible — rechargez l\'app');
+              toast('🔄 Nouvelle version disponible — rechargez l\'app pour mettre à jour');
             }
           });
         });
       })
       .catch(err => console.warn('SW échec:', err));
+
+    // Écouter les messages du SW (cache mis à jour)
+    navigator.serviceWorker.addEventListener('message', event => {
+      if(event.data && event.data.type === 'CACHE_UPDATED'){
+        console.log('[SW] Cache mis à jour, version:', event.data.version);
+        toast('✅ App mise à jour sur cet appareil', 2500);
+      }
+    });
   });
 }
 
@@ -16394,6 +16417,8 @@ async function priseDeService(){
 
   setSyncStatus('online','Synchronisé ✓');
   toast('✅ Prise de service terminée — tous les appareils sont synchronisés !', 4000);
+  // Notifier le SW local pour renouveler le cache
+  swEnvoyerVersion();
   rafraichirPageCourante();
 
   if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
@@ -16411,6 +16436,9 @@ async function masterSave(){
   // Générer une version maître (timestamp)
   genVersion();
   S.version = Date.now();
+  // Mettre à jour sw_version pour forcer le renouvellement du cache sur tous les appareils
+  if(!S.parametres) S.parametres = {};
+  S.parametres.sw_version = S.version;
   saveLocal(S);
 
   // 1. Écrire toutes les données dans Firebase
@@ -16431,6 +16459,8 @@ async function masterSave(){
   await db.ref('christmedia/master_save').set(signal);
 
   toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
+  // Notifier le SW local pour renouveler le cache
+  swEnvoyerVersion();
   if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
 }
 
@@ -16474,6 +16504,8 @@ function activerListenerMasterSave(){
     saveLocal(S);
 
     toast('✅ Synchronisation Master Save terminée !', 3000);
+    // Renouveler le cache SW sur cet appareil aussi
+    swEnvoyerVersion();
 
     // Recharger l'interface
     setTimeout(() => {
