@@ -1495,7 +1495,7 @@ const defaultData={
   plannings:[],
   dettes:[],
   historique_prix:[],
-  objectifs:{ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true},
+  objectifs_par_boutique:{},
   boutiques:[
     {id:1,nom:'Boutique A',emoji:'🏪',couleur:'#0f1f3d',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true},
     {id:2,nom:'Boutique B',emoji:'🏬',couleur:'#1a5c2e',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true}
@@ -2381,6 +2381,20 @@ function getBoutiqueActive(){
   return (S.boutiques||[]).find(b=>b.id==bid) || (S.boutiques||[])[0] || {id:1,nom:'Boutique',emoji:'🏪',couleur:'#0f1f3d',categories:[]};
 }
 
+// Retourne les objectifs de la boutique active (par boutique)
+function getObjBoutique(){
+  const bid = getBid();
+  if(!S.objectifs_par_boutique) S.objectifs_par_boutique = {};
+  if(!S.objectifs_par_boutique[bid]) S.objectifs_par_boutique[bid] = {ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true};
+  if(S.objectifs && typeof S.objectifs === 'object' && !Array.isArray(S.objectifs) && S.objectifs.ca_mensuel){
+    if(!S.objectifs_par_boutique[1] || !S.objectifs_par_boutique[1].ca_mensuel){
+      S.objectifs_par_boutique[1] = Object.assign({}, S.objectifs);
+    }
+    delete S.objectifs;
+  }
+  return S.objectifs_par_boutique[bid];
+}
+
 // Switcher de boutique (admin uniquement)
 function switcherBoutique(bid){
   if(S.session?.role !== 'admin'){toast('⛔ Réservé à l\'admin');return;}
@@ -2950,7 +2964,7 @@ function rDashVendeur(){
   const nbMois = mesVentesMois.length;
 
   // Objectif journalier (objectif mensuel / 26 jours ouvrés)
-  const obj = S.objectifs || {ca_mensuel:500000, ventes_nb:50};
+  const obj = getObjBoutique();
   const objJour = Math.round((obj.ca_mensuel||500000) / 26);
   const objNbJour = Math.round((obj.ventes_nb||50) / 26);
   const caPct = Math.min(100, objJour ? Math.round(caAuj/objJour*100) : 0);
@@ -3207,7 +3221,7 @@ function rDash(){
   const cats = getCatsBoutique();
   const vt=vp||1;
   // Objectifs
-  const obj=S.objectifs||{ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true};
+  const obj=getObjBoutique();
   const vNbCur=ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curM)).length;
   const caPct=Math.min(100,obj.ca_mensuel?Math.round(vpCur/obj.ca_mensuel*100):0);
   const nbPct=Math.min(100,obj.ventes_nb?Math.round(vNbCur/obj.ventes_nb*100):0);
@@ -3273,8 +3287,7 @@ function rDash(){
 
 // ─── OBJECTIFS ───
 function rObjectifs(){
-  if(!S.objectifs)S.objectifs={ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true};
-  const obj=S.objectifs;
+  const obj=getObjBoutique();
   const now=new Date();
   const moisLabels=[];const caHisto=[];const depHisto=[];
   for(let i=5;i>=0;i--){
@@ -3330,8 +3343,7 @@ function rObjectifs(){
     </table></div>`;
 }
 function editObjectifs(){
-  if(!S.objectifs)S.objectifs={ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true};
-  const o=S.objectifs;
+  const o=getObjBoutique();
   modal(`<div class="mft">Objectifs mensuels</div>
     <div class="fg"><label class="fl">Objectif CA (${S.parametres.devise})</label><input class="fi" type="number" id="o-ca" value="${o.ca_mensuel}"></div>
     <div class="fg"><label class="fl">Nombre de ventes cible</label><input class="fi" type="number" id="o-nb" value="${o.ventes_nb}"></div>
@@ -3340,11 +3352,11 @@ function editObjectifs(){
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveObjectifs()">Enregistrer</button></div>`);
 }
 function saveObjectifs(){
-  if(!S.objectifs)S.objectifs={};
-  S.objectifs.ca_mensuel=+document.getElementById("o-ca").value||0;
-  S.objectifs.ventes_nb=+document.getElementById("o-nb").value||0;
-  S.objectifs.depenses_max=+document.getElementById("o-dep").value||0;
-  S.objectifs.actif=document.getElementById("o-actif").checked;
+  const ob=getObjBoutique();
+  ob.ca_mensuel=+document.getElementById("o-ca").value||0;
+  ob.ventes_nb=+document.getElementById("o-nb").value||0;
+  ob.depenses_max=+document.getElementById("o-dep").value||0;
+  ob.actif=document.getElementById("o-actif").checked;
   saveData();closeModal();toast("Objectifs mis à jour");rObjectifs();
 }
 
@@ -7085,21 +7097,16 @@ function getNotifs(){
   }
 
   // ── OBJECTIFS NON ATTEINTS ──
-  if(S.objectifs&&S.objectifs.length>0){
-    const curY=today.slice(0,4);
-    S.objectifs.forEach(obj=>{
-      const caReel=ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curM)).reduce((s,v)=>s+v.mt,0);
-      const cible=obj.caMensuel||obj.ca_mensuel||0;
-      if(cible>0){
-        const pct=Math.round(caReel/cible*100);
-        const joursRestants=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()-new Date().getDate();
-        if(pct<70&&joursRestants<=10){
-          notifs.push({icon:'🎯',msg:`Objectif mensuel en danger`,sub:`${pct}% atteint — ${joursRestants}j restants`,type:'objectif',urgent:pct<50,action:"nav(document.querySelector('[data-page=objectifs]'),'objectifs')"});
-        } else if(pct>=100){
-          notifs.push({icon:'🏆',msg:`Objectif mensuel atteint !`,sub:`${F(caReel)} / ${F(cible)} — ${pct}%`,type:'objectif',urgent:false,action:"nav(document.querySelector('[data-page=objectifs]'),'objectifs')"});
-        }
-      }
-    });
+  const _obj=getObjBoutique();
+  if(_obj&&_obj.actif!==false&&_obj.ca_mensuel>0){
+    const caReel=ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curM)).reduce((s,v)=>s+v.mt,0);
+    const pct=Math.round(caReel/_obj.ca_mensuel*100);
+    const joursRestants=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()-new Date().getDate();
+    if(pct<70&&joursRestants<=10){
+      notifs.push({icon:'🎯',msg:`Objectif mensuel en danger`,sub:`${pct}% atteint — ${joursRestants}j restants`,type:'objectif',urgent:pct<50,action:"nav(document.querySelector('[data-page=objectifs]'),'objectifs')"});
+    } else if(pct>=100){
+      notifs.push({icon:'🏆',msg:`Objectif mensuel atteint !`,sub:`${F(caReel)} / ${F(_obj.ca_mensuel)} — ${pct}%`,type:'objectif',urgent:false,action:"nav(document.querySelector('[data-page=objectifs]'),'objectifs')"});
+    }
   }
 
   // ── AGENDA / PLANNINGS ──
@@ -10751,7 +10758,7 @@ function rCaisse(){
   });
 
   // Score journée
-  const score = totalVentes >= (S.objectifs&&S.objectifs.ca_mensuel ? S.objectifs.ca_mensuel/30 : 20000)
+  const score = totalVentes >= (getObjBoutique().ca_mensuel ? getObjBoutique().ca_mensuel/30 : 20000)
     ? '🟢 Bonne journée' : totalVentes > 0 ? '🟡 Journée moyenne' : '🔴 Aucune vente';
 
   document.getElementById('content').innerHTML = `
@@ -14273,7 +14280,7 @@ function genDemoData(){
       {id:2,date:ym+'-03',lib:'Électricité',cat:'Charges',mt:8500,mode:'Espèces'},
       {id:3,date:today,lib:'Transport marchandises',cat:'Transport',mt:5000,mode:'Espèces'},
     ],
-    objectifs:{ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true},
+    objectifs_par_boutique:{1:{ca_mensuel:500000,ventes_nb:50,depenses_max:200000,actif:true}},
     parametres:{nom:'Christ Media DÉMO',ville:'Lomé, Togo',devise:'FCFA',categories:['Lingerie','Audio-Vidéo','Bureautique'],planNom:'Christ Media DÉMO',planSub:'Mode Démo',planIco:'🎮'},
     utilisateurs:[{id:1,nom:'Demo Admin',role:'admin',email:'demo@demo.com',password:'demo1234',emoji:'👑',actif:true}],
     boutiques:[{id:1,nom:'Christ Media — Démo',actif:true}],
