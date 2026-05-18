@@ -4907,7 +4907,7 @@ function rDep(){
       </tbody></table></div>`;
 }
 function getCatsDep(){
-  const defaut=['Loyer','Transport','Électricité','Salaires','Frais généraux','Prélèvement personnel','Famille & Vie courante','Autre'];
+  const defaut=['Loyer boutique','Transport','Électricité','Salaires','Frais généraux','Autre','🏠 Loyer maison','🍽️ Nourriture','🏥 Santé','📚 Éducation','💡 Factures (eau/électricité)','👗 Habillement','🎉 Loisirs & Sorties','🙏 Dons & Église','Prélèvement personnel'];
   return (S.parametres&&S.parametres.categoriesDep)||defaut;
 }
 function getCatsRev(){
@@ -14674,7 +14674,7 @@ function rKPIs(){
   },0);
   const margeBrute = ca - coutVentes;
   // Séparation dépenses boutique vs prélèvements personnels/famille
-  const CATS_PERSO = ['Prélèvement personnel','Famille & Vie courante'];
+  const CATS_PERSO = ['🏠 Loyer maison','🍽️ Nourriture','🏥 Santé','📚 Éducation','💡 Factures (eau/électricité)','👗 Habillement','🎉 Loisirs & Sorties','🙏 Dons & Église','Prélèvement personnel'];
   const totalDepPerso = depenses.filter(d=>CATS_PERSO.includes(d.cat)).reduce((s,d)=>s+d.mt,0);
   const totalDepBoutique = totalDep - totalDepPerso;
   const resultat = margeBrute - totalDep;
@@ -14766,6 +14766,12 @@ function rKPIs(){
       <div class="kpi-label">🏠 Prélèvements famille</div>
       <div class="kpi-val" style="color:var(--purple);font-size:20px">${F(totalDepPerso)}</div>
       <span class="kpi-trend flat">${ca>0?Math.round(totalDepPerso/ca*100):0}% du CA</span>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+        ${CATS_PERSO.map(cat=>{
+          const mt=depenses.filter(d=>d.cat===cat).reduce((s,d)=>s+d.mt,0);
+          return mt>0?`<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:3px"><span style="color:var(--text2)">${cat}</span><span style="font-weight:600;color:var(--purple)">${F(mt)}</span></div>`:'';
+        }).join('')}
+      </div>
     </div>
     <div class="kpi-card" style="flex:1;min-width:180px;border-left:4px solid var(--teal)">
       <div class="kpi-label">📦 Achats stock</div>
