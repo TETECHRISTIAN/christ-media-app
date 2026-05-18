@@ -1799,14 +1799,8 @@ function activerListenerTempsReel(){
         saveLocal(S);
         rafraichirPageCourante();
         toast('🔄 Données mises à jour', 1800);
-        // Republier la fusion pour que tous les appareils aient le même état
-        _ignorerProchainUpdate = true;
-        clearTimeout(_ignorerTimer);
-        _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
-        saveToFirebase(S).then(()=>{
-          clearTimeout(_ignorerTimer);
-          _ignorerProchainUpdate = false;
-        }).catch(()=>{});
+        // NE PAS republier vers Firebase : évite la boucle de sync entre appareils
+        // Seul masterSave() écrit depuis un listener
       } else {
         // Même si pas de changement, aligner la version locale sur le remote
         S.version = remoteVer;
@@ -1836,10 +1830,7 @@ function activerListenerTempsReel(){
         }
         S.version = Date.now();
         saveLocal(S);
-        _ignorerProchainUpdate = true;
-        clearTimeout(_ignorerTimer);
-        _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 8000);
-        saveToFirebase(S).catch(()=>{});
+        // NE PAS republier vers Firebase — évite la boucle de sync
         rafraichirPageCourante();
       }
       setSyncStatus('online','Synchronisé ✓');
@@ -1885,13 +1876,7 @@ function activerListenerTempsReel(){
         saveLocal(S);
         rafraichirPageCourante();
         toast('🔄 Nouvelles données reçues', 1800);
-        // Republier la fusion vers Firebase — version montée pour éviter boucle
-        S.version = Date.now();
-        saveLocal(S);
-        _ignorerProchainUpdate = true;
-        clearTimeout(_ignorerTimer);
-        _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 8000);
-        saveToFirebase(S).catch(()=>{});
+        // NE PAS republier vers Firebase — évite la boucle de sync entre appareils
       }
       setSyncStatus('online','Synchronisé ✓');
     }
@@ -2085,9 +2070,10 @@ let S=loadData();
 // Sur mobile, les listeners Firebase globaux peuvent provoquer une surcharge mémoire
 // (surtout avec de gros tableaux: stock, ventes, clients...).
 // On limite donc le temps réel sur mobile et on privilégie la sync manuelle/auto.
-const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-const IS_LOW_RAM = (typeof navigator.deviceMemory === 'number') && navigator.deviceMemory <= 2;
-const DISABLE_HEAVY_REALTIME = IS_MOBILE || IS_LOW_RAM;
+// Tous les appareils sont Android (portables/tablettes) — mode léger forcé
+const IS_MOBILE = true;
+const IS_LOW_RAM = false;
+const DISABLE_HEAVY_REALTIME = true; // Toujours utiliser le listener léger par collection
 
 // Collections synchronisées sur mobile (listener léger)
 const MOBILE_SYNC_COLLECTIONS = ['ventes','achats','stock','clients','fournisseurs','depenses','dettes'];
