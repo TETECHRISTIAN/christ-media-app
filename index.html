@@ -2030,6 +2030,8 @@ function appliquerEtatFusionne(merged){
       S.boutique_active = savedSession.boutique_active;
     }
   }
+  // Nettoyer les doublons d'agenda après chaque fusion Firebase
+  if(S.agenda && S.agenda.length > 0) dedupAgenda();
   saveLocal(S);
 }
 
@@ -10050,8 +10052,21 @@ function confirmerFait(id){
     else if(op.recurrence==='Mensuel') next.setMonth(next.getMonth()+1);
     const nextDateStr=next.toISOString().split('T')[0];
     // Anti-doublon : ne pas créer si une occurrence identique (même titre+date+type) existe déjà
-    const dejaPlanifie=S.agenda.some(a=>!a.fait&&a.titre===op.titre&&a.date===nextDateStr&&a.type===op.type&&a.recurrence===op.recurrence);
-    if(!dejaPlanifie) S.agenda.push({...op,id:genId(),date:nextDateStr,fait:false,dateFait:null});
+    // Anti-doublon renforcé : titre+date+type OU parent_id+date
+    // Couvre la race condition multi-appareils (deux appareils créent la même occurrence)
+    const parentId = op.parent_id || op.id;
+    const dejaPlanifie=S.agenda.some(a=>
+      !a.fait && a.date===nextDateStr && (
+        (a.titre===op.titre && a.type===op.type && a.recurrence===op.recurrence) ||
+        (a.parent_id && a.parent_id===parentId)
+      )
+    );
+    if(!dejaPlanifie){
+      S.agenda.push({...op, id:genId(), date:nextDateStr, fait:false, dateFait:null,
+        parent_id: parentId,
+        ts: Date.now()
+      });
+    }
   }
   saveData();closeModal();
   if(op.type!=='transfert') toast(`✅ ${op.titre}${mt?` — ${F(mt)}`:''} enregistré`);
@@ -10072,10 +10087,17 @@ function dedupAgenda(){
   const dedup=[];
   // Garder tous les faits intacts
   S.agenda.filter(a=>a.fait).forEach(a=>dedup.push(a));
-  // Pour les non-faits, dédupliquer par titre+date+type
+  // Pour les non-faits, dédupliquer par titre+date+type ET par parent_id+date
+  // (couvre les doublons créés en race condition multi-appareils)
+  const parentSeen = new Set(); // parent_id|date
   S.agenda.filter(a=>!a.fait).forEach(a=>{
     const key=`${a.titre}|${a.date}|${a.type}|${a.recurrence||''}`;
-    if(!seen.has(key)){ seen.add(key); dedup.push(a); }
+    const pkey = a.parent_id ? `${a.parent_id}|${a.date}` : null;
+    if(seen.has(key)) return; // doublon titre+date
+    if(pkey && parentSeen.has(pkey)) return; // doublon parent_id+date
+    seen.add(key);
+    if(pkey) parentSeen.add(pkey);
+    dedup.push(a);
   });
   if(dedup.length!==S.agenda.length){
     const nb=S.agenda.length-dedup.length;
