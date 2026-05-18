@@ -14674,7 +14674,7 @@ function rKPIs(){
   },0);
   const margeBrute = ca - coutVentes;
   // Séparation dépenses boutique vs prélèvements personnels/famille
-  const CATS_PERSO = ['🏠 Loyer maison','🍽️ Nourriture','🏥 Santé','📚 Éducation','💡 Factures (eau/électricité)','👗 Habillement','🎉 Loisirs & Sorties','🙏 Dons & Église','Prélèvement personnel'];
+  const CATS_PERSO = ['🏠 Loyer maison','🍽️ Nourriture','🏥 Santé','📚 Éducation','💡 Factures (eau/électricité)','👗 Habillement','🎉 Loisirs & Sorties','🙏 Dons & Église','Prélèvement personnel','Famille & Vie courante','Maison','Santé','Nourriture'];
   const totalDepPerso = depenses.filter(d=>CATS_PERSO.includes(d.cat)).reduce((s,d)=>s+d.mt,0);
   const totalDepBoutique = totalDep - totalDepPerso;
   const resultat = margeBrute - totalDep;
