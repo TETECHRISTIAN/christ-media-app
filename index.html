@@ -1140,6 +1140,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><path d="M8 11V2M5 5l3-3 3 3M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Importer données
     </div>
+    <div class="ni admin-only" onclick="priseDeService()" id="prise-service-btn" style="color:#fff;background:linear-gradient(135deg,#1a6b3c,#27ae60);border-radius:var(--rs);margin-bottom:4px;font-weight:700;letter-spacing:.3px;box-shadow:0 2px 8px rgba(39,174,96,.4);transition:all .2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px rgba(39,174,96,.55)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(39,174,96,.4)'">
+      <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      🔄 Prise de service
+    </div>
     <div class="ni admin-only" onclick="masterSave()" id="master-save-btn" style="color:#fff;background:linear-gradient(135deg,#b8860b,#daa520);border-radius:var(--rs);margin-bottom:4px;font-weight:700;letter-spacing:.3px;box-shadow:0 2px 8px rgba(184,134,11,.4);transition:all .2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px rgba(184,134,11,.55)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(184,134,11,.4)'">
       <svg viewBox="0 0 16 16" fill="none"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
       ⚡ Master Save
@@ -16347,6 +16351,54 @@ async function envoyerCoachIA(question, btn){
 // ─── MASTER SAVE ───
 // L'admin pousse ses données comme référence absolue.
 // Tous les autres appareils reçoivent le signal et rechargent immédiatement.
+// ─── PRISE DE SERVICE ───
+// Synchro forcée + Master Save en un clic
+// À utiliser lors du passage de relais (ex: midi sur Chromebook, reprise vendeurs)
+async function priseDeService(){
+  if(!fbReady || !db){ toast('⚠️ Firebase non disponible'); return; }
+  if(!navigator.onLine){ toast('⚠️ Connexion internet requise'); return; }
+
+  const btn = document.getElementById('prise-service-btn');
+  if(btn){ btn.style.opacity='0.6'; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4" stroke-dasharray="4 2"/></svg> En cours...'; }
+
+  toast('🔄 Prise de service — synchronisation en cours...', 3000);
+
+  // Étape 1 : charger Firebase et fusionner
+  setSyncStatus('syncing','Prise de service...');
+  const remote = await loadFromFirebase();
+  if(remote){
+    const merged = fusionnerDonnees(S, remote);
+    appliquerEtatFusionne(merged);
+    saveLocal(S);
+  }
+
+  // Étape 2 : générer nouvelle version et pousser vers Firebase
+  genVersion();
+  S.version = Date.now();
+  saveLocal(S);
+  const ok = await saveToFirebase(S);
+  if(!ok){
+    toast('❌ Échec de la synchronisation');
+    if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
+    return;
+  }
+
+  // Étape 3 : signal Master Save pour que tous les appareils se synchronisent
+  const signal = {
+    ts: S.version,
+    par: (S.session?.nom || 'Admin') + ' (Prise de service)',
+    email: S.session?.email || '',
+    at: new Date().toISOString()
+  };
+  await db.ref('christmedia/master_save').set(signal);
+
+  setSyncStatus('online','Synchronisé ✓');
+  toast('✅ Prise de service terminée — tous les appareils sont synchronisés !', 4000);
+  rafraichirPageCourante();
+
+  if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
+}
+
 async function masterSave(){
   if(S.session?.role !== 'admin'){ toast('⛔ Réservé à l\'admin'); return; }
   if(!fbReady || !db){ toast('⚠️ Firebase non disponible'); return; }
