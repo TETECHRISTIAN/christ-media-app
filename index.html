@@ -4907,7 +4907,7 @@ function rDep(){
       </tbody></table></div>`;
 }
 function getCatsDep(){
-  const defaut=['Lingerie','Audio-Vidéo','Bureautique','Loyer','Transport','Électricité','Salaires','Frais généraux'];
+  const defaut=['Loyer','Transport','Électricité','Salaires','Frais généraux','Prélèvement personnel','Famille & Vie courante','Autre'];
   return (S.parametres&&S.parametres.categoriesDep)||defaut;
 }
 function getCatsRev(){
@@ -14673,6 +14673,10 @@ function rKPIs(){
     },0);
   },0);
   const margeBrute = ca - coutVentes;
+  // Séparation dépenses boutique vs prélèvements personnels/famille
+  const CATS_PERSO = ['Prélèvement personnel','Famille & Vie courante'];
+  const totalDepPerso = depenses.filter(d=>CATS_PERSO.includes(d.cat)).reduce((s,d)=>s+d.mt,0);
+  const totalDepBoutique = totalDep - totalDepPerso;
   const resultat = margeBrute - totalDep;
   const txMarge = ca>0 ? Math.round(margeBrute/ca*100) : 0;
   const txResultat = ca>0 ? Math.round(resultat/ca*100) : 0;
@@ -14750,6 +14754,26 @@ function rKPIs(){
       <div class="kpi-bar" style="width:${ca>0?Math.min(100,Math.round((totalAchats+totalDep)/ca*100)):0}%;background:linear-gradient(90deg,var(--red),var(--amber))"></div>
     </div>
   </div>
+  <!-- Décomposition dépenses boutique vs famille -->
+  ${totalDepPerso>0?`
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="kpi-card" style="flex:1;min-width:180px;border-left:4px solid var(--navy)">
+      <div class="kpi-label">🏪 Dépenses boutique</div>
+      <div class="kpi-val" style="color:var(--navy);font-size:20px">${F(totalDepBoutique)}</div>
+      <span class="kpi-trend flat">${ca>0?Math.round(totalDepBoutique/ca*100):0}% du CA</span>
+    </div>
+    <div class="kpi-card" style="flex:1;min-width:180px;border-left:4px solid var(--purple)">
+      <div class="kpi-label">🏠 Prélèvements famille</div>
+      <div class="kpi-val" style="color:var(--purple);font-size:20px">${F(totalDepPerso)}</div>
+      <span class="kpi-trend flat">${ca>0?Math.round(totalDepPerso/ca*100):0}% du CA</span>
+    </div>
+    <div class="kpi-card" style="flex:1;min-width:180px;border-left:4px solid var(--teal)">
+      <div class="kpi-label">📦 Achats stock</div>
+      <div class="kpi-val" style="color:var(--teal);font-size:20px">${F(totalAchats)}</div>
+      <span class="kpi-trend flat">Réappro. boutique</span>
+    </div>
+  </div>`:''}
+
 
   <div class="g2" style="margin-bottom:16px">
     <!-- Évolution CA -->
