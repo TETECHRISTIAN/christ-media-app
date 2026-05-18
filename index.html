@@ -14662,7 +14662,17 @@ function rKPIs(){
   const caPrev = vPrev.reduce((s,v)=>s+v.mt,0);
   const totalAchats = achats.reduce((s,a)=>s+a.mt,0);
   const totalDep = depenses.reduce((s,d)=>s+d.mt,0);
-  const margeBrute = ca - totalAchats;
+  // Marge brute = CA - coût réel des articles vendus (pa × qté vendue)
+  // On n'utilise PAS totalAchats ici car ce sont les achats de stock du mois,
+  // pas le coût des articles effectivement vendus.
+  const coutVentes = ventes.reduce((s,v)=>{
+    const lignes = v.lignes||[{aid:v.aid,qte:v.qte||1}];
+    return s + lignes.reduce((ls,l)=>{
+      const art = ga(l.aid);
+      return ls + (art&&art.pa>0 ? art.pa*(l.qte||1) : 0);
+    },0);
+  },0);
+  const margeBrute = ca - coutVentes;
   const resultat = margeBrute - totalDep;
   const txMarge = ca>0 ? Math.round(margeBrute/ca*100) : 0;
   const txResultat = ca>0 ? Math.round(resultat/ca*100) : 0;
