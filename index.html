@@ -11042,6 +11042,65 @@ function rClotureCaisse(){
       </div>
     </div>
 
+    <!-- Capacité fournisseur -->
+    ${(()=>{
+      const liquidite = (S.comptes||[]).reduce((s,c)=>s+(c.solde||0),0);
+      const totalDettes = (S.dettesAchats||[]).filter(d=>d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+      const liquiditeNette = liquidite - totalDettes;
+      const cmdsActives = (S.commandes||[]).filter(c=>c.statut!=='Reçue');
+      const cmdsAvecPrix = cmdsActives
+        .map(c=>({...c, total:(c.lignes||[]).reduce((s,l)=>s+(l.qte*(l.pu||0)),0), fnom:((S.fournisseurs||[]).find(f=>f.id==c.fid)||{nom:'—'}).nom}))
+        .filter(c=>c.total>0)
+        .sort((a,b)=>a.total-b.total);
+      let restant = liquidite; let nbOk = 0;
+      cmdsAvecPrix.forEach(c=>{ if(restant>=c.total){restant-=c.total;nbOk++;} });
+      const totalCmds = cmdsAvecPrix.reduce((s,c)=>s+c.total,0);
+      const pct = totalCmds>0 ? Math.min(100,Math.round(liquidite/totalCmds*100)) : 100;
+      const couleurPct = pct>=100?'var(--green)':pct>=60?'var(--amber)':'var(--red)';
+      const msgPrincipal = cmdsActives.length===0
+        ? '✅ Aucune commande en attente — trésorerie libre'
+        : nbOk===cmdsActives.length
+          ? `✅ Toutes les commandes finançables (${cmdsActives.length})`
+          : nbOk===0
+            ? `⚠️ Fonds insuffisants pour les ${cmdsActives.length} commande(s) en attente`
+            : `⚡ ${nbOk} commande(s) finançable(s) sur ${cmdsActives.length} en attente`;
+      return `<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;border:1px solid var(--border2)">
+        <div style="background:linear-gradient(135deg,var(--navy) 0%,var(--purple) 100%);padding:14px 18px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">💧 Capacité fournisseur ce soir</div>
+            <div style="font-size:22px;font-weight:800">${F(liquidite)}</div>
+            <div style="font-size:12px;opacity:.85;margin-top:2px">${msgPrincipal}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;opacity:.75;margin-bottom:2px">Après dettes</div>
+            <div style="font-size:18px;font-weight:700;color:${liquiditeNette>=0?'#7effa0':'#ff8a8a'}">${F(liquiditeNette)}</div>
+            <div style="font-size:10px;opacity:.7;margin-top:2px">${F(totalDettes)} de dettes</div>
+          </div>
+        </div>
+        ${cmdsAvecPrix.length>0?`
+        <div style="padding:12px 18px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+            <span>Couverture commandes en attente</span>
+            <span>${F(liquidite)} / ${F(totalCmds)}</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${couleurPct};border-radius:6px;transition:width .5s"></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+            ${cmdsAvecPrix.slice(0,4).map(c=>{
+              let rest2=liquidite; let ok=false;
+              cmdsAvecPrix.forEach(x=>{ if(rest2>=x.total){if(x.id===c.id)ok=true; rest2-=x.total;} });
+              return `<span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${ok?'var(--green-bg,#e8f5e9)':'var(--red-bg,#fce8e8)'};color:${ok?'var(--green)':'var(--red)'};font-weight:600">
+                ${ok?'✅':'❌'} CMD-${String(c.id).slice(-4).padStart(4,'0')} ${c.fnom} — ${F(c.total)}
+              </span>`;
+            }).join('')}
+            ${cmdsAvecPrix.length>4?`<span style="font-size:11px;color:var(--text3);padding:3px 0">+${cmdsAvecPrix.length-4} autres</span>`:''}
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">Liquidité restante après financement : <b>${F(restant)}</b></div>
+        </div>`:`<div style="padding:10px 18px;font-size:12px;color:var(--text3)">📭 Aucune commande active avec prix renseigné</div>`}
+      </div>`;
+    })()}
+
     <!-- Détail par compte -->
     <div class="card" style="margin-bottom:16px">
       <div style="font-weight:700;margin-bottom:12px;font-size:13px">💳 Détail par compte</div>
