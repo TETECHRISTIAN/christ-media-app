@@ -11125,7 +11125,7 @@ function ouvrirModalCloture(){
   // Vérifier si clôture déjà faite aujourd'hui
   const dejaFaite = historique.find(c=>c.date===today);
 
-  showModal(`
+  modal(`
     <div style="font-weight:700;font-size:16px;margin-bottom:16px">✅ Clôture de caisse — ${today}</div>
 
     ${dejaFaite?`<div style="background:var(--amber-bg);color:var(--amber);padding:10px 14px;border-radius:var(--rs);margin-bottom:14px;font-size:13px">
