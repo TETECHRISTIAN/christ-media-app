@@ -2595,6 +2595,7 @@ const QB_PAGES = [
   {page:'depots',       emoji:'🏭', label:'Multi-dépôt',   labelCourt:'Dépôts'},
   {page:'stats',        emoji:'📉', label:'Statistiques',  labelCourt:'Stats'},
   {page:'caisse',       emoji:'🧾', label:'Rapport caisse',labelCourt:'Caisse'},
+  {page:'cloture_caisse',emoji:'💰', label:'Clôture de Caisse',labelCourt:'Clôture'},
   {page:'bilan_jour',   emoji:'📆', label:'Bilan journalier',labelCourt:'Bilan'},
   {page:'kpis',         emoji:'🏆', label:'KPIs',          labelCourt:'KPIs'},
   {page:'comptabilite', emoji:'📒', label:'Comptabilité',  labelCourt:'Compta.'},
@@ -8487,7 +8488,6 @@ function rWorkspace(){
     {id:'depots',label:'Stock multi-dépôt',icon:'🏭'},
     {id:'fidelite',label:'Programme fidélité',icon:'⭐'},
     {id:'audit',label:'Journal d\'audit',icon:'🔍'},
-    {id:'cloture_caisse',label:'Clôture de Caisse',icon:'💰'},
   ];
   const visible=p.menu_visible||allMenus.map(m=>m.id);
 
