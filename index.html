@@ -1405,11 +1405,6 @@ body.dark th{background:var(--surface3)}
         🔑 Réinitialiser l'accès administrateur
       </button>
     </div>
-    <div style="margin-top:8px;text-align:center">
-      <button onclick="connexionUrgence()" style="background:#c0392b;border:none;color:#fff;font-size:11px;font-weight:700;border-radius:6px;padding:6px 16px;cursor:pointer">
-        🚨 Accès d'urgence admin
-      </button>
-    </div>
     <!-- DIAGNOSTIC -->
     <div id="diag-panel" style="margin-top:12px;background:#f8f8f0;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;color:#333;display:none;max-height:180px;overflow-y:auto;text-align:left;line-height:1.7"></div>
     <button onclick="afficherDiag()" style="margin-top:8px;background:none;border:1px solid #ccc;border-radius:6px;font-size:10px;color:#888;cursor:pointer;padding:4px 10px">🔍 Diagnostic</button>
@@ -8280,24 +8275,6 @@ function _ouvrirSession(u){
 }
 
 // ─── RESET ACCÈS ADMIN (urgence) ───
-function connexionUrgence(){
-  // Bypass complet Firebase — connexion directe en local
-  const adminU = {id:1, nom:'Admin', role:'admin', emoji:'👑',
-    email:'christmedia176@gmail.com', password:'admin1234', actif:true};
-  if(!S.utilisateurs) S.utilisateurs = [];
-  const existing = S.utilisateurs.find(u => u.role==='admin');
-  if(existing){
-    existing.actif = true;
-    existing.email = adminU.email;
-    existing.password = adminU.password;
-  } else {
-    S.utilisateurs.unshift(adminU);
-  }
-  saveLocal(S);
-  // Ouvrir session sans passer par Firebase
-  _ouvrirSession(existing || adminU);
-}
-
 function resetAdminLogin(){
   if(!confirm("Réinitialiser l'accès admin ?\n\nEmail: christmedia176@gmail.com\nMot de passe: admin1234\n\nConfirmer ?"))return;
   if(!S.utilisateurs)S.utilisateurs=[];
