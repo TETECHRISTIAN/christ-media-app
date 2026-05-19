@@ -10981,6 +10981,21 @@ function rClotureCaisse(){
   // ── Solde théorique ──
   const soldeTheorique = soldeOuverture + totalVentes - totalDepenses;
 
+  // ── Solde théorique TOUTES BOUTIQUES ──
+  const boutiques = S.boutiques || [];
+  let totalTheorique = 0;
+  const detailBoutiques = boutiques.map(b => {
+    const bVentes = (S.ventes||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.statut==='Payé');
+    const bDeps   = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && d.bid==b.id);
+    const bHistorique = (S.clotures_caisse||[]).filter(c => c.bid==b.id).sort((a,b2)=>b2.ts-a.ts);
+    const bOuverture = bHistorique[0] ? bHistorique[0].solde_fermeture : 0;
+    const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0);
+    const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
+    const bSolde = bOuverture + bVentesTotal - bDepsTotal;
+    totalTheorique += bSolde;
+    return { nom: b.nom||b.name||b.id, solde: bSolde };
+  });
+
   // ── Rendu ──
   const dateLabel = new Date(today+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
@@ -11017,6 +11032,13 @@ function rClotureCaisse(){
         <div class="ct">Solde théorique</div>
         <div class="mv" style="color:${soldeTheorique>=0?'var(--green)':'var(--red)'}">${F(soldeTheorique)}</div>
         <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses</div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--blue,#1976d2);background:var(--surface2)">
+        <div class="ct">🏪 Total toutes boutiques</div>
+        <div class="mv" style="color:${totalTheorique>=0?'var(--green)':'var(--red)'}">${F(totalTheorique)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          ${detailBoutiques.map(b=>`<span style="display:block">${b.nom} : <b style="color:${b.solde>=0?'var(--green)':'var(--red)'}">${F(b.solde)}</b></span>`).join('')}
+        </div>
       </div>
     </div>
 
