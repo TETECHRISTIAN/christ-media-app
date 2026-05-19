@@ -11222,6 +11222,13 @@ function rClotureCaisse(){
 
     <!-- Bouton clôturer -->
     <div style="text-align:center;margin-bottom:20px">
+      ${soldeTheorique<0?`
+      <div style="background:var(--red-bg,#fce8e8);border:1px solid var(--red);border-radius:var(--rs);padding:12px 16px;margin-bottom:12px;display:inline-block;max-width:460px;width:100%">
+        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🔴 Déficit de ${F(Math.abs(soldeTheorique))} — as-tu emprunté pour combler ?</div>
+        <button class="btn" onclick="ouvrirEmpruntCaisse(${Math.abs(soldeTheorique)})" style="background:var(--amber);color:#fff;border:none;font-weight:700;width:100%">
+          📥 Enregistrer un emprunt reçu
+        </button>
+      </div><br>`:``}
       <button class="btn btn-success" onclick="ouvrirModalCloture()" style="padding:12px 32px;font-size:15px;font-weight:700">
         ✅ Clôturer la caisse du jour
       </button>
@@ -11262,6 +11269,61 @@ function rClotureCaisse(){
   // Mettre à jour la date si changée
   const inp = document.getElementById('cc-date');
   if(inp) inp.value = window._clotureDate || today;
+}
+
+function ouvrirEmpruntCaisse(montantDeficit){
+  if(!S.dettesPerso) S.dettesPerso=[];
+  const dev=(S.parametres&&S.parametres.devise)||'FCFA';
+  modal(`<div class="mft">📥 Enregistrer un emprunt reçu</div>
+    <div style="background:var(--amber-bg,#fff8e1);border:1px solid var(--amber);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--amber)">
+      ⚠️ Cet emprunt sera crédité sur le compte choisi et enregistré dans tes dettes à rembourser.
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Qui t'a prêté ?</label>
+        <input class="fi" id="ec-pers" placeholder="Nom du prêteur (proche, banque...)">
+      </div>
+      <div class="fg"><label class="fl">Date</label>
+        <input class="fi" type="date" id="ec-date" value="${D()}">
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Montant reçu (${dev})</label>
+        <input class="fi" type="number" id="ec-mt" value="${montantDeficit||''}" placeholder="0">
+      </div>
+      <div class="fg"><label class="fl">Compte à créditer</label>
+        ${selectComptes('ec-cid', premierCompteId())}
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date de remboursement (optionnel)</label>
+        <input class="fi" type="date" id="ec-ech">
+      </div>
+      <div class="fg"><label class="fl">Notes</label>
+        <input class="fi" id="ec-notes" placeholder="Pour combler le déficit du jour...">
+      </div>
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="validerEmpruntCaisse()">✅ Enregistrer l'emprunt</button>
+    </div>`);
+}
+
+function validerEmpruntCaisse(){
+  const personne=document.getElementById('ec-pers').value.trim();
+  const mt=+document.getElementById('ec-mt').value||0;
+  const cid=document.getElementById('ec-cid').value;
+  const date=document.getElementById('ec-date').value||D();
+  const ech=document.getElementById('ec-ech').value||null;
+  const notes=document.getElementById('ec-notes').value||'Emprunt pour combler déficit caisse';
+  if(!personne) return toast('❌ Indique qui t\'a prêté l\'argent');
+  if(!mt) return toast('❌ Montant requis');
+  if(!S.dettesPerso) S.dettesPerso=[];
+  S.dettesPerso.push({id:genId(),typeDette:'emprunter',personne,date,montant:mt,rembourse:0,cid,echeance:ech,taux:0,notes,statut:'En cours'});
+  crediterCompte(cid,mt);
+  saveData();
+  closeModal();
+  toast(`✅ Emprunt de ${F(mt)} enregistré — compte crédité`);
+  rClotureCaisse();
 }
 
 function getBoutiqueName(){
