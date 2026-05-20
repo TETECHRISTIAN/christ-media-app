@@ -1401,59 +1401,13 @@ body.dark th{background:var(--surface3)}
       <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">Aucune donnée réelle ne sera modifiée</div>
     </div>
     <div style="margin-top:10px;text-align:center">
-      <button onclick="(function(){
-        try{
-          // Lire le localStorage directement sans passer par S
-          var raw=localStorage.getItem('christmedia_v2');
-          var data=raw?JSON.parse(raw):{};
-          if(!data.utilisateurs)data.utilisateurs=[];
-          var admin=data.utilisateurs.find(function(u){return u.role==='admin';});
-          if(admin){
-            admin.email='christmedia176@gmail.com';
-            admin.password='admin1234';
-            admin.actif=true;
-          } else {
-            data.utilisateurs.unshift({id:1,nom:'Admin',role:'admin',pin:'1234',email:'christmedia176@gmail.com',password:'admin1234',emoji:'👑',actif:true});
-          }
-          localStorage.setItem('christmedia_v2',JSON.stringify(data));
-          document.getElementById('login-email').value='christmedia176@gmail.com';
-          document.getElementById('login-password').value='admin1234';
-          alert('✅ Accès réinitialisé !\n\nEmail: christmedia176@gmail.com\nMot de passe: admin1234\n\nClique maintenant sur Se connecter.');
-        }catch(e){
-          // Si localStorage corrompu, créer de zéro
-          var fresh={utilisateurs:[{id:1,nom:'Admin',role:'admin',pin:'1234',email:'christmedia176@gmail.com',password:'admin1234',emoji:'👑',actif:true}]};
-          localStorage.setItem('christmedia_v2',JSON.stringify(fresh));
-          document.getElementById('login-email').value='christmedia176@gmail.com';
-          document.getElementById('login-password').value='admin1234';
-          alert('✅ Base réinitialisée. Email: christmedia176@gmail.com / admin1234');
-        }
-      })()" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline">
+      <button onclick="resetAdminLogin()" style="background:none;border:none;font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline">
         🔑 Réinitialiser l'accès administrateur
       </button>
     </div>
     <!-- DIAGNOSTIC -->
-    <div id="diag-panel" style="margin-top:12px;background:#f8f8f0;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;color:#333;display:none;max-height:200px;overflow-y:auto;text-align:left;line-height:1.7"></div>
-    <button onclick="(function(){
-      var p=document.getElementById('diag-panel');
-      if(!p)return;
-      try{
-        var raw=localStorage.getItem('christmedia_v2');
-        var data=raw?JSON.parse(raw):{};
-        var users=data.utilisateurs||[];
-        var lines=[
-          '📦 localStorage: '+(raw?'OK ('+Math.round(raw.length/1024)+'kb)':'VIDE ⚠️'),
-          '👥 Utilisateurs: '+users.length,
-        ];
-        users.forEach(function(u){
-          lines.push('  • '+(u.email||'?')+' ['+u.role+'] pw='+(u.password?'✓':'∅')+' actif='+(u.actif!==false?'oui':'NON'));
-        });
-        lines.push('🌐 En ligne: '+navigator.onLine);
-        p.innerHTML=lines.map(function(l){return'<div>'+l+'</div>';}).join('');
-      }catch(e){
-        p.innerHTML='<div style=color:red>❌ Erreur: '+e.message+'</div><div>localStorage corrompu — clique Réinitialiser</div>';
-      }
-      p.style.display=p.style.display==='none'?'block':'none';
-    })()" style="margin-top:8px;background:none;border:1px solid #ccc;border-radius:6px;font-size:10px;color:#888;cursor:pointer;padding:4px 10px">🔍 Diagnostic</button>
+    <div id="diag-panel" style="margin-top:12px;background:#f8f8f0;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;color:#333;display:none;max-height:180px;overflow-y:auto;text-align:left;line-height:1.7"></div>
+    <button onclick="afficherDiag()" style="margin-top:8px;background:none;border:1px solid #ccc;border-radius:6px;font-size:10px;color:#888;cursor:pointer;padding:4px 10px">🔍 Diagnostic</button>
   </div>
 </div>
 
@@ -8189,18 +8143,32 @@ function connexionEmail(){
     });
   }
 
-  // Si Firebase disponible ET en ligne → toujours vérifier Firebase en premier
-  // (garantit la synchro même si localStorage est vide sur un nouvel appareil)
+  // ── LOCAL EN PRIORITÉ : si l'utilisateur est dans localStorage, on connecte immédiatement
+  // Firebase est utilisé en arrière-plan pour synchro, pas pour bloquer la connexion
+  let u=_trouverUser(S.utilisateurs);
+  if(!u) u=_trouverUser(defaultData.utilisateurs);
+
+  if(u){
+    // Connexion locale réussie → ouvrir la session immédiatement
+    if(errEl){errEl.style.color='';errEl.style.display='none';}
+    _ouvrirSession(u);
+    // Sync Firebase en arrière-plan (sans bloquer)
+    if(fbReady && navigator.onLine && db){
+      db.ref('christmedia/data/utilisateurs').once('value').then(snap=>{
+        const fbUsers=snap.val();
+        if(Array.isArray(fbUsers)&&fbUsers.length>0){S.utilisateurs=fbUsers;saveLocal(S);}
+      }).catch(()=>{});
+    }
+    return;
+  }
+
+  // Pas trouvé en local → tenter Firebase (nouvel appareil sans données locales)
   if(fbReady && navigator.onLine){
     const btnLogin=document.querySelector('.login-btn');
     if(btnLogin){btnLogin.disabled=true;}
     _connexionViaFirebase(email, password, errEl, btnLogin);
     return;
   }
-
-  // Hors ligne : sources locales uniquement
-  let u=_trouverUser(S.utilisateurs);
-  if(!u) u=_trouverUser(defaultData.utilisateurs);
 
   if(!u){
     if(errEl){errEl.style.color='';errEl.textContent='Email ou mot de passe incorrect.';errEl.style.display='block';}
