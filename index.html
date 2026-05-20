@@ -10200,7 +10200,7 @@ function rAgenda(){
               <button class="btn btn-sm btn-success" onclick="marquerFait(${op.id})" title="Marquer fait">✓</button>
               ${op.modeleId?`<button class="btn btn-sm btn-primary" onclick="appliquerModele(${op.modeleId})" title="Appliquer modèle">▶</button>`:''}
               <button class="btn-icon btn-sm" onclick="editAgenda(${op.id})" title="Modifier" style="color:var(--navy);font-size:12px">✏️</button>
-              <button class="btn-icon btn-sm" onclick="delAgenda(${op.id})" style="color:var(--red)">✕</button>
+              ${op.recurrence?`<button class="btn-icon btn-sm" onclick="delAgendaDefinitif(${op.id})" title="Supprimer définitivement (toutes occurrences)" style="color:var(--red);font-weight:700;font-size:13px" title="🗑️ Suppr. définitif">🗑️</button>`:`<button class="btn-icon btn-sm" onclick="delAgenda(${op.id})" style="color:var(--red)">✕</button>`}
             </div>
           </div>
         </div>`;}).join('')}
@@ -10503,6 +10503,27 @@ function delAgenda(id){
   if(!confirm('Supprimer cette opération ?'))return;
   S.agenda=S.agenda.filter(a=>a.id!=id);
   saveData();rAgenda();toast('🗑️ Opération supprimée');
+}
+
+function delAgendaDefinitif(id){
+  const op=S.agenda.find(a=>a.id==id);
+  if(!op)return;
+  const msg=op.recurrence
+    ?`Supprimer définitivement "${op.titre}" et TOUTES ses occurrences (${op.recurrence}) sur tous les appareils ?`
+    :`Supprimer définitivement "${op.titre}" ?`;
+  if(!confirm(msg))return;
+  const parentId=op.parent_id||op.id;
+  const titre=op.titre;
+  const type=op.type;
+  const rec=op.recurrence;
+  // Supprimer toutes les occurrences liées : même parent_id OU même titre+type+recurrence (non faites)
+  S.agenda=S.agenda.filter(a=>{
+    if(a.id==id) return false;
+    if(a.parent_id && (a.parent_id===parentId || a.parent_id===id)) return false;
+    if(!a.fait && a.titre===titre && a.type===type && a.recurrence===rec) return false;
+    return true;
+  });
+  saveData();rAgenda();toast('🗑️ Opération supprimée définitivement sur tous les appareils');
 }
 
 // Vérifier les opérations en retard au démarrage
