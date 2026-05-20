@@ -10486,6 +10486,11 @@ function marquerFait(id){
         <input class="fi" type="date" id="cf-date" value="${D()}">
       </div>
     </div>
+    ${op.recurrence?`<div class="fg" style="background:var(--amber-bg,#fff8e1);border:1px solid var(--amber);border-radius:var(--rs);padding:10px 12px">
+      <label class="fl" style="color:var(--amber);font-weight:600">🔁 Nb de périodes à cocher (ex: 3 jours d'un coup)</label>
+      <input class="fi" type="number" id="cf-nb" value="1" min="1" max="60" style="width:80px">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Le montant total sera multiplié · les occurrences manquantes seront cochées automatiquement</div>
+    </div>`:''}
     <div class="fg"><label class="fl">${compteLabel}</label>
       ${selectComptes('cf-cid', op.cid||premierCompteId())}
     </div>
@@ -10507,81 +10512,105 @@ function marquerFait(id){
     </div>`);
 }
 
+function _nextRecDate(dateStr, recurrence){
+  const d=new Date(dateStr);
+  if(recurrence==='Quotidien') d.setDate(d.getDate()+1);
+  else if(recurrence==='Hebdomadaire') d.setDate(d.getDate()+7);
+  else if(recurrence==='Mensuel') d.setMonth(d.getMonth()+1);
+  return d.toISOString().split('T')[0];
+}
+
+function _creerOccurrence(op, dateStr, parentId){
+  // Anti-doublon avant insertion
+  const existe=S.agenda.some(a=>
+    !a.fait && a.date===dateStr && (
+      (a.titre===op.titre && a.type===op.type && a.recurrence===op.recurrence) ||
+      (a.parent_id && a.parent_id===parentId)
+    )
+  );
+  if(existe) return null;
+  const nouv={
+    id:genId(), titre:op.titre, type:op.type, montant:op.montant,
+    cat:op.cat, cid:op.cid, notes:op.notes, recurrence:op.recurrence,
+    modeleId:op.modeleId||null, date:dateStr, fait:false, dateFait:null,
+    parent_id:parentId, ts:Date.now()
+  };
+  S.agenda.push(nouv);
+  return nouv;
+}
+
 function confirmerFait(id){
   const op=S.agenda.find(a=>a.id==id);if(!op)return;
-  const mt=+document.getElementById('cf-mt').value||0;
+  const mtUnit=+document.getElementById('cf-mt').value||0;
   const cid=document.getElementById('cf-cid').value;
   const date=document.getElementById('cf-date').value||D();
   const notes=document.getElementById('cf-notes').value||op.notes||'';
   const cat=document.getElementById('cf-cat')?document.getElementById('cf-cat').value:'';
+  const nb=op.recurrence?(+document.getElementById('cf-nb').value||1):1;
+  const mtTotal=mtUnit*nb;
 
-  // Exécuter l'opération selon le type
-  if(mt>0){
+  // Exécuter l'opération financière (montant total)
+  if(mtTotal>0){
     if(op.type==='depense'){
-      S.depenses.push({id:genId(),date,four:op.titre,cat:cat||op.cat||'Agenda',mt,mode:nomCompte(cid),cid,notes,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
-      debiterCompte(cid,mt);
+      S.depenses.push({id:genId(),date,four:op.titre,cat:cat||op.cat||'Agenda',mt:mtTotal,mode:nomCompte(cid),cid,notes:notes+(nb>1?` (${nb} jours)`:''),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+      debiterCompte(cid,mtTotal);
       verifierLimites();
     } else if(op.type==='revenu'){
       if(!S.revenus)S.revenus=[];
-      S.revenus.push({id:genId(),date,desc:op.titre,cat:cat||op.cat||'Agenda',mt,mode:nomCompte(cid),cid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
-      crediterCompte(cid,mt);
+      S.revenus.push({id:genId(),date,desc:op.titre,cat:cat||op.cat||'Agenda',mt:mtTotal,mode:nomCompte(cid),cid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+      crediterCompte(cid,mtTotal);
     } else if(op.type==='achat'){
       toast('📦 Achat — allez dans la section Achats pour enregistrer le détail');
     } else if(op.type==='transfert'){
       const cidVers=document.getElementById('cf-cid-vers')?document.getElementById('cf-cid-vers').value:null;
       if(cidVers&&cidVers!==cid){
-        debiterCompte(cid,mt);
-        crediterCompte(cidVers,mt);
+        debiterCompte(cid,mtTotal);
+        crediterCompte(cidVers,mtTotal);
         if(!S.transferts)S.transferts=[];
-        S.transferts.push({id:genId(),date,de:cid,vers:cidVers,mt,notes,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
-        toast(`✅ Transfert de ${F(mt)} — ${nomCompte(cid)} → ${nomCompte(cidVers)}`);
+        S.transferts.push({id:genId(),date,de:cid,vers:cidVers,mt:mtTotal,notes:notes+(nb>1?` (${nb} périodes)`:''),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+        toast(`✅ Transfert de ${F(mtTotal)} — ${nomCompte(cid)} → ${nomCompte(cidVers)}`);
       } else {
         return toast('❌ Comptes source et destination doivent être différents');
       }
     }
   }
 
-  // Marquer comme fait et gérer récurrence
-  op.fait=true;op.dateFait=date;
-  if(op.recurrence){
-    // FIX : calculer la prochaine date depuis max(date prévue, aujourd'hui)
-    // pour éviter de créer une occurrence déjà dans le passé si confirmé en retard
-    const baseDate = op.date > D() ? op.date : D();
-    const next=new Date(baseDate);
-    if(op.recurrence==='Quotidien') next.setDate(next.getDate()+1);
-    else if(op.recurrence==='Hebdomadaire') next.setDate(next.getDate()+7);
-    else if(op.recurrence==='Mensuel') next.setMonth(next.getMonth()+1);
-    const nextDateStr=next.toISOString().split('T')[0];
-    const parentId = op.parent_id || op.id;
-    // Anti-doublon renforcé : titre+date+type+recurrence OU parent_id+date
-    const dejaPlanifie=S.agenda.some(a=>
-      !a.fait && a.date===nextDateStr && (
-        (a.titre===op.titre && a.type===op.type && a.recurrence===op.recurrence) ||
-        (a.parent_id && a.parent_id===parentId)
-      )
-    );
-    if(!dejaPlanifie){
-      // FIX : copie propre — seulement les champs nécessaires, pas de spread complet
-      S.agenda.push({
-        id:genId(),
-        titre:op.titre,
-        type:op.type,
-        montant:op.montant,
-        cat:op.cat,
-        cid:op.cid,
-        notes:op.notes,
-        recurrence:op.recurrence,
-        modeleId:op.modeleId||null,
-        date:nextDateStr,
-        fait:false,
-        dateFait:null,
-        parent_id:parentId,
-        ts:Date.now()
-      });
+  // Marquer l'occurrence actuelle comme faite
+  op.fait=true; op.dateFait=date;
+
+  if(op.recurrence && nb>1){
+    // Paiement groupé : cocher nb-1 occurrences intermédiaires déjà existantes ou à créer,
+    // puis créer la prochaine occurrence après la dernière période couverte
+    const parentId=op.parent_id||op.id;
+    let currentDate=op.date;
+    for(let i=1;i<nb;i++){
+      const interDate=_nextRecDate(currentDate, op.recurrence);
+      // Chercher si cette occurrence existe déjà dans l'agenda
+      const existing=S.agenda.find(a=>
+        !a.fait && a.date===interDate && a.titre===op.titre && a.type===op.type
+      );
+      if(existing){
+        existing.fait=true; existing.dateFait=date;
+      } else {
+        // Créer et marquer immédiatement comme faite
+        const nouv=_creerOccurrence(op, interDate, parentId);
+        if(nouv){ nouv.fait=true; nouv.dateFait=date; }
+      }
+      currentDate=interDate;
     }
+    // Créer la prochaine occurrence à planifier (après toutes les périodes couvertes)
+    const nextDate=_nextRecDate(currentDate, op.recurrence);
+    _creerOccurrence(op, nextDate, parentId);
+  } else if(op.recurrence){
+    // Paiement simple : 1 seule période
+    const baseDate=op.date>D()?op.date:D();
+    const nextDate=_nextRecDate(baseDate, op.recurrence);
+    const parentId=op.parent_id||op.id;
+    _creerOccurrence(op, nextDate, parentId);
   }
+
   saveData();closeModal();
-  if(op.type!=='transfert') toast(`✅ ${op.titre}${mt?` — ${F(mt)}`:''} enregistré`);
+  if(op.type!=='transfert') toast(`✅ ${op.titre}${mtTotal?` — ${F(mtTotal)}`:''}${nb>1?` (${nb} périodes)`:''} enregistré`);
   rAgenda();
 }
 
@@ -10614,23 +10643,19 @@ function delAgendaDefinitif(id){
 // Vérifier les opérations en retard au démarrage
 function dedupAgenda(){
   if(!S.agenda||S.agenda.length===0) return;
-  // Set de tous les IDs existants pour détecter les parent_id orphelins
-  const allIds = new Set(S.agenda.map(a=>a.id));
+  // Grouper par clé unique : titre+date+type+recurrence (non faits seulement)
   const seen=new Set();
   const dedup=[];
+  // Garder tous les faits intacts
   S.agenda.filter(a=>a.fait).forEach(a=>dedup.push(a));
-  const parentSeen = new Set();
+  // Pour les non-faits, dédupliquer par titre+date+type ET par parent_id+date
+  // (couvre les doublons créés en race condition multi-appareils)
+  const parentSeen = new Set(); // parent_id|date
   S.agenda.filter(a=>!a.fait).forEach(a=>{
-    // FIX 3 : ignorer les occurrences dont le parent_id ne correspond à aucun id connu
-    // (parent supprimé via delAgendaDefinitif mais l'occurrence a survécu côté Firebase)
-    if(a.parent_id && !allIds.has(a.parent_id) && !S.agenda.some(x=>x.id==a.parent_id)){
-      console.log('[Agenda] orphelin ignoré:', a.titre, a.date);
-      return;
-    }
     const key=`${a.titre}|${a.date}|${a.type}|${a.recurrence||''}`;
     const pkey = a.parent_id ? `${a.parent_id}|${a.date}` : null;
-    if(seen.has(key)) return;
-    if(pkey && parentSeen.has(pkey)) return;
+    if(seen.has(key)) return; // doublon titre+date
+    if(pkey && parentSeen.has(pkey)) return; // doublon parent_id+date
     seen.add(key);
     if(pkey) parentSeen.add(pkey);
     dedup.push(a);
@@ -10639,7 +10664,7 @@ function dedupAgenda(){
     const nb=S.agenda.length-dedup.length;
     S.agenda=dedup;
     saveData();
-    console.log(`[Agenda] ${nb} doublon(s)/orphelin(s) supprimé(s)`);
+    console.log(`[Agenda] ${nb} doublon(s) supprimé(s)`);
   }
 }
 
