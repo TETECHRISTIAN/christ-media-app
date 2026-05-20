@@ -9602,7 +9602,8 @@ function validerConversion(type, id, montant) {
   if (!duree) return toast("❌ Nombre d'échéances requis");
 
   // Générer l'échéancier
-  const echeancier = genEcheancier(montant, taux, tperiode, duree, freq, dateDebut);
+  const amortType = taux === 0 ? 'lineaire' : 'constant';
+  const echeancier = genEcheancier(montant, taux, tperiode, duree, freq, amortType, dateDebut);
   const derniereEch = echeancier.length > 0 ? echeancier[echeancier.length - 1].date : null;
 
   // Ajouter dans dettesPerso comme emprunt
