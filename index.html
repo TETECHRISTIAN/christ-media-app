@@ -11377,7 +11377,7 @@ function ouvrirModalCloture(){
     </div>
 
     <div style="margin-bottom:12px">
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">💵 Cash physiquement compté (${dev})</label>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3);border-top:1px dashed var(--border2);padding-top:8px">📌 Ce montant deviendra le <strong>solde d'ouverture de demain</strong> pour ${getBoutiqueName()}.${soldeTheorique<0?" <span style='color:var(--red);font-weight:600'>⚠️ Déficit — enregistre tout emprunt reçu avant de clôturer.</span>":""}</div></div><div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">💵 Cash compté — vérification uniquement (${dev})</label>
       <input type="number" id="cc-cash" min="0" step="1" placeholder="Entrez le montant compté"
         oninput="majEcartCloture(${soldeTheorique})"
         style="width:100%;padding:10px;border:2px solid var(--border2);border-radius:var(--rs);font-size:15px;font-weight:700;font-family:inherit;box-sizing:border-box;background:var(--surface)">
@@ -11441,7 +11441,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     solde_theorique: soldeTheorique,
     cash_compte: cashCompte,
     ecart: ecart,
-    solde_fermeture: cashCompte, // le cash compté devient le solde d'ouverture du lendemain
+    solde_fermeture: soldeTheorique, // solde théorique boutique → ouverture du lendemain
     notes: notes,
     par: S.session?.nom || 'Admin',
     ts: Date.now()
