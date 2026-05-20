@@ -10544,15 +10544,16 @@ function confirmerFait(id){
   // Marquer comme fait et gérer récurrence
   op.fait=true;op.dateFait=date;
   if(op.recurrence){
-    const next=new Date(op.date);
+    // FIX : calculer la prochaine date depuis max(date prévue, aujourd'hui)
+    // pour éviter de créer une occurrence déjà dans le passé si confirmé en retard
+    const baseDate = op.date > D() ? op.date : D();
+    const next=new Date(baseDate);
     if(op.recurrence==='Quotidien') next.setDate(next.getDate()+1);
     else if(op.recurrence==='Hebdomadaire') next.setDate(next.getDate()+7);
     else if(op.recurrence==='Mensuel') next.setMonth(next.getMonth()+1);
     const nextDateStr=next.toISOString().split('T')[0];
-    // Anti-doublon : ne pas créer si une occurrence identique (même titre+date+type) existe déjà
-    // Anti-doublon renforcé : titre+date+type OU parent_id+date
-    // Couvre la race condition multi-appareils (deux appareils créent la même occurrence)
     const parentId = op.parent_id || op.id;
+    // Anti-doublon renforcé : titre+date+type+recurrence OU parent_id+date
     const dejaPlanifie=S.agenda.some(a=>
       !a.fait && a.date===nextDateStr && (
         (a.titre===op.titre && a.type===op.type && a.recurrence===op.recurrence) ||
@@ -10560,9 +10561,22 @@ function confirmerFait(id){
       )
     );
     if(!dejaPlanifie){
-      S.agenda.push({...op, id:genId(), date:nextDateStr, fait:false, dateFait:null,
-        parent_id: parentId,
-        ts: Date.now()
+      // FIX : copie propre — seulement les champs nécessaires, pas de spread complet
+      S.agenda.push({
+        id:genId(),
+        titre:op.titre,
+        type:op.type,
+        montant:op.montant,
+        cat:op.cat,
+        cid:op.cid,
+        notes:op.notes,
+        recurrence:op.recurrence,
+        modeleId:op.modeleId||null,
+        date:nextDateStr,
+        fait:false,
+        dateFait:null,
+        parent_id:parentId,
+        ts:Date.now()
       });
     }
   }
@@ -10600,19 +10614,23 @@ function delAgendaDefinitif(id){
 // Vérifier les opérations en retard au démarrage
 function dedupAgenda(){
   if(!S.agenda||S.agenda.length===0) return;
-  // Grouper par clé unique : titre+date+type+recurrence (non faits seulement)
+  // Set de tous les IDs existants pour détecter les parent_id orphelins
+  const allIds = new Set(S.agenda.map(a=>a.id));
   const seen=new Set();
   const dedup=[];
-  // Garder tous les faits intacts
   S.agenda.filter(a=>a.fait).forEach(a=>dedup.push(a));
-  // Pour les non-faits, dédupliquer par titre+date+type ET par parent_id+date
-  // (couvre les doublons créés en race condition multi-appareils)
-  const parentSeen = new Set(); // parent_id|date
+  const parentSeen = new Set();
   S.agenda.filter(a=>!a.fait).forEach(a=>{
+    // FIX 3 : ignorer les occurrences dont le parent_id ne correspond à aucun id connu
+    // (parent supprimé via delAgendaDefinitif mais l'occurrence a survécu côté Firebase)
+    if(a.parent_id && !allIds.has(a.parent_id) && !S.agenda.some(x=>x.id==a.parent_id)){
+      console.log('[Agenda] orphelin ignoré:', a.titre, a.date);
+      return;
+    }
     const key=`${a.titre}|${a.date}|${a.type}|${a.recurrence||''}`;
     const pkey = a.parent_id ? `${a.parent_id}|${a.date}` : null;
-    if(seen.has(key)) return; // doublon titre+date
-    if(pkey && parentSeen.has(pkey)) return; // doublon parent_id+date
+    if(seen.has(key)) return;
+    if(pkey && parentSeen.has(pkey)) return;
     seen.add(key);
     if(pkey) parentSeen.add(pkey);
     dedup.push(a);
@@ -10621,7 +10639,7 @@ function dedupAgenda(){
     const nb=S.agenda.length-dedup.length;
     S.agenda=dedup;
     saveData();
-    console.log(`[Agenda] ${nb} doublon(s) supprimé(s)`);
+    console.log(`[Agenda] ${nb} doublon(s)/orphelin(s) supprimé(s)`);
   }
 }
 
