@@ -5457,6 +5457,7 @@ function rTresorerie(){
                 <div class="fin-val" style="color:var(--red)">${F(f.dette)}</div>
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="reglerDette(${f.id})">Régler</button>
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜</button>
+            <button class="btn btn-sm" onclick="convertirEnEmprunt('fourDirect',${f.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button>
               </div>
             </div>`).join('')}
           ${empruntsPerso.map(d=>{const reste=d.montant-(d.rembourse||0);return`
@@ -9116,7 +9117,7 @@ function rDettes(){
             <td style="color:var(--green)">${F(paye)}</td>
             <td style="color:var(--red);font-weight:600">${F(reste)}</td>
             <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--green);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
-            <td><button class="btn btn-sm btn-success" onclick="configurerTranchesAchat(${a.id})">💳 Payer</button></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm btn-success" onclick="configurerTranchesAchat(${a.id})">💳 Payer</button><button class="btn btn-sm" onclick="convertirEnEmprunt('achat',${a.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button></td>
           </tr>`;}).join('')}
       </tbody></table></div>`:``}
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='foursDirects')?`
@@ -9151,7 +9152,7 @@ function rDettes(){
             <td style="color:var(--green)">${F(paye)}</td>
             <td style="color:var(--red);font-weight:600">${F(reste)}</td>
             <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--teal);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
-            <td><button class="btn btn-sm btn-primary" onclick="gererAcompte(${v.id})">💰 Encaisser</button></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="gererAcompte(${v.id})">💰 Encaisser</button><button class="btn btn-sm" onclick="convertirEnEmprunt('client',${v.id})" style="font-size:11px;color:var(--teal);border-color:var(--teal)">📅 Planifier</button></td>
           </tr>`;}).join('')}
       </tbody></table></div>`:``}
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='emprunts')?`
@@ -9476,6 +9477,175 @@ function voirTableauAmort(id){
       <button class="btn" onclick="closeModal()">Fermer</button>
       <button class="btn btn-success" onclick="closeModal();rembourserDette(${id})">💳 Enregistrer un paiement</button>
     </div>`);
+}
+
+
+// ══════════════════════════════════════════════════════
+// CONVERTIR UNE DETTE EN EMPRUNT STRUCTURÉ AVEC ÉCHÉANCIER
+// ══════════════════════════════════════════════════════
+function convertirEnEmprunt(type, id) {
+  const dev = (S.parametres && S.parametres.devise) || 'FCFA';
+  let nom = '?', montant = 0;
+
+  if (type === 'achat') {
+    const a = (S.achats || []).find(x => x.id == id);
+    if (!a) return toast('❌ Achat introuvable');
+    const paye = (a.tranches || []).reduce((s, t) => s + t.mt, 0);
+    montant = Math.max(0, a.mt - paye);
+    const f = (S.fournisseurs || []).find(x => x.id == a.fid);
+    const art = (S.stock || []).find(x => x.id == a.aid);
+    nom = (f ? f.nom : '?') + (art ? ' — ' + art.nom : '');
+  } else if (type === 'fourDirect') {
+    const f = (S.fournisseurs || []).find(x => x.id == id);
+    if (!f) return toast('❌ Fournisseur introuvable');
+    montant = f.dette || 0;
+    nom = f.nom;
+  } else if (type === 'client') {
+    const v = (S.ventes || []).find(x => x.id == id);
+    if (!v) return toast('❌ Vente introuvable');
+    const paye = ((v.acomptes||[]).reduce((s,a)=>s+a.mt,0)) + ((v.tranches||[]).reduce((s,t)=>s+t.mt,0));
+    montant = Math.max(0, v.mt - paye);
+    nom = (v.client || 'Anonyme') + ' (créance)';
+  }
+
+  if (montant <= 0) return toast('❌ Solde déjà soldé');
+
+  modal(`<div class="mft">📅 Planifier le remboursement — ${nom}</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;justify-content:space-between">
+      <span>Montant restant dû</span>
+      <strong style="color:var(--red)">${F(montant)}</strong>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Nom du créancier</label>
+        <input class="fi" id="cv-nom" value="${nom}">
+      </div>
+      <div class="fg"><label class="fl">Date de début</label>
+        <input class="fi" type="date" id="cv-date" value="${D()}">
+      </div>
+    </div>
+    <div style="border:1px solid var(--border2);border-radius:var(--rs);padding:12px;margin:8px 0;background:var(--surface2)">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">⚙️ Paramètres du plan</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Taux d'intérêt %</label>
+          <input class="fi" type="number" id="cv-taux" placeholder="0 si sans intérêt" step="0.1" value="0" oninput="previewConvert(${montant})">
+        </div>
+        <div class="fg"><label class="fl">Période du taux</label>
+          <select class="fs" id="cv-tperiode" onchange="previewConvert(${montant})">
+            <option value="mensuel">Mensuel</option>
+            <option value="annuel">Annuel</option>
+          </select>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Nombre d'échéances</label>
+          <input class="fi" type="number" id="cv-duree" placeholder="Ex: 6" min="1" value="6" oninput="previewConvert(${montant})">
+        </div>
+        <div class="fg"><label class="fl">Fréquence</label>
+          <select class="fs" id="cv-freq" onchange="previewConvert(${montant})">
+            <option value="mensuel">Mensuelle</option>
+            <option value="hebdo">Hebdomadaire</option>
+            <option value="trimestriel">Trimestrielle</option>
+          </select>
+        </div>
+      </div>
+      <div id="cv-preview" style="display:none;margin-top:10px;background:var(--navy);color:#fff;border-radius:var(--rs);padding:10px 14px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Échéance estimée</span><strong id="cv-mens">—</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>Total à rembourser</span><strong id="cv-tot">—</strong></div>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Compte à débiter pour les remboursements</label>
+      ${selectComptes('cv-cid', premierCompteId())}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">
+      ℹ️ L'ancienne dette sera mise à zéro et un échéancier sera créé dans "Emprunts".
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="validerConversion('${type}',${id},${montant})">✅ Créer le plan</button>
+    </div>`);
+  setTimeout(() => previewConvert(montant), 100);
+}
+
+function previewConvert(montant) {
+  const taux = +document.getElementById('cv-taux').value || 0;
+  const duree = +document.getElementById('cv-duree').value || 0;
+  const freq = (document.getElementById('cv-freq') || {}).value || 'mensuel';
+  const tperiode = (document.getElementById('cv-tperiode') || {}).value || 'mensuel';
+  const prev = document.getElementById('cv-preview');
+  if (!duree || !prev) return;
+  let tauxP = tperiode === 'annuel' ? taux / 100 / 12 : taux / 100;
+  if (freq === 'hebdo') tauxP = tperiode === 'annuel' ? taux / 100 / 52 : taux / 100 / 4.33;
+  if (freq === 'trimestriel') tauxP = tperiode === 'annuel' ? taux / 100 / 4 : taux / 100 * 3;
+  let mensualite, total;
+  if (taux === 0) {
+    mensualite = Math.round(montant / duree);
+    total = montant;
+  } else {
+    mensualite = Math.round(montant * tauxP * Math.pow(1 + tauxP, duree) / (Math.pow(1 + tauxP, duree) - 1));
+    total = mensualite * duree;
+  }
+  prev.style.display = 'block';
+  document.getElementById('cv-mens').textContent = F(mensualite);
+  document.getElementById('cv-tot').textContent = F(total);
+}
+
+function validerConversion(type, id, montant) {
+  const nom = document.getElementById('cv-nom').value.trim() || '?';
+  const dateDebut = document.getElementById('cv-date').value || D();
+  const taux = +document.getElementById('cv-taux').value || 0;
+  const duree = +document.getElementById('cv-duree').value || 0;
+  const freq = document.getElementById('cv-freq').value;
+  const tperiode = document.getElementById('cv-tperiode').value;
+  const cid = document.getElementById('cv-cid').value;
+  if (!duree) return toast("❌ Nombre d'échéances requis");
+
+  // Générer l'échéancier
+  const echeancier = genEcheancier(montant, taux, tperiode, duree, freq, dateDebut);
+  const derniereEch = echeancier.length > 0 ? echeancier[echeancier.length - 1].date : null;
+
+  // Ajouter dans dettesPerso comme emprunt
+  if (!S.dettesPerso) S.dettesPerso = [];
+  S.dettesPerso.push({
+    id: genId(), typeDette: 'emprunter',
+    personne: nom, date: dateDebut,
+    montant, rembourse: 0, cid,
+    echeance: derniereEch,
+    taux, tauxPeriode: tperiode, duree, freq,
+    amortType: taux === 0 ? 'lineaire' : 'constant',
+    echeancier,
+    notes: 'Converti depuis dette existante',
+    statut: 'En cours',
+    sourceType: type, sourceId: id
+  });
+
+  // Mettre à zéro la dette source
+  if (type === 'achat') {
+    const a = (S.achats || []).find(x => x.id == id);
+    if (a) {
+      if (!a.tranches) a.tranches = [];
+      a.tranches.push({ date: D(), mt: montant, note: 'Converti en plan de remboursement', cid });
+    }
+  } else if (type === 'fourDirect') {
+    const f = (S.fournisseurs || []).find(x => x.id == id);
+    if (f) {
+      if (!f.historiquePaiementsFour) f.historiquePaiementsFour = [];
+      f.historiquePaiementsFour.push({ date: D(), mt: f.dette, note: 'Converti en plan de remboursement' });
+      f.dette = 0;
+    }
+  } else if (type === 'client') {
+    const v = (S.ventes || []).find(x => x.id == id);
+    if (v) {
+      if (!v.tranches) v.tranches = [];
+      const paye = ((v.acomptes||[]).reduce((s,a)=>s+a.mt,0)) + ((v.tranches||[]).reduce((s,t)=>s+t.mt,0));
+      v.tranches.push({ date: D(), mt: montant, note: 'Plan de remboursement créé' });
+    }
+  }
+
+  saveData();
+  closeModal();
+  dettesFiltreTab = 'emprunts';
+  toast(`✅ Plan créé — ${duree} échéances de ~${F(Math.round(montant/duree))} · Voir onglet Emprunts`);
+  rDettes();
 }
 
 function augmenterDette(fid){
