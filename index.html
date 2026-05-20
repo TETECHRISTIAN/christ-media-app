@@ -9388,8 +9388,13 @@ function saveRembours(id){
   const cid=document.getElementById('rb-cid').value;
   if(mt<=0)return toast('❌ Montant invalide');
   d.rembourse=(d.rembourse||0)+mt;
-  if(d.typeDette==='emprunter') debiterCompte(cid,mt);
-  else crediterCompte(cid,mt);
+  if(d.typeDette==='emprunter'){
+    debiterCompte(cid,mt);
+    if(!S.depenses)S.depenses=[];
+    S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Remboursement emprunt',mt,mode:nomCompte(cid),cid,notes:`Remboursement emprunt — ${d.personne}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+  } else {
+    crediterCompte(cid,mt);
+  }
   if(d.rembourse>=d.montant){d.statut='Soldé';toast('✅ Entièrement soldé !');}
   else toast(`✅ ${F(mt)} · Reste: ${F(d.montant-d.rembourse)}`);
   saveData();closeModal();rDettes();
