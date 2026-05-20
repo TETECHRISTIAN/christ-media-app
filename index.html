@@ -10031,21 +10031,42 @@ function rModeles(){
     });
   });
 }
+function buildModCatSelect(type, selected=''){
+  let cats=[];
+  if(type==='depense'||type==='achat') cats=getCatsDep();
+  else if(type==='revenu') cats=getCatsRev();
+  else cats=[...getCatsDep(),...getCatsRev()].filter((v,i,a)=>a.indexOf(v)===i);
+  const opts=cats.map(c=>`<option${c===selected?' selected':''}>${c}</option>`).join('');
+  const addFn=type==='revenu'?`ajouterCatRev('mod-cat')`:`ajouterCatDep('mod-cat')`;
+  return `<div style="display:flex;gap:6px;align-items:center">
+    <select class="fs" id="mod-cat" style="flex:1">${opts}</select>
+    <button type="button" class="btn btn-sm" onclick="${addFn};setTimeout(()=>updateModCatSelect(),100)" style="white-space:nowrap;flex-shrink:0">+ Cat.</button>
+  </div>`;
+}
+function updateModCatSelect(){
+  const type=document.getElementById('mod-type').value;
+  const cur=(document.getElementById('mod-cat')||{}).value||'';
+  const wrap=document.getElementById('mod-cat-wrap');
+  if(wrap) wrap.innerHTML=buildModCatSelect(type, cur);
+}
 function addModele(){
+  const type='depense';
   modal(`<div class="mft">📋 Nouveau modèle d'opération</div>
     <div class="fg"><label class="fl">Nom du modèle</label>
       <input class="fi" id="mod-nom" placeholder="Ex: Loyer mensuel, Salaire vendeur...">
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">Type d'opération</label>
-        <select class="fs" id="mod-type" onchange="updateModeleForm()">
+        <select class="fs" id="mod-type" onchange="updateModCatSelect()">
           <option value="depense">💸 Dépense</option>
           <option value="revenu">💰 Revenu</option>
           <option value="achat">📦 Achat stock</option>
+          <option value="transfert">🔄 Transfert</option>
+          <option value="rappel">🔔 Rappel</option>
         </select>
       </div>
       <div class="fg"><label class="fl">Catégorie</label>
-        <input class="fi" id="mod-cat" placeholder="Ex: Loyer, Salaires...">
+        <div id="mod-cat-wrap">${buildModCatSelect(type)}</div>
       </div>
     </div>
     <div class="fr">
@@ -10091,7 +10112,7 @@ function editModele(id){
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">Type d'opération</label>
-        <select class="fs" id="mod-type">
+        <select class="fs" id="mod-type" onchange="updateModCatSelect()">
           <option value="depense"${m.type==='depense'?' selected':''}>💸 Dépense</option>
           <option value="revenu"${m.type==='revenu'?' selected':''}>💰 Revenu</option>
           <option value="achat"${m.type==='achat'?' selected':''}>📦 Achat stock</option>
@@ -10100,7 +10121,7 @@ function editModele(id){
         </select>
       </div>
       <div class="fg"><label class="fl">Catégorie</label>
-        <input class="fi" id="mod-cat" value="${m.cat||''}">
+        <div id="mod-cat-wrap">${buildModCatSelect(m.type, m.cat||'')}</div>
       </div>
     </div>
     <div class="fr">
