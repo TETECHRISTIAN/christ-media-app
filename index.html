@@ -9318,7 +9318,7 @@ function saveDettePerso(){
   if(typeDette==='emprunter') crediterCompte(cid,mt);
   else debiterCompte(cid,mt);
   saveData();closeModal();
-  toast(`✅ ${typeDette==='emprunter'?'Emprunt':'Prêt'} de ${F(mt)} enregistré${echeancier?' — tableau d'amortissement généré':''}`);
+  toast(`✅ ${typeDette==='emprunter'?'Emprunt':'Prêt'} de ${F(mt)} enregistré${echeancier?' — tableau d’amortissement généré':''}`);
   rDettes();
 }
 
@@ -9444,22 +9444,20 @@ function voirTableauAmort(id){
         ${d.echeancier.map(e=>{
           const retard=!e.paye&&e.date<today;
           const bg=e.paye?'background:var(--green-bg,#e8f5e9)':retard?'background:var(--red-bg,#fce8e8)':'';
-          return \`<tr style="\${bg}">
-            <td style="font-weight:600;color:var(--text3)">\${e.n}</td>
-            <td style="font-family:'DM Mono',monospace;font-size:11px">\${e.date}</td>
-            <td style="font-weight:700;color:var(--navy)">\${F(e.mensualite)}</td>
-            <td style="color:var(--purple)">\${F(e.capital)}</td>
-            <td style="color:var(--amber)">\${F(e.interet)}</td>
-            <td style="font-weight:600">\${F(e.solde)}</td>
-            <td>
-              \${e.paye
-                ?'<span style="color:var(--green);font-size:11px;font-weight:600">✅ Payé</span>'
-                :retard
-                  ?'<span style="color:var(--red);font-size:11px;font-weight:600">⚠️ En retard</span>'
-                  :'<span style="color:var(--text3);font-size:11px">⏳ À venir</span>'
-              }
-            </td>
-          </tr>\`;
+          const statut=e.paye
+            ?'<span style="color:var(--green);font-size:11px;font-weight:600">✅ Payé</span>'
+            :retard
+              ?'<span style="color:var(--red);font-size:11px;font-weight:600">⚠️ En retard</span>'
+              :'<span style="color:var(--text3);font-size:11px">⏳ À venir</span>';
+          return '<tr style="'+bg+'">'
+            +'<td style="font-weight:600;color:var(--text3)">'+e.n+'</td>'
+            +'<td style="font-family:DM Mono,monospace;font-size:11px">'+e.date+'</td>'
+            +'<td style="font-weight:700;color:var(--navy)">'+F(e.mensualite)+'</td>'
+            +'<td style="color:var(--purple)">'+F(e.capital)+'</td>'
+            +'<td style="color:var(--amber)">'+F(e.interet)+'</td>'
+            +'<td style="font-weight:600">'+F(e.solde)+'</td>'
+            +'<td>'+statut+'</td>'
+            +'</tr>';
         }).join('')}
         <tr style="border-top:2px solid var(--border2);font-weight:700;background:var(--surface2)">
           <td colspan="2">TOTAL</td>
