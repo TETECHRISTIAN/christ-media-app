@@ -9562,8 +9562,9 @@ function convertirEnEmprunt(type, id) {
     </div>
     <div class="mff">
       <button class="btn" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-primary" onclick="validerConversion('${type}',${id},${montant})">✅ Créer le plan</button>
+      <button class="btn btn-primary" onclick="validerConversion(window._cvType,window._cvId,window._cvMontant)">✅ Créer le plan</button>
     </div>`);
+  window._cvType=type; window._cvId=id; window._cvMontant=montant;
   setTimeout(() => previewConvert(montant), 100);
 }
 
