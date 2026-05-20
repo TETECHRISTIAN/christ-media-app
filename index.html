@@ -9134,6 +9134,7 @@ function rDettes(){
             <button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)" onclick="augmenterDette(${f.id})">➕ Ajouter</button>
             <button class="btn btn-sm btn-success" onclick="reglerDette(${f.id})">💳 Régler</button>
             <button class="btn btn-sm" style="font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜 Relevé${((f.historiquePaiementsFour&&f.historiquePaiementsFour.length)||(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length))?` (${((f.historiquePaiementsFour||[]).length)+(( f.historiqueDetteAjouts||[]).length)})`:''}</button>
+            <button class="btn btn-sm" onclick="convertirEnEmprunt('fourDirect',${f.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button>
           </td>
         </tr>`).join('')}
       </tbody></table></div>`:``}
