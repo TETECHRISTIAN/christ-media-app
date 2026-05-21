@@ -17835,6 +17835,13 @@ async function masterSave(){
     email: S.session?.email || '',
     at: new Date().toISOString()
   };
+
+  // FIX : bloquer la réception du signal sur CET appareil pendant 15s
+  // (évite que le PC s'écrase lui-même avec les données Firebase après un Master Save)
+  _justDidMasterSave = true;
+  clearTimeout(_justDidMasterSaveTimer);
+  _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 15000);
+
   await db.ref('christmedia/master_save').set(signal);
 
   toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
@@ -17847,6 +17854,8 @@ async function masterSave(){
 // Dès qu'un master_save est détecté sur Firebase, recharger les données locales
 let _masterSaveListener = null;
 let _dernierMasterSaveTs = 0;
+let _justDidMasterSave = false;   // FIX : flag pour bloquer la réception après émission
+let _justDidMasterSaveTimer = null;
 
 function activerListenerMasterSave(){
   if(!fbReady || !db) return;
@@ -17857,8 +17866,15 @@ function activerListenerMasterSave(){
     if(!signal || !signal.ts) return;
     // Ignorer si c'est notre propre Master Save (admin sur le même appareil)
     if(signal.ts <= _dernierMasterSaveTs) return;
-    // Ignorer si c'est nous qui venons de l'émettre (même session + moins de 3s)
-    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 3000);
+    // FIX : si on vient d'émettre un Master Save, ignorer le signal pendant 15s
+    // (la fenêtre de 3s était trop courte — Firebase peut mettre plus de 3s à propager)
+    if(_justDidMasterSave){
+      _dernierMasterSaveTs = signal.ts;
+      console.log('[MASTER SAVE] Signal ignoré — cet appareil vient d\'émettre le Master Save');
+      return;
+    }
+    // Sécurité supplémentaire : même email + moins de 15s
+    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 15000);
     _dernierMasterSaveTs = signal.ts;
     if(estEmetteur) return;
 
