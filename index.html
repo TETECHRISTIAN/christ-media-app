@@ -1914,7 +1914,6 @@ async function saveData(){
     if(Array.isArray(S[col])) S[col].forEach(item=>{ if(!item.ts) item.ts = now; });
   });
   // PROTECTION : mémoriser uniquement les ventes/achats créés dans les 10 dernières minutes
-  // (pas TOUS les items — sinon les IDs anciens polluent le cache et expirent mal)
   const _recentsLimit = Date.now() - 10*60*1000;
   ['ventes','achats'].forEach(col=>{
     if(Array.isArray(S[col])) S[col].forEach(item=>{
@@ -1924,6 +1923,9 @@ async function saveData(){
   });
   saveLocal(S);
   if(typeof majNotifBadge==='function') majNotifBadge();
+  // FIX TELEPHONE : vendeur et caissier écrivent toujours vers Firebase pour leurs ventes
+  // (ils doivent pouvoir enregistrer des ventes) — mais on bloque uniquement la republication
+  // globale au DEMARRAGE (voir startFirebaseSync). Ici on laisse passer.
   if(fbReady&&navigator.onLine){
     // FIX : délai porté à 10s pour couvrir les connexions lentes (Togo)
     // Évite que le listener reçoive notre propre mise à jour et rafraîchisse inutilement
@@ -2228,14 +2230,26 @@ async function startFirebaseSync(){
         setSyncStatus('online','Synchronisé ✓');
         await initAuth(); // vérifie session → cache ou affiche l'écran de login
         rafraichirPageCourante();
-        // Pousser la fusion vers Firebase uniquement si local avait des données plus récentes
-        if(localLatestTs > remoteLatestTs){
+        // FIX TELEPHONE : seul l'admin peut republier vers Firebase au démarrage.
+        // Un vendeur/caissier reçoit les données mais n'écrit JAMAIS au démarrage —
+        // c'est lui qui causait l'écrasement des ventes du PC quand il se connectait.
+        const _roleSession = S.session?.role || null;
+        const _peutEcrireAuDemarrage = (_roleSession === 'admin');
+        if(_peutEcrireAuDemarrage && localLatestTs > remoteLatestTs){
+          // Admin avec données plus récentes (travail hors ligne) → pousser
           await saveToFirebase(S);
+          console.log('[SYNC] Admin → Firebase au démarrage (données locales plus récentes)');
+        } else if(!_peutEcrireAuDemarrage){
+          console.log('[SYNC] Vendeur/Caissier → lecture seule au démarrage (pas de republication)');
         }
       }else{
-        // Aucune donnée cloud → premier appareil, on pousse le local
+        // Aucune donnée cloud → premier appareil
         await initAuth();
-        await saveToFirebase(S);
+        const _roleSession2 = S.session?.role || null;
+        if(_roleSession2 === 'admin'){
+          // Seul l'admin initialise Firebase
+          await saveToFirebase(S);
+        }
         setSyncStatus('online','Synchronisé ✓');
       }
       // Activer la sync temps réel après le chargement initial
@@ -2321,29 +2335,36 @@ window.addEventListener('online', async()=>{
   if(!fbReady) await initFirebase();
   if(fbReady){
     // FIX : avant de pousser, on fusionne avec le remote
-    // pour ne pas écraser des changements faits sur un autre appareil pendant qu'on était offline
     const remote = await loadFromFirebase();
     if(remote){
       const merged = fusionnerDonnees(S, remote);
       appliquerEtatFusionne(merged);
     }
-    // FIX : délai porté à 6s pour couvrir les connexions lentes
-    _ignorerProchainUpdate = true;
-    clearTimeout(_ignorerTimer);
-    _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 6000);
-    const ok = await saveToFirebase(S);
-    if(ok){
-      viderFileAttente();
-      setSyncStatus('online', nbOps > 0 ? `${nbOps} op. synchronisées ✓` : 'Synchronisé ✓');
-      setTimeout(()=>setSyncStatus('online','Synchronisé ✓'), 3000);
-      // Après reconnexion : relancer le bon listener selon appareil
-      if(!DISABLE_HEAVY_REALTIME){
-        activerListenerTempsReel();
-      } else {
-        activerListenerVentesOnly();
-      }
-      // Réactiver le listener Master Save après reconnexion
+    // FIX TELEPHONE : à la reconnexion, vendeur/caissier ne republie pas tout Firebase
+    // (seul l'admin republie, ou si des ops hors-ligne sont en attente)
+    const _roleReconnect = S.session?.role || null;
+    const _peutRepublier = (_roleReconnect === 'admin') || (nbOps > 0);
+    if(!_peutRepublier){
+      console.log('[SYNC] Reconnexion vendeur — lecture seule, pas de republication globale');
+      setSyncStatus('online','Synchronisé ✓');
+      activerListenerVentesOnly();
       activerListenerMasterSave();
+    } else {
+      _ignorerProchainUpdate = true;
+      clearTimeout(_ignorerTimer);
+      _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 6000);
+      const ok = await saveToFirebase(S);
+      if(ok){
+        viderFileAttente();
+        setSyncStatus('online', nbOps > 0 ? `${nbOps} op. synchronisées ✓` : 'Synchronisé ✓');
+        setTimeout(()=>setSyncStatus('online','Synchronisé ✓'), 3000);
+        if(!DISABLE_HEAVY_REALTIME){
+          activerListenerTempsReel();
+        } else {
+          activerListenerVentesOnly();
+        }
+        activerListenerMasterSave();
+      }
     }
   }
 });
