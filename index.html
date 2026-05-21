@@ -1681,14 +1681,75 @@ async function saveToFirebase(data){
   if(!fbReady||!db)return false;
   return new Promise(resolve=>{
     setSyncStatus('syncing','Synchronisation...');
+
+    const _role = S.session?.role || null;
+    const _bid  = S.session?.boutique_id || null;
+    const _estAdmin = (_role === 'admin');
+
+    // ─── VERROU PAR BOUTIQUE ───
+    // Un vendeur/caissier ne peut écrire que les collections filtrées par son bid.
+    // Il ne touche JAMAIS : version globale, parametres, utilisateurs, boutique_active,
+    // ni les données des autres boutiques.
+    // Seul l'admin (Chromebook de Christian) écrit tout.
+
+    if(!_estAdmin && _bid){
+      // Collections filtrables par bid
+      const COLS_FILTREES = ['ventes','achats','depenses','stock','dettes','dettesAchats',
+        'clients','fournisseurs','devis','commandes','promos','depots','audit','live',
+        'ventes_services','services'];
+      const update = {};
+      COLS_FILTREES.forEach(col=>{
+        if(!Array.isArray(data[col])) return;
+        // N'envoyer que les items de SA boutique (bid correspondant)
+        const filtered = data[col].filter(x => {
+          if(!x) return false;
+          // Si l'item a un bid → vérifier qu'il correspond
+          if(x.bid != null) return String(x.bid) === String(_bid);
+          // Si pas de bid → laisser passer (item sans boutique = partagé)
+          return true;
+        });
+        // Fusionner avec ce qui est déjà dans Firebase pour ne pas effacer
+        // les données des autres boutiques — on utilise update par chemin
+        update[col + '_partial_' + _bid] = null; // marqueur interne (ignoré)
+        // On écrit uniquement via saveCollectionBoutiqueFirebase
+      });
+      // Écriture sécurisée : collection par collection, filtrée par bid
+      const promises = COLS_FILTREES.map(col=>{
+        if(!Array.isArray(data[col])) return Promise.resolve();
+        const filtered = data[col].filter(x=>{
+          if(!x) return false;
+          if(x.bid != null) return String(x.bid) === String(_bid);
+          return true;
+        });
+        if(filtered.length === 0) return Promise.resolve();
+        // Lire d'abord Firebase pour ne pas écraser les autres boutiques
+        return db.ref('christmedia/data/'+col).once('value').then(snap=>{
+          const fbVal = snap.val();
+          const fbArr = fbVal ? (Array.isArray(fbVal) ? fbVal : Object.values(fbVal)) : [];
+          // Garder les items des autres boutiques intacts
+          const autresBoutiques = fbArr.filter(x=>{
+            if(!x) return false;
+            if(x.bid != null) return String(x.bid) !== String(_bid);
+            return false; // sans bid → sera géré par l'admin
+          });
+          // Fusionner : autres boutiques + données de ce vendeur
+          const fusion = [...autresBoutiques, ...filtered];
+          return db.ref('christmedia/data/'+col).set(fusion);
+        });
+      });
+      Promise.all(promises)
+        .then(()=>{ setSyncStatus('online','Synchronisé ✓'); resolve(true); })
+        .catch(e=>{ console.warn('Firebase vendeur write error:',e); setSyncStatus('offline','Hors ligne'); resolve(false); });
+      return;
+    }
+
+    // ─── ADMIN : écriture complète (comportement original) ───
     const update={};
-    // Toujours utiliser un timestamp précis comme version
     update['version'] = data.version || Date.now();
     update['nid']     = data.nid || 200;
     update['parametres']      = data.parametres || {};
     update['utilisateurs']    = data.utilisateurs || [];
     update['boutique_active'] = data.boutique_active || null;
-    // Toutes les collections (FB_COLLECTIONS inclut désormais boutiques)
     FB_COLLECTIONS.forEach(col=>{
       if(data[col] !== undefined) update[col] = data[col];
     });
