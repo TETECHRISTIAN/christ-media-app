@@ -9047,6 +9047,7 @@ function saveTrancheAchat(acid){
 // ════════════════════════════════════════════════════
 // État filtre dettes
 let dettesFiltreTab='tout';
+let dettesFourVue='groupe';
 
 function rDettes(){
   if(!S.achats)S.achats=[];
@@ -9101,8 +9102,14 @@ function rDettes(){
       <button class="btn btn-sm btn-success" onclick="addDettePerso()" style="margin-left:auto">+ Emprunter / Prêter</button>
     </div>
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='fournisseurs')?`
-    <p class="st">📦 Dettes fournisseurs</p>
-    <div class="tbl-wrap"><table>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <p class="st" style="margin:0">📦 Dettes fournisseurs</p>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button class="btn btn-sm" onclick="dettesFourVue='groupe';rDettes()" style="${dettesFourVue!=='detail'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">👥 Par fournisseur</button>
+        <button class="btn btn-sm" onclick="dettesFourVue='detail';rDettes()" style="${dettesFourVue==='detail'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">📋 Par achat</button>
+      </div>
+    </div>
+    ${dettesFourVue==='detail'?`<div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Fournisseur</th><th>Article</th><th>Total</th><th>Payé</th><th>Reste</th><th>%</th><th></th></tr></thead>
       <tbody>${dettesF.length===0?'<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucune dette fournisseur</td></tr>':
         dettesF.slice().reverse().map(a=>{
@@ -9119,7 +9126,36 @@ function rDettes(){
             <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--green);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm btn-success" onclick="configurerTranchesAchat(${a.id})">💳 Payer</button><button class="btn btn-sm" onclick="convertirEnEmprunt('achat',${a.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button></td>
           </tr>`;}).join('')}
-      </tbody></table></div>`:``}
+      </tbody></table></div>`:`<div class="tbl-wrap"><table>
+      <thead><tr><th>Fournisseur</th><th>Nb achats</th><th>Total dû</th><th>Déjà payé</th><th>Reste</th><th>%</th><th></th></tr></thead>
+      <tbody>${(()=>{
+        if(dettesF.length===0) return '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucune dette fournisseur</td></tr>';
+        const groupes={};
+        dettesF.forEach(a=>{
+          const f=gf(a.fid);const key=a.fid||'_sans';
+          if(!groupes[key]) groupes[key]={fid:a.fid,nom:f?f.nom:'—',achats:[],total:0,paye:0};
+          const p=a.tranches?a.tranches.reduce((s,t)=>s+t.mt,0):0;
+          groupes[key].achats.push(a);groupes[key].total+=a.mt;groupes[key].paye+=p;
+        });
+        return Object.values(groupes).sort((a,b)=>(b.total-b.paye)-(a.total-a.paye)).map(g=>{
+          const reste=Math.max(0,g.total-g.paye);
+          const pct=g.total>0?Math.min(100,Math.round((g.paye/g.total)*100)):0;
+          const ids=g.achats.map(a=>a.id).join(',');
+          return `<tr>
+            <td class="tdm" style="font-weight:700">${g.nom}<div style="font-size:10px;color:var(--text3);margin-top:2px">${g.achats.length} achat(s)</div></td>
+            <td style="color:var(--text3);font-size:12px">${g.achats.length}</td>
+            <td style="color:var(--purple);font-weight:600">${F(g.total)}</td>
+            <td style="color:var(--green)">${F(g.paye)}</td>
+            <td style="color:var(--red);font-weight:700">${F(reste)}</td>
+            <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--green);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-success" onclick="payerGroupeFournisseur('${ids}','${g.nom}')">💳 Tout payer</button>
+              <button class="btn btn-sm" onclick="dettesFourVue='detail';rDettes()" style="font-size:11px">📋 Détail</button>
+            </td>
+          </tr>`;
+        }).join('');
+      })()}
+      </tbody></table></div>`}`:``}
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='foursDirects')?`
     <p class="st" style="margin-top:16px">🏭 Fournisseurs — Solde direct (${F(totalFoursDirects)})</p>
     <div class="tbl-wrap"><table>
@@ -9166,6 +9202,70 @@ function rDettes(){
     <div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Personne</th><th>Type</th><th>Montant</th><th>Récupéré</th><th>Reste</th><th>Compte</th><th>%</th><th></th></tr></thead>
       <tbody>${renderDP(prets)}</tbody></table></div>`:``}`;
+}
+
+function payerGroupeFournisseur(idsStr, nomFour){
+  const ids=idsStr.split(',').map(x=>+x);
+  const achats=S.achats.filter(a=>ids.includes(a.id));
+  const resteTotal=achats.reduce((s,a)=>{
+    const paye=a.tranches?a.tranches.reduce((x,t)=>x+t.mt,0):0;
+    return s+Math.max(0,a.mt-paye);
+  },0);
+  if(resteTotal<=0) return toast('✅ Toutes les dettes de ce fournisseur sont soldées');
+  const devise=(S.parametres&&S.parametres.devise)||'FCFA';
+  modal(`<div class="mft">💳 Payer — ${nomFour}</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:13px">
+      <div style="color:var(--text3)">Total restant dû sur ${achats.length} achat(s)</div>
+      <div style="font-weight:700;font-size:18px;color:var(--red)">${F(resteTotal)}</div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Montant à payer (${devise})</label>
+        <input class="fi" type="number" id="pgf-mt" value="${resteTotal}" min="1">
+      </div>
+      <div class="fg"><label class="fl">Date</label>
+        <input class="fi" type="date" id="pgf-date" value="${D()}">
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Compte</label>
+      ${selectComptes('pgf-cid', premierCompteId())}
+    </div>
+    <div class="fg"><label class="fl">Notes</label>
+      <input class="fi" id="pgf-notes" placeholder="Ex: Règlement groupé mai 2026...">
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="savePayerGroupeFournisseur('${idsStr}','${nomFour}')">💳 Confirmer le paiement</button>
+    </div>`);
+}
+
+function savePayerGroupeFournisseur(idsStr, nomFour){
+  const ids=idsStr.split(',').map(x=>+x);
+  let mt=+document.getElementById('pgf-mt').value||0;
+  const cid=document.getElementById('pgf-cid').value;
+  const date=document.getElementById('pgf-date').value||D();
+  const notes=document.getElementById('pgf-notes').value||`Règlement groupé — ${nomFour}`;
+  if(mt<=0) return toast('❌ Montant invalide');
+
+  // Débiter le compte
+  debiterCompte(cid, mt);
+
+  // Répartir le paiement sur les achats, du plus ancien au plus récent
+  const achats=S.achats.filter(a=>ids.includes(a.id)).sort((a,b)=>a.date>b.date?1:-1);
+  let resteMt=mt;
+  achats.forEach(a=>{
+    if(resteMt<=0) return;
+    const paye=a.tranches?a.tranches.reduce((s,t)=>s+t.mt,0):0;
+    const reste=Math.max(0,a.mt-paye);
+    if(reste<=0) return;
+    const versement=Math.min(resteMt, reste);
+    if(!a.tranches) a.tranches=[];
+    a.tranches.push({id:genId(),date,mt:versement,cid,notes});
+    if(paye+versement>=a.mt) a.statut='Payé';
+    resteMt-=versement;
+  });
+
+  saveData();closeModal();rDettes();
+  toast(`✅ ${F(mt)} réglé sur ${achats.length} achat(s) de ${nomFour}${resteMt>0?' — surplus conservé':''}`);
 }
 
 function addDettePerso(){
