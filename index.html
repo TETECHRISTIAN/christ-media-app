@@ -2151,26 +2151,35 @@ function activerListenerVentesOnly(){
     try{
       const ref = db.ref('christmedia/data/'+col);
       const listener = ref.on('value', snap=>{
-        // Ne pas écraser une mise à jour locale récente (achat, vente, etc.)
-        if(_ignorerProchainUpdate) return;
         const fbVal = snap.val();
         if(!fbVal) return;
         const fbArr = Array.isArray(fbVal) ? fbVal : Object.values(fbVal);
-        // FIX ventes disparaissent : si le remote n'a aucun item plus récent que
-        // notre version locale, ignorer complètement (évite l'écrasement par un
-        // autre appareil en retard de sync)
-        const latestFbTs = fbArr.reduce((m,x)=>Math.max(m, x?.ts||0), 0);
-        const localVer = S.version || 0;
-        if(latestFbTs > 0 && latestFbTs < localVer - 5000) return; // remote est trop vieux
-        // Detecter s'il y a vraiment du nouveau
         const local = Array.isArray(S[col]) ? S[col] : [];
         const localMap = new Map(local.map(x=>[String(x.id), tsOf(x)]));
-        const hasNew = fbArr.some(x=>{
+
+        // Détecter s'il y a des items vraiment nouveaux (absents ou plus récents)
+        const nouvellesVentes = fbArr.filter(x=>{
           if(!x||x.id==null||x._deleted) return false;
           const k = String(x.id);
           return !localMap.has(k) || tsOf(x) > (localMap.get(k)||0);
         });
-        if(!hasNew) return;
+        if(nouvellesVentes.length === 0) return;
+
+        // FIX SYNC TELEPHONE : si _ignorerProchainUpdate est actif (on vient de sauvegarder),
+        // on ignore quand même SAUF si les nouveaux items viennent d'un autre appareil
+        // (ts plus récent que notre dernier save = vente d'un vendeur externe)
+        if(_ignorerProchainUpdate){
+          const _dernierSaveTs = S.version || 0;
+          const vientDAutreAppareil = nouvellesVentes.some(x => tsOf(x) > _dernierSaveTs);
+          if(!vientDAutreAppareil) return; // c'est notre propre écho → ignorer
+          // Sinon c'est une vente externe → accepter quand même
+        }
+
+        // FIX ventes disparaissent : rejeter si toutes les données Firebase sont trop vieilles
+        const latestFbTs = fbArr.reduce((m,x)=>Math.max(m, x?.ts||0), 0);
+        const localVer = S.version || 0;
+        if(latestFbTs > 0 && latestFbTs < localVer - 30000) return; // remote > 30s de retard
+
         S[col] = _fusionnerCollection(col, fbArr);
         saveLocal(S);
         if((pagesParCol[col]||[]).includes(currentPage)){
