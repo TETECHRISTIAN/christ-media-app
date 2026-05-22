@@ -1,27 +1,31 @@
 {
-  "name": "Christ Media — All-in-One",
+  "name": "Christ Media",
   "short_name": "Christ Media",
-  "description": "Gestion complète de boutique — Stock, Ventes, Clients, Finances",
-  "start_url": "/christ-media-app/index.html",
+  "description": "Gestion commerciale Christ Media — Lomé, Togo",
+  "start_url": "/christ-media-app/",
+  "scope": "/christ-media-app/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f1f3d",
-  "theme_color": "#0f1f3d",
-  "lang": "fr",
-  "scope": "/christ-media-app/",
+  "background_color": "#1a237e",
+  "theme_color": "#1a237e",
   "icons": [
-    {"src": "icons/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable"},
-    {"src": "icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
-  ],
-  "screenshots": [
-    {"src": "icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "form_factor": "narrow"}
-  ],
-  "categories": ["business", "finance", "productivity"],
-  "prefer_related_applications": false
+    {
+      "src": "/christ-media-app/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/christ-media-app/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/christ-media-app/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
