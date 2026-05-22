@@ -2194,6 +2194,7 @@ function _fusionnerCollection(col, fbArr){
 
 // ─── ANDROID SAFE REALTIME (MULTI-COLLECTIONS) ───
 // Un listener leger par collection : ventes, dettes, stock, clients, fournisseurs, achats, depenses
+let _mobileListeners = {}; // FIX : déclaration manquante qui causait ReferenceError
 
 function activerListenerVentesOnly(){
   if(!fbReady||!db) return;
