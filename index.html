@@ -6614,12 +6614,15 @@ function delEmploye(id){
   S.employes=S.employes.filter(e=>e.id!=id);
   saveData();toast('🗑️ Employé supprimé');rParametres();
 }
+function ouvrirGDrive(){
+  window.open('https://drive.google.com', '_blank');
+}
 function recalculerStock(){
   if(!confirm('Recalculer le stock depuis les ventes et achats réels ?'))return;
   // Remettre qv à 0 pour tous les articles
   S.stock.forEach(a=>{a.qv=0;a.ea=0;});
-  // Recalculer qv depuis les ventes
-  S.ventes.forEach(v=>{
+  // Recalculer qv depuis les ventes (exclure les soft-deleted)
+  S.ventes.filter(v=>!v._deleted).forEach(v=>{
     const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1}];
     lignes.forEach(l=>{
       const a=ga(l.aid);
