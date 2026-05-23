@@ -4612,11 +4612,14 @@ function ajustStockExact(id){
 
 // ─── CLIENTS ───
 function rClients(){
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>x.bid==bid||(!x.bid&&bid==defaultBid);
+  const clients=getClientsBoutique(bid);
   document.getElementById('content').innerHTML=`
     <div class="tbl-wrap"><table>
       <thead><tr><th>Nom</th><th>Téléphone</th><th>Secteur</th><th>Total achats</th><th>Solde dû</th><th>Points</th><th>Statut</th><th></th></tr></thead>
-      <tbody>${S.clients.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Aucun client</td></tr>':
-        S.clients.map(c=>{
+      <tbody>${clients.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Aucun client</td></tr>':
+        clients.map(c=>{
           const vc2=S.ventes.filter(v=>v.client===c.nom&&v.statut==='Payé');
           const tot=vc2.reduce((s,v)=>s+v.mt,0);
           return`<tr style="cursor:pointer" onclick="ouvrirFicheClient(${c.id})">
@@ -4894,8 +4897,12 @@ function delClient(id){
 
 // ─── FOURNISSEURS ───
 function rFour(){
-  const totalDettes=S.fournisseurs.reduce((s,f)=>s+(f.dette||0),0);
-  const totalAchats=S.achats.reduce((s,a)=>s+a.mt,0);
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>x.bid==bid||(!x.bid&&bid==defaultBid);
+  const fournisseurs=(S.fournisseurs||[]).filter(isMine);
+  const achatsB=getAchatsBoutique(bid);
+  const totalDettes=fournisseurs.reduce((s,f)=>s+(f.dette||0),0);
+  const totalAchats=achatsB.reduce((s,a)=>s+a.mt,0);
   document.getElementById('content').innerHTML=`
     <div class="tbl-wrap"><table>
       <thead><tr><th>Nom</th><th>Téléphone</th><th>Secteur</th><th>Total acheté</th><th>Nb achats</th><th>Dette</th><th>Statut</th><th></th></tr></thead>
@@ -11607,6 +11614,9 @@ function journalVerrouiller(){
 
 // ─── RAPPORT DE CAISSE JOURNALIER ───
 function rCaisse(){
+  const bid=getBid();
+  const ventesB=getVentesBoutique(bid);
+  const depensesB=getDepensesBoutique(bid);
   const today = new Date();
   const todayStr = today.toISOString().slice(0,10);
   // Date sélectionnée (par défaut aujourd'hui)
@@ -11617,10 +11627,10 @@ function rCaisse(){
   const dev = p.devise || 'FCFA';
 
   // Filtrer les données du jour sélectionné
-  const ventesJour = S.ventes.filter(v => v.date && v.date.startsWith(selDate));
+  const ventesJour = ventesB.filter(v => v.date && v.date.startsWith(selDate));
   const ventesPayees = ventesJour.filter(v => v.statut === 'Payé');
   const ventesCredit = ventesJour.filter(v => v.statut === 'Non payé');
-  const depensesJour = S.depenses.filter(d => d.date && d.date.startsWith(selDate));
+  const depensesJour = depensesB.filter(d => d.date && d.date.startsWith(selDate));
   const achatsJour = S.achats ? S.achats.filter(a => a.date && a.date.startsWith(selDate)) : [];
 
   // Totaux
@@ -13775,6 +13785,8 @@ function demarrerHorloge(){
 }
 
 function rStats(){
+  const bid=getBid();
+  const ventesB=getVentesBoutique(bid);
   const now = new Date();
   const todayStr = now.toISOString().slice(0,10);
   const curM = now.toISOString().slice(0,7);
@@ -13782,7 +13794,7 @@ function rStats(){
 
   // Filtrer ventes selon période
   function filtrerVentes(periode){
-    return S.ventes.filter(v => {
+    return ventesB.filter(v => {
       if(!v.date || v.statut !== 'Payé') return false;
       if(periode === 'semaine'){
         const d = new Date(v.date);
@@ -13824,7 +13836,7 @@ function rStats(){
     d.setDate(d.getDate() - i);
     const ds = d.toISOString().slice(0,10);
     const label = d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
-    const mt = S.ventes.filter(v => v.date && v.date.startsWith(ds) && v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
+    const mt = ventesB.filter(v => v.date && v.date.startsWith(ds) && v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
     jours7.push({ds, label, mt});
   }
   const max7 = Math.max(...jours7.map(j=>j.mt), 1);
