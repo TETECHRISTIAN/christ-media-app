@@ -1520,8 +1520,7 @@ const defaultData={
   historique_prix:[],
   objectifs_par_boutique:{},
   boutiques:[
-    {id:1,nom:'Boutique A',emoji:'🏪',couleur:'#0f1f3d',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true},
-    {id:2,nom:'Boutique B',emoji:'🏬',couleur:'#1a5c2e',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true}
+    {id:1,nom:'Boutique A',emoji:'🏪',couleur:'#0f1f3d',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true}
   ],
   fidelite:{actif:false,pointsParFCFA:1,valeurPoint:10,niveaux:[{nom:'Bronze',seuil:0,emoji:'🥉'},{nom:'Argent',seuil:500,emoji:'🥈'},{nom:'Or',seuil:2000,emoji:'🥇'},{nom:'VIP',seuil:5000,emoji:'💎'}]},
   boutique_active:1,
@@ -11116,6 +11115,10 @@ if(!S.boutiques||S.boutiques.length===0){
     categories: (S.parametres&&S.parametres.categories)||['Lingerie','Audio-Vidéo','Bureautique'],
     ...b
   }));
+  // Supprimer définitivement Boutique B (id=2, nom='Boutique B')
+  const avantSuppression = S.boutiques.length;
+  S.boutiques = S.boutiques.filter(b => !(b.id===2 && b.nom==='Boutique B'));
+  if(S.boutiques.length < avantSuppression) saveLocal(S);
   // Ne pas recréer automatiquement une 2ème boutique
 }
 if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
