@@ -5843,8 +5843,12 @@ let revTab='revenus';
 function rRevenus(){
   if(!S.revenus)S.revenus=[];
   if(!S.charges)S.charges=[];
-  const totalRev=S.revenus.reduce((s,r)=>s+r.mt,0);
-  const totalChg=S.charges.reduce((s,c)=>s+c.mt,0);
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
+  const revenus=(S.revenus||[]).filter(isMine);
+  const charges=(S.charges||[]).filter(isMine);
+  const totalRev=revenus.reduce((s,r)=>s+r.mt,0);
+  const totalChg=charges.reduce((s,c)=>s+c.mt,0);
   document.getElementById('content').innerHTML=`
     <div class="g2" style="margin-bottom:16px">
       <div class="card" style="border-left:3px solid var(--green)">
@@ -5879,7 +5883,7 @@ function rRevenus(){
     <div class="tbl-wrap"><table>
       <thead><tr><th>Description</th><th>Catégorie</th><th>Montant/mois</th><th>Récurrence</th><th></th></tr></thead>
       <tbody>${S.charges.length===0?'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">Aucune charge enregistrée</td></tr>':
-        S.charges.map(c=>`<tr>
+        charges.map(c=>`<tr>
           <td class="tdm">${c.desc}</td>
           <td><span class="badge ba">${c.cat}</span></td>
           <td style="font-weight:600;color:var(--red)">${F(c.mt)}</td>
@@ -5909,7 +5913,7 @@ function saveRevenu(){
   if(!desc||!mt)return toast('❌ Description et montant requis');
   const cid_rev=document.getElementById('mmo').value;
   if(!S.revenus)S.revenus=[];
-  S.revenus.push({id:genId(),date:document.getElementById('mda').value,desc,cat:document.getElementById('mcat').value,mt,mode:nomCompte(cid_rev),cid:cid_rev,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+  S.revenus.push({id:genId(),date:document.getElementById('mda').value,desc,cat:document.getElementById('mcat').value,mt,mode:nomCompte(cid_rev),cid:cid_rev,bid:getBid(),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
   crediterCompte(cid_rev,mt);
   saveData();closeModal();toast('✅ Revenu enregistré');rRevenus();
 }
@@ -5917,7 +5921,7 @@ function delRevenu(id){
   if(!confirm('Supprimer ce revenu ?'))return;
   const r=(S.revenus||[]).find(x=>x.id==id);
   if(r&&r.cid) debiterCompte(r.cid, r.mt);
-  S.revenus=S.revenus.filter(x=>x.id!=id);
+  S.revenus=revenus.filter(x=>x.id!=id);
   saveData();toast('🗑️ Revenu supprimé — compte mis à jour');rRevenus();
 }
 function addCharge(){
@@ -5938,12 +5942,12 @@ function saveCharge(){
   const mt=+document.getElementById('mmt').value||0;
   if(!desc||!mt)return toast('❌ Description et montant requis');
   if(!S.charges)S.charges=[];
-  S.charges.push({id:genId(),desc,cat:document.getElementById('mcat').value,mt,recurrence:document.getElementById('mrec').value});
+  S.charges.push({id:genId(),desc,cat:document.getElementById('mcat').value,mt,recurrence:document.getElementById('mrec').value,bid:getBid()});
   saveData();closeModal();toast('✅ Charge enregistrée');rRevenus();
 }
 function delCharge(id){
   if(!confirm('Supprimer cette charge ?'))return;
-  S.charges=S.charges.filter(c=>c.id!=id);
+  S.charges=charges.filter(c=>c.id!=id);
   saveData();toast('🗑️ Charge supprimée');rRevenus();
 }
 
@@ -6984,16 +6988,20 @@ function rTransactions(){
 function rServices(){
   if(!S.services)S.services=[];
   if(!S.ventes_services)S.ventes_services=[];
-  const totalSvcs=S.ventes_services.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
+  const services=(S.services||[]).filter(isMine);
+  const ventes_services=(S.ventes_services||[]).filter(isMine);
+  const totalSvcs=ventes_services.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   document.getElementById('content').innerHTML=`
     <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="ct">Services proposés</div><div class="mv">${N(S.services.length)}</div></div>
-      <div class="card"><div class="ct">Prestations réalisées</div><div class="mv">${N(S.ventes_services.length)}</div></div>
+      <div class="card"><div class="ct">Services proposés</div><div class="mv">${N(services.length)}</div></div>
+      <div class="card"><div class="ct">Prestations réalisées</div><div class="mv">${N(ventes_services.length)}</div></div>
       <div class="card"><div class="ct">Revenus services</div><div class="mv" style="color:var(--green)">${F(totalSvcs)}</div></div>
     </div>
     <p class="st">Catalogue de services</p>
     <div class="g3" style="margin-bottom:20px">
-      ${S.services.map(sv=>`
+      ${services.map(sv=>`
         <div class="service-card">
           <div class="service-icon">⭐</div>
           <div class="service-info">
@@ -7012,7 +7020,7 @@ function rServices(){
     <p class="st">Historique des prestations</p>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Service</th><th>Client</th><th>Montant</th><th>Mode</th><th>Statut</th><th></th></tr></thead>
-      <tbody>${S.ventes_services.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune prestation enregistrée</td></tr>':
+      <tbody>${ventes_services.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune prestation enregistrée</td></tr>':
         S.ventes_services.slice().reverse().map(v=>`<tr>
           <td>${v.date}</td><td class="tdm">${v.nom_service}</td>
           <td>${v.client||'—'}</td><td style="font-weight:600">${F(v.mt)}</td>
@@ -7040,7 +7048,7 @@ function saveService(){
   const nom=document.getElementById('ms-nom').value;
   if(!nom)return toast('❌ Nom requis');
   if(!S.services)S.services=[];
-  S.services.push({id:genId(),nom,cat:document.getElementById('ms-cat').value||'Service',desc:document.getElementById('ms-desc').value,prix:+document.getElementById('ms-prix').value||0});
+  S.services.push({id:genId(),nom,cat:document.getElementById('ms-cat').value||'Service',desc:document.getElementById('ms-desc').value,prix:+document.getElementById('ms-prix').value||0,bid:getBid()});
   saveData();closeModal();toast('✅ Service ajouté');rServices();
 }
 function editService(id){
@@ -7065,7 +7073,7 @@ function updateService(id){
 }
 function delService(id){
   if(!confirm('Supprimer ce service ?'))return;
-  S.services=S.services.filter(s=>s.id!=id);
+  S.services=services.filter(s=>s.id!=id);
   saveData();toast('🗑️ Service supprimé');rServices();
 }
 function vendrService(id){
@@ -7102,7 +7110,7 @@ function saveVenteService(id){
   const cid_svc=document.getElementById('ms-mode').value;
   const statut_svc=document.getElementById('ms-statut').value;
   const mt_svc=qte*pu;
-  S.ventes_services.push({
+  S.ventes_services.push({bid:getBid(),
     id:genId(),date:D(),sid:id,nom_service:sv.nom,
     client:document.getElementById('ms-client').value,
     qte,pu,mt:mt_svc,mode:nomCompte(cid_svc),cid:cid_svc,statut:statut_svc,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()
@@ -7135,7 +7143,7 @@ function delVenteService(id){
   if(!confirm('Supprimer cette prestation ?'))return;
   const v=S.ventes_services&&S.ventes_services.find(x=>x.id==id);
   if(v && v.statut==='Payé' && v.cid) debiterCompte(v.cid, v.mt);
-  S.ventes_services=S.ventes_services.filter(v=>v.id!=id);
+  S.ventes_services=ventes_services.filter(v=>v.id!=id);
   saveData();toast('🗑️ Prestation supprimée — compte mis à jour');rServices();
 }
 
@@ -10059,6 +10067,11 @@ function voirHistoDette(fid){
 // ─── MODULE : FLUX FINANCIER ───
 // ════════════════════════════════════════════════════
 function rFlux(){
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
+  const ventesB=getVentesBoutique(bid);
+  const depensesB=getDepensesBoutique(bid);
+  const achatsB=getAchatsBoutique(bid);
   const now=new Date();
   const mois=[];
   for(let i=5;i>=0;i--){
@@ -10066,13 +10079,13 @@ function rFlux(){
     mois.push(d.toISOString().slice(0,7));
   }
   const entrees=mois.map(m=>{
-    const v=S.ventes.filter(x=>x.statut==='Payé'&&x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
+    const v=ventesB.filter(x=>x.statut==='Payé'&&x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
     const r=(S.revenus||[]).filter(x=>x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
     return v+r;
   });
   const sorties=mois.map(m=>{
-    const d=S.depenses.filter(x=>x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
-    const a=S.achats.filter(x=>x.statut==='Payé'&&x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
+    const d=depensesB.filter(x=>x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
+    const a=achatsB.filter(x=>x.statut==='Payé'&&x.date&&x.date.startsWith(m)).reduce((s,x)=>s+x.mt,0);
     return d+a;
   });
   const soldes=mois.map((_,i)=>entrees[i]-sorties[i]);
@@ -10085,10 +10098,10 @@ function rFlux(){
   // Historique unifié
   const buildHist=(type)=>{
     const h=[];
-    if(type==='Tout'||type==='Vente') S.ventes.filter(v=>v.statut==='Payé').forEach(v=>h.push({date:v.date,type:'Vente',label:v.client||'Client',montant:v.mt,sens:'+',couleur:'var(--green)',compte:v.cid?nomCompte(v.cid):v.mode||'—'}));
+    if(type==='Tout'||type==='Vente') ventesB.filter(v=>v.statut==='Payé').forEach(v=>h.push({date:v.date,type:'Vente',label:v.client||'Client',montant:v.mt,sens:'+',couleur:'var(--green)',compte:v.cid?nomCompte(v.cid):v.mode||'—'}));
     if(type==='Tout'||type==='Revenu') (S.revenus||[]).forEach(r=>h.push({date:r.date,type:'Revenu',label:r.desc||'',montant:r.mt,sens:'+',couleur:'var(--teal)',compte:r.cid?nomCompte(r.cid):r.mode||'—'}));
     if(type==='Tout'||type==='Dépense') S.depenses.forEach(d=>h.push({date:d.date,type:'Dépense',label:d.four+' · '+d.cat,montant:d.mt,sens:'-',couleur:'var(--red)',compte:d.cid?nomCompte(d.cid):d.mode||'—'}));
-    if(type==='Tout'||type==='Achat') S.achats.filter(a=>a.statut==='Payé').forEach(a=>{const art=ga(a.aid);const f=gf(a.fid);h.push({date:a.date,type:'Achat',label:(f?f.nom:'')+(art?' · '+art.nom:''),montant:a.mt,sens:'-',couleur:'var(--purple)',compte:a.cid?nomCompte(a.cid):a.mode||'—'});});
+    if(type==='Tout'||type==='Achat') achatsB.filter(a=>a.statut==='Payé').forEach(a=>{const art=ga(a.aid);const f=gf(a.fid);h.push({date:a.date,type:'Achat',label:(f?f.nom:'')+(art?' · '+art.nom:''),montant:a.mt,sens:'-',couleur:'var(--purple)',compte:a.cid?nomCompte(a.cid):a.mode||'—'});});
     if(type==='Tout'||type==='Transfert') (S.transferts||[]).forEach(t=>h.push({date:t.date,type:'Transfert',label:nomCompte(t.de)+' → '+nomCompte(t.vers),montant:t.mt,sens:'⇄',couleur:'var(--navy)',compte:nomCompte(t.de)}));
     if(type==='Tout'||type==='Emprunt') (S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter').forEach(d=>h.push({date:d.date,type:'Emprunt',label:d.personne,montant:d.montant,sens:'+',couleur:'var(--amber)',compte:d.cid?nomCompte(d.cid):'—'}));
     if(type==='Tout'||type==='Prêt') (S.dettesPerso||[]).filter(d=>d.typeDette==='preter').forEach(d=>h.push({date:d.date,type:'Prêt',label:d.personne,montant:d.montant,sens:'-',couleur:'var(--pink)',compte:d.cid?nomCompte(d.cid):'—'}));
@@ -10172,8 +10185,10 @@ function filtrerFlux(type){
 
 function rLimites(){
   if(!S.limites)S.limites=[];
+  const bid=getBid();
+  const depensesB=getDepensesBoutique(bid);
   const curM=new Date().toISOString().slice(0,7);
-  const depCat=(cat)=>S.depenses.filter(d=>d.date&&d.date.startsWith(curM)&&(cat==='Toutes'||d.cat===cat)).reduce((s,d)=>s+d.mt,0);
+  const depCat=(cat)=>depensesB.filter(d=>d.date&&d.date.startsWith(curM)&&(cat==='Toutes'||d.cat===cat)).reduce((s,d)=>s+d.mt,0);
 
   document.getElementById('content').innerHTML=`
     <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Définissez des plafonds de dépenses par catégorie. Une alerte s'affiche quand vous approchez ou dépassez la limite.</p>
@@ -10849,7 +10864,7 @@ function confirmerFait(id){
       verifierLimites();
     } else if(op.type==='revenu'){
       if(!S.revenus)S.revenus=[];
-      S.revenus.push({id:genId(),date,desc:op.titre,cat:cat||op.cat||'Agenda',mt:mtTotal,mode:nomCompte(cid),cid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+      S.revenus.push({id:genId(),date,desc:op.titre,cat:cat||op.cat||'Agenda',mt:mtTotal,mode:nomCompte(cid),cid,bid:getBid(),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
       crediterCompte(cid,mtTotal);
     } else if(op.type==='achat'){
       toast('📦 Achat — allez dans la section Achats pour enregistrer le détail');
@@ -11209,6 +11224,11 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
   (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   (S.fournisseurs||[]).forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
+  (S.revenus||[]).forEach(r=>{ if(!r.bid){ r.bid=defaultBid; modifie=true; } });
+  (S.charges||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
+  (S.services||[]).forEach(s=>{ if(!s.bid){ s.bid=defaultBid; modifie=true; } });
+  (S.ventes_services||[]).forEach(v=>{ if(!v.bid){ v.bid=defaultBid; modifie=true; } });
+  (S.commandes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   if(modifie) saveLocal(S);
 })();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
@@ -14214,7 +14234,9 @@ function delPromo(id){
 
 function rCommandes(){
   if(!S.commandes) S.commandes = [];
-  const cmds = S.commandes;
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
+  const cmds = S.commandes.filter(isMine);
   const enAttente = cmds.filter(c => c.statut === 'En attente');
   const envoyees = cmds.filter(c => c.statut === 'Envoyée');
   const recues = cmds.filter(c => c.statut === 'Reçue');
@@ -14475,7 +14497,7 @@ function saveCommande(id){
     const c = S.commandes.find(c=>c.id==id);
     if(c) Object.assign(c, {fid,date,notes,lignes});
   } else {
-    S.commandes.push({id:genId(),fid,date,statut:'En attente',lignes,notes,ts:Date.now()});
+    S.commandes.push({id:genId(),fid,date,statut:'En attente',lignes,notes,bid:getBid(),ts:Date.now()});
   }
   saveData(); closeModal(); toast('✅ Commande enregistrée'); rCommandes();
 }
@@ -15165,7 +15187,9 @@ function ajouterPointsFidelite(clientNom, montant){
 function rFidelite(){
   const cfg = getFideliteConfig();
   const dev = (S.parametres||{}).devise || 'FCFA';
-  const clientsAvecPoints = S.clients.filter(c => (c.points||0) > 0)
+  const bid=getBid();
+  const clientsB = getClientsBoutique(bid);
+  const clientsAvecPoints = clientsB.filter(c => (c.points||0) > 0)
     .sort((a,b) => (b.points||0) - (a.points||0));
   const totalPoints = clientsAvecPoints.reduce((s,c)=>s+(c.points||0),0);
 
@@ -15449,7 +15473,8 @@ function rAudit(){
   const actions = ['Tous','CREATE','UPDATE','DELETE','LOGIN','PRINT'];
   const categories = ['Tous',...new Set(S.audit.map(a=>a.categorie).filter(Boolean))];
 
-  let filtered = S.audit;
+  const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
+  let filtered = (S.audit||[]).filter(a=>!a.bid||a.bid==bid||(!a.bid&&bid==defaultBid));
   if(_auditFiltreAction !== 'Tous') filtered = filtered.filter(a=>a.action===_auditFiltreAction);
   if(_auditFiltreCategorie !== 'Tous') filtered = filtered.filter(a=>a.categorie===_auditFiltreCategorie);
 
