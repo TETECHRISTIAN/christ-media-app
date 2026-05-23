@@ -9071,17 +9071,24 @@ function partagerWAAvecMontant(vid){
 // ─── HELPER RÔLE ───
 function isAdmin(){return S.session&&S.session.role==='admin';}
 // ─── HELPERS COMPTES ───
-function selectComptes(idSelect, compteIdSelectionne){
+function selectComptes(idSelect, compteIdSelectionne, forceBid){
   if(!S.comptes||S.comptes.length===0) return `<select class="fs" id="${idSelect}"><option value="">— Aucun compte —</option></select>`;
-  const opts=S.comptes.map(c=>`<option value="${c.id}"${c.id==compteIdSelectionne?' selected':''}>${c.nom} · ${F(c.solde)}</option>`).join('');
+  const bid = forceBid || getBid();
+  const defaultBid = (S.boutiques||[])[0]?.id || 1;
+  const comptesFiltres = S.comptes.filter(c => c.bid==bid || (!c.bid && bid==defaultBid));
+  if(comptesFiltres.length===0) return `<select class="fs" id="${idSelect}"><option value="">— Aucun compte dans cette boutique —</option></select>`;
+  const opts=comptesFiltres.map(c=>`<option value="${c.id}"${c.id==compteIdSelectionne?' selected':''}>${c.nom} · ${F(c.solde)}</option>`).join('');
   return `<select class="fs" id="${idSelect}">${opts}</select>`;
 }
 function nomCompte(cid){
   const c=S.comptes&&S.comptes.find(c=>c.id==cid);
   return c?c.nom:cid||'—';
 }
-function premierCompteId(){
-  return S.comptes&&S.comptes.length>0?S.comptes[0].id:null;
+function premierCompteId(forceBid){
+  const bid = forceBid || getBid();
+  const defaultBid = (S.boutiques||[])[0]?.id || 1;
+  const comptesB = (S.comptes||[]).filter(c => c.bid==bid || (!c.bid && bid==defaultBid));
+  return comptesB.length>0 ? comptesB[0].id : null;
 }
 function crediterCompte(cid, montant){
   if(!S.comptes)return;
