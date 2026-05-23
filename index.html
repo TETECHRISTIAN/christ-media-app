@@ -11104,8 +11104,7 @@ S.utilisateurs=S.utilisateurs.map(u=>{
 // S'assurer que les boutiques ont les bonnes propriétés
 if(!S.boutiques||S.boutiques.length===0){
   S.boutiques=[
-    {id:1,nom:'Boutique A',emoji:'🏪',couleur:'#0f1f3d',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true},
-    {id:2,nom:'Boutique B',emoji:'🏬',couleur:'#1a5c2e',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true}
+    {id:1,nom:'Boutique A',emoji:'🏪',couleur:'#0f1f3d',categories:['Lingerie','Audio-Vidéo','Bureautique'],actif:true}
   ];
 } else {
   // Migrer les boutiques existantes sans emoji/couleur/categories
@@ -11115,10 +11114,7 @@ if(!S.boutiques||S.boutiques.length===0){
     categories: (S.parametres&&S.parametres.categories)||['Lingerie','Audio-Vidéo','Bureautique'],
     ...b
   }));
-  // Ajouter une 2ème boutique si une seule existe
-  if(S.boutiques.length===1){
-    S.boutiques.push({id:genId(),nom:'Boutique B',emoji:'🏬',couleur:'#1a5c2e',categories:(S.parametres&&S.parametres.categories)||['Lingerie','Audio-Vidéo','Bureautique'],actif:true});
-  }
+  // Ne pas recréer automatiquement une 2ème boutique
 }
 if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
 // ─── VENTE RAPIDE DEPUIS STOCK ───
