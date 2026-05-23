@@ -2528,7 +2528,9 @@ function switcherBoutique(bid){
       calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,
       limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
-      depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive})[currentPage]();
+      depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
+      rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
