@@ -9235,15 +9235,19 @@ function rDettes(){
   if(!S.ventes)S.ventes=[];
   if(!S.dettesPerso)S.dettesPerso=[];
 
-  const dettesF=S.achats.filter(a=>a.statut==='À payer');
+  const bid=getBid();
+  const defaultBid=(S.boutiques||[])[0]?.id||1;
+  const isMine=x=>x.bid==bid||(!x.bid&&bid==defaultBid);
+
+  const dettesF=S.achats.filter(a=>a.statut==='À payer'&&isMine(a));
   const resteF=dettesF.reduce((s,a)=>s+(a.mt-(a.tranches?a.tranches.reduce((x,t)=>x+t.mt,0):0)),0);
-  const dettesC=S.ventes.filter(v=>v.statut==='Non payé');
+  const dettesC=S.ventes.filter(v=>v.statut==='Non payé'&&isMine(v));
   const resteC=dettesC.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0);
   const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
   const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0);
+  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&isMine(f));
   const totalFoursDirects=foursDirects.reduce((s,f)=>s+f.dette,0);
 
   const tabs=[{id:'tout',label:'Tout'},{id:'fournisseurs',label:'📦 Fournisseurs (achats)'},{id:'foursDirects',label:'🏭 Fournisseurs (solde)'},{id:'clients',label:'👤 Clients'},{id:'emprunts',label:'📥 Emprunts'},{id:'prets',label:'📤 Prêts'}];
@@ -11197,6 +11201,7 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.achats||[]).forEach(a=>{ if(!a.bid){ a.bid=defaultBid; modifie=true; } });
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
   (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
+  (S.fournisseurs||[]).forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
   if(modifie) saveLocal(S);
 })();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
