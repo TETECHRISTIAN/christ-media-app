@@ -2312,6 +2312,13 @@ async function startFirebaseSync(){
           merged = fusionnerDonnees(S, remote);
         }
         appliquerEtatFusionne(merged);
+        // Supprimer Boutique B définitivement si elle revient de Firebase
+        if((S.boutiques||[]).some(b=>b.id===2&&b.nom==='Boutique B')){
+          S.boutiques = S.boutiques.filter(b=>!(b.id===2&&b.nom==='Boutique B'));
+          saveLocal(S);
+          await saveToFirebase(S);
+          console.log('[MIGRATION] Boutique B supprimée de Firebase');
+        }
         setSyncStatus('online','Synchronisé ✓');
         await initAuth(); // vérifie session → cache ou affiche l'écran de login
         rafraichirPageCourante();
