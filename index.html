@@ -2574,25 +2574,25 @@ function getStockBoutique(bid){
 function getVentesBoutique(bid){
   bid = bid || getBid();
   // FIX : exclure les ventes soft-deleted (_deleted:true) propagées par la fusion
-  return (S.ventes||[]).filter(v => !v._deleted && (!v.bid || v.bid == bid));
+  return (S.ventes||[]).filter(v => !v._deleted && (v.bid == bid || (!v.bid && bid == (S.boutiques[0]?.id||1))));
 }
 
 // Filtre achats par boutique active
 function getAchatsBoutique(bid){
   bid = bid || getBid();
-  return (S.achats||[]).filter(a => !a.bid || a.bid == bid);
+  return (S.achats||[]).filter(a => a.bid == bid || (!a.bid && bid == (S.boutiques[0]?.id||1)));
 }
 
 // Filtre dépenses par boutique active
 function getDepensesBoutique(bid){
   bid = bid || getBid();
-  return (S.depenses||[]).filter(d => !d.bid || d.bid == bid);
+  return (S.depenses||[]).filter(d => d.bid == bid || (!d.bid && bid == (S.boutiques[0]?.id||1)));
 }
 
 // Filtre clients par boutique active
 function getClientsBoutique(bid){
   bid = bid || getBid();
-  return (S.clients||[]).filter(c => !c.bid || c.bid == bid);
+  return (S.clients||[]).filter(c => c.bid == bid || (!c.bid && bid == (S.boutiques[0]?.id||1)));
 }
 
 // Catégories de la boutique active
@@ -11119,6 +11119,15 @@ if(!S.boutiques||S.boutiques.length===0){
   // Ne pas recréer automatiquement une 2ème boutique
 }
 if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
+// ─── MIGRATION BID : assigner bid=1 aux enregistrements sans boutique ───
+(function migrerBid(){
+  let modifie = false;
+  const defaultBid = S.boutiques[0]?.id || 1;
+  (S.ventes||[]).forEach(v=>{ if(!v.bid && !v._deleted){ v.bid=defaultBid; modifie=true; } });
+  (S.achats||[]).forEach(a=>{ if(!a.bid){ a.bid=defaultBid; modifie=true; } });
+  (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
+  if(modifie) saveLocal(S);
+})();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
 function venteRapideArticle(aid){
   const a=ga(aid);if(!a)return;
