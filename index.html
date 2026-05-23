@@ -3407,6 +3407,9 @@ function rDash(){
 
 // ─── OBJECTIFS ───
 function rObjectifs(){
+  const bid=getBid();
+  const ventesB=getVentesBoutique(bid);
+  const depensesB=getDepensesBoutique(bid);
   const obj=getObjBoutique();
   const now=new Date();
   const moisLabels=[];const caHisto=[];const depHisto=[];
@@ -3415,12 +3418,12 @@ function rObjectifs(){
     const m=d.toISOString().slice(0,7);
     const label=d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
     moisLabels.push(label);
-    caHisto.push(S.ventes.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(m)).reduce((s,v)=>s+v.mt,0));
-    depHisto.push(S.depenses.filter(d2=>d2.date&&d2.date.startsWith(m)).reduce((s,d2)=>s+d2.mt,0));
+    caHisto.push(ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(m)).reduce((s,v)=>s+v.mt,0));
+    depHisto.push(depensesB.filter(d2=>d2.date&&d2.date.startsWith(m)).reduce((s,d2)=>s+d2.mt,0));
   }
   const curM=now.toISOString().slice(0,7);
   const vpCur=caHisto[5],depCur=depHisto[5];
-  const vNbCur=S.ventes.filter(v=>v.statut==="Payé"&&v.date&&v.date.startsWith(curM)).length;
+  const vNbCur=ventesB.filter(v=>v.statut==="Payé"&&v.date&&v.date.startsWith(curM)).length;
   const caPct=Math.min(100,obj.ca_mensuel?Math.round(vpCur/obj.ca_mensuel*100):0);
   const nbPct=Math.min(100,obj.ventes_nb?Math.round(vNbCur/obj.ventes_nb*100):0);
   const depPct=Math.min(100,obj.depenses_max?Math.round(depCur/obj.depenses_max*100):0);
@@ -4620,7 +4623,7 @@ function rClients(){
       <thead><tr><th>Nom</th><th>Téléphone</th><th>Secteur</th><th>Total achats</th><th>Solde dû</th><th>Points</th><th>Statut</th><th></th></tr></thead>
       <tbody>${clients.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Aucun client</td></tr>':
         clients.map(c=>{
-          const vc2=S.ventes.filter(v=>v.client===c.nom&&v.statut==='Payé');
+          const vc2=getVentesBoutique(bid).filter(v=>v.client===c.nom&&v.statut==='Payé');
           const tot=vc2.reduce((s,v)=>s+v.mt,0);
           return`<tr style="cursor:pointer" onclick="ouvrirFicheClient(${c.id})">
             <td class="tdm" style="color:var(--navy)">${c.nom}</td><td>${c.tel}</td><td>${cb(c.secteur)}</td>
@@ -4638,8 +4641,8 @@ function rClients(){
       </tbody></table></div>
     <div class="g3" style="margin-top:18px">
       <div class="card"><div class="ct">Total clients</div><div class="mv">${N(S.clients.length)}</div></div>
-      <div class="card"><div class="ct">Débiteurs</div><div class="mv" style="color:var(--red)">${N(S.clients.filter(c=>c.solde>0).length)}</div></div>
-      <div class="card"><div class="ct">Total créances</div><div class="mv" style="color:var(--amber)">${F(S.clients.reduce((s,c)=>s+c.solde,0))}</div></div>
+      <div class="card"><div class="ct">Débiteurs</div><div class="mv" style="color:var(--red)">${N(clients.filter(c=>c.solde>0).length)}</div></div>
+      <div class="card"><div class="ct">Total créances</div><div class="mv" style="color:var(--amber)">${F(clients.reduce((s,c)=>s+c.solde,0))}</div></div>
     </div>`;
   if(!document.getElementById('client-panel')){
     const p=document.createElement('div');p.id='client-panel';p.className='client-panel';p.innerHTML='';document.body.appendChild(p);
@@ -4647,7 +4650,7 @@ function rClients(){
 }
 function ouvrirFicheClient(id){
   const c=S.clients.find(c=>c.id==id);if(!c)return;
-  const vc2=S.ventes.filter(v=>v.client===c.nom);
+  const vc2=getVentesBoutique(bid).filter(v=>v.client===c.nom);
   const vp2=vc2.filter(v=>v.statut==='Payé');
   const tot=vp2.reduce((s,v)=>s+v.mt,0);
   const dv=vc2.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
@@ -4865,7 +4868,7 @@ function addClient(){
 }
 function saveCli(){
   const n=document.getElementById('mn').value;if(!n)return toast('❌ Nom requis');
-  S.clients.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,solde:+document.getElementById('mso').value||0,statut:document.getElementById('mst').value,notes:document.getElementById('mno').value,ts:Date.now()});
+  S.clients.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,solde:+document.getElementById('mso').value||0,statut:document.getElementById('mst').value,notes:document.getElementById('mno').value,bid:getBid(),ts:Date.now()});
   addAudit('CREATE','Client','Nouveau client : '+n, null, {nom:n});
   saveData();closeModal();toast('✅ Client ajouté');rClients();
 }
@@ -4891,7 +4894,7 @@ function delClient(id){
   const _cDel = S.clients.find(c=>c.id==id);
   if(!confirm('Supprimer ce client ?'))return;
   if(_cDel) addAudit('DELETE','Client','Suppression client : '+_cDel.nom, {nom:_cDel.nom}, null);
-  S.clients=S.clients.filter(c=>c.id!=id);
+  S.clients=clients.filter(c=>c.id!=id);
   saveData();toast('🗑️ Client supprimé');rClients();
 }
 
@@ -4906,8 +4909,8 @@ function rFour(){
   document.getElementById('content').innerHTML=`
     <div class="tbl-wrap"><table>
       <thead><tr><th>Nom</th><th>Téléphone</th><th>Secteur</th><th>Total acheté</th><th>Nb achats</th><th>Dette</th><th>Statut</th><th></th></tr></thead>
-      <tbody>${S.fournisseurs.map(f=>{
-        const achatsF=S.achats.filter(a=>a.fid==f.id);
+      <tbody>${fournisseurs.map(f=>{
+        const achatsF=achatsB.filter(a=>a.fid==f.id);
         const totalF=achatsF.reduce((s,a)=>s+a.mt,0);
         const nbF=achatsF.length;
         return`<tr>
@@ -4928,7 +4931,7 @@ function rFour(){
       <div class="card"><div class="ct">Total fournisseurs</div><div class="mv">${N(S.fournisseurs.length)}</div></div>
       <div class="card"><div class="ct">Total achats</div><div class="mv" style="color:var(--purple)">${F(totalAchats)}</div></div>
       <div class="card"><div class="ct">Total dettes</div><div class="mv" style="color:var(--red)">${F(totalDettes)}</div></div>
-      <div class="card"><div class="ct">Fournisseurs actifs</div><div class="mv">${N(S.fournisseurs.filter(f=>f.statut==='Actif').length)}</div></div>
+      <div class="card"><div class="ct">Fournisseurs actifs</div><div class="mv">${N(fournisseurs.filter(f=>f.statut==='Actif').length)}</div></div>
     </div>`;
 }
 
@@ -4982,7 +4985,7 @@ function addFour(){
 }
 function saveFour(){
   const n=document.getElementById('mn').value;if(!n)return toast('❌ Nom requis');
-  S.fournisseurs.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,dette:+document.getElementById('md').value||0,statut:'Actif',ts:Date.now()});
+  S.fournisseurs.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,dette:+document.getElementById('md').value||0,statut:'Actif',bid:getBid(),ts:Date.now()});
   saveData();closeModal();toast('✅ Fournisseur ajouté');rFour();
 }
 function editFour(id){
@@ -9612,7 +9615,7 @@ function saveDettePerso(){
   // Dernière échéance = fin du tableau
   const derniereEch = echeancier&&echeancier.length>0 ? echeancier[echeancier.length-1].date : null;
   S.dettesPerso.push({
-    id:genId(),typeDette,personne,
+    id:genId(),typeDette,personne,bid:getBid(),
     date:dateDebut,
     montant:mt,rembourse:0,cid,
     echeance:derniereEch,
@@ -9918,7 +9921,7 @@ function validerConversion(type, id, montant) {
   // Ajouter dans dettesPerso comme emprunt
   if (!S.dettesPerso) S.dettesPerso = [];
   S.dettesPerso.push({
-    id: genId(), typeDette: 'emprunter',
+    id: genId(), typeDette: 'emprunter', bid: getBid(),
     personne: nom, date: dateDebut,
     montant, rembourse: 0, cid,
     echeance: derniereEch,
@@ -10521,7 +10524,7 @@ function confirmerModele(id){
     verifierLimites();
   }else if(m.type==='revenu'){
     if(!S.revenus)S.revenus=[];
-    S.revenus.push({id:genId(),date,desc:m.nom,cat:m.cat||'Modèle',mt,mode:nomCompte(cid),cid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+    S.revenus.push({id:genId(),date,desc:m.nom,cat:m.cat||'Modèle',mt,mode:nomCompte(cid),cid,bid:getBid(),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
     crediterCompte(cid,mt);
   }
   saveData();closeModal();
@@ -11233,6 +11236,7 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.services||[]).forEach(s=>{ if(!s.bid){ s.bid=defaultBid; modifie=true; } });
   (S.ventes_services||[]).forEach(v=>{ if(!v.bid){ v.bid=defaultBid; modifie=true; } });
   (S.commandes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
+  (S.clients||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   if(modifie) saveLocal(S);
 })();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
@@ -11655,7 +11659,7 @@ function rCaisse(){
   const ventesPayees = ventesJour.filter(v => v.statut === 'Payé');
   const ventesCredit = ventesJour.filter(v => v.statut === 'Non payé');
   const depensesJour = depensesB.filter(d => d.date && d.date.startsWith(selDate));
-  const achatsJour = S.achats ? S.achats.filter(a => a.date && a.date.startsWith(selDate)) : [];
+  const achatsJour = S.achats ? achatsB.filter(a => a.date && a.date.startsWith(selDate)) : [];
 
   // Totaux
   const totalVentes = ventesPayees.reduce((s,v) => s+v.mt, 0);
@@ -12248,7 +12252,7 @@ function validerEmpruntCaisse(){
   if(!personne) return toast('❌ Indique qui t\'a prêté l\'argent');
   if(!mt) return toast('❌ Montant requis');
   if(!S.dettesPerso) S.dettesPerso=[];
-  S.dettesPerso.push({id:genId(),typeDette:'emprunter',personne,date,montant:mt,rembourse:0,cid,echeance:ech,taux:0,notes,statut:'En cours'});
+  S.dettesPerso.push({id:genId(),bid:getBid(),typeDette:'emprunter',personne,date,montant:mt,rembourse:0,cid,echeance:ech,taux:0,notes,statut:'En cours'});
   crediterCompte(cid,mt);
   saveData();
   closeModal();
@@ -14393,6 +14397,7 @@ function confirmerGenCommandesAuto(){
       id: genId(),
       fid: g.four.id,
       date: D(),
+      bid: getBid(),
       statut: 'En attente',
       lignes: g.articles.map(a => ({aid:a.aid, nom:a.nom, qte:a.qte, pu:a.pu})),
       notes: 'Générée automatiquement — stock bas',
@@ -15229,7 +15234,7 @@ function rFidelite(){
       </div>
       <div class="kpi-card kpi-purple">
         <div class="ct">Clients VIP</div>
-        <div class="kpi-val" style="color:var(--purple)">${S.clients.filter(c=>{const n=getNiveauClient(c.points||0);return n.nom==='VIP';}).length}</div>
+        <div class="kpi-val" style="color:var(--purple)">${clientsB.filter(c=>{const n=getNiveauClient(c.points||0);return n.nom==='VIP';}).length}</div>
         <div class="ms">💎 niveau max</div>
       </div>
     </div>
@@ -15238,7 +15243,7 @@ function rFidelite(){
     <p class="st">🏆 Niveaux de fidélité</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
       ${(cfg.niveaux||[]).map(n => {
-        const nbClients = S.clients.filter(c => {
+        const nbClients = clientsB.filter(c => {
           const pts = c.points||0;
           const niveau = getNiveauClient(pts);
           return niveau.nom === n.nom && pts >= n.seuil;
