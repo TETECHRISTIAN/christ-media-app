@@ -7488,21 +7488,40 @@ function rechercheGlobale(q){
 }
 
 // ─── COMPTES & TRANSFERTS ───
+function getComptesBoutique(bid){
+  bid = bid || getBid();
+  const defaultBid = (S.boutiques||[])[0]?.id || 1;
+  return (S.comptes||[]).filter(c => c.bid==bid || (!c.bid && bid==defaultBid));
+}
 function rComptes(){
   if(!S.comptes)S.comptes=[];
   if(!S.transferts)S.transferts=[];
-  const totalSoldes=S.comptes.reduce((s,c)=>s+c.solde,0);
+  const bid = getBid();
+  const boutique = getBoutiqueActive();
+  const comptesB = getComptesBoutique(bid);
+  const totalSoldes = comptesB.reduce((s,c)=>s+c.solde,0);
+  // Transferts impliquant cette boutique
+  const transfertsB = (S.transferts||[]).filter(t=>{
+    const de=S.comptes.find(c=>c.id==t.de);
+    const vers=S.comptes.find(c=>c.id==t.vers);
+    return (de&&de.bid==bid)||(vers&&vers.bid==bid);
+  });
+  // Autres boutiques pour transfert inter-boutiques
+  const autresBoutiques = (S.boutiques||[]).filter(b=>b.id!=bid);
   document.getElementById('content').innerHTML=`
     <div class="g4" style="margin-bottom:20px">
       <div class="card kpi-card kpi-blue" style="grid-column:span 1">
-        <div class="ct">Solde total tous comptes</div>
+        <div class="ct">Solde total — ${boutique.emoji||'🏪'} ${boutique.nom}</div>
         <div class="kpi-val" style="color:var(--navy)">${F(totalSoldes)}</div>
-        <div class="ms">${S.comptes.length} compte(s)</div>
+        <div class="ms">${comptesB.length} compte(s)</div>
       </div>
+      ${autresBoutiques.length>0?`<div class="card" style="grid-column:span 1;display:flex;align-items:center;justify-content:center">
+        <button class="btn btn-primary" onclick="ouvrirTransfertInterBoutique()" style="width:100%">🔄 Transfert inter-boutiques</button>
+      </div>`:''}
     </div>
-    <p class="st">Mes comptes</p>
+    <p class="st">Comptes — ${boutique.nom}</p>
     <div class="g3" style="margin-bottom:20px">
-      ${S.comptes.map((c,idx)=>`
+      ${comptesB.map((c)=>`
         <div class="compte-card" draggable="true"
           ondragstart="dragCompte(event,${c.id})"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -7532,14 +7551,17 @@ function rComptes(){
     <p class="st">Historique des transferts</p>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>De</th><th>Vers</th><th>Montant</th><th>Notes</th><th></th></tr></thead>
-      <tbody>${S.transferts.length===0?'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Aucun transfert</td></tr>':
-        S.transferts.slice().reverse().map(t=>{
+      <tbody>${transfertsB.length===0?'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Aucun transfert</td></tr>':
+        transfertsB.slice().reverse().map(t=>{
           const de=S.comptes.find(c=>c.id==t.de);
           const vers=S.comptes.find(c=>c.id==t.vers);
-          return`<tr>
+          const deB=(S.boutiques||[]).find(b=>b.id==(de?.bid));
+          const versB=(S.boutiques||[]).find(b=>b.id==(vers?.bid));
+          const interBoutique = de&&vers&&de.bid!=vers.bid;
+          return`<tr${interBoutique?' style="background:var(--navy-bg)"':''}>
             <td>${t.date}</td>
-            <td class="tdm">${de?de.nom:'?'}</td>
-            <td class="tdm">${vers?vers.nom:'?'}</td>
+            <td class="tdm">${de?`${deB&&interBoutique?deB.emoji+' ':''}${de.nom}`:'?'}</td>
+            <td class="tdm">${vers?`${versB&&interBoutique?versB.emoji+' ':''}${vers.nom}`:'?'}</td>
             <td style="font-weight:600">${F(t.mt)}</td>
             <td style="color:var(--text3)">${t.notes||'—'}</td>
             <td><div class="td-actions"><button class="btn-icon btn-sm" onclick="delTransfert(${t.id})" style="color:var(--red)">✕</button></div></td>
@@ -7564,7 +7586,7 @@ function saveCompte(){
   const nom=document.getElementById('mc-nom').value;
   if(!nom)return toast('❌ Nom requis');
   if(!S.comptes)S.comptes=[];
-  S.comptes.push({id:genId(),nom,type:document.getElementById('mc-type').value,solde:+document.getElementById('mc-solde').value||0,couleur:document.getElementById('mc-couleur').value});
+  S.comptes.push({id:genId(),nom,type:document.getElementById('mc-type').value,solde:+document.getElementById('mc-solde').value||0,couleur:document.getElementById('mc-couleur').value,bid:getBid()});
   saveData();closeModal();toast('✅ Compte créé');rComptes();
 }
 
@@ -7640,13 +7662,15 @@ function saveAjustement(id){
   saveData();closeModal();toast(`✅ Solde ajusté : ${F(c.solde)}`);rComptes();
 }
 function ouvrirTransfert(fromId){
-  if(!S.comptes||S.comptes.length<2)return toast('⚠️ Il faut au moins 2 comptes');
-  const autresComptes=S.comptes.filter(c=>c.id!=fromId);
-  modal(`<div class="mft">↔ Transfert entre comptes</div>
+  const bid = getBid();
+  const comptesB = getComptesBoutique(bid);
+  if(comptesB.length<2)return toast('⚠️ Il faut au moins 2 comptes dans cette boutique');
+  const autresComptes=comptesB.filter(c=>c.id!=fromId);
+  modal(`<div class="mft">↔ Transfert — ${getBoutiqueActive().nom}</div>
     <div class="fr">
       <div class="fg"><label class="fl">Compte source</label>
         <select class="fs" id="mt-de">
-          ${S.comptes.map(c=>`<option value="${c.id}"${c.id==fromId?' selected':''}>${c.nom} (${F(c.solde)})</option>`).join('')}
+          ${comptesB.map(c=>`<option value="${c.id}"${c.id==fromId?' selected':''}>${c.nom} (${F(c.solde)})</option>`).join('')}
         </select>
       </div>
       <div class="transfert-arrow">→</div>
@@ -7658,6 +7682,35 @@ function ouvrirTransfert(fromId){
     </div>
     <div class="fg"><label class="fl">Montant (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="mt-mt" placeholder="0" min="1"></div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="mt-notes" placeholder="Motif du transfert..."></div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveTransfert()">Transférer</button></div>`);
+}
+function ouvrirTransfertInterBoutique(){
+  const tousComptes = S.comptes||[];
+  if(tousComptes.length<2)return toast('⚠️ Pas assez de comptes');
+  const boutiques = S.boutiques||[];
+  modal(`<div class="mft">🔄 Transfert inter-boutiques</div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Compte source</label>
+        <select class="fs" id="mt-de">
+          ${tousComptes.map(c=>{
+            const b=boutiques.find(bq=>bq.id==c.bid);
+            return `<option value="${c.id}">${b?b.emoji+' '+b.nom+' — ':' '}${c.nom} (${F(c.solde)})</option>`;
+          }).join('')}
+        </select>
+      </div>
+      <div class="transfert-arrow">→</div>
+      <div class="fg"><label class="fl">Compte destination</label>
+        <select class="fs" id="mt-vers">
+          ${tousComptes.map(c=>{
+            const b=boutiques.find(bq=>bq.id==c.bid);
+            return `<option value="${c.id}">${b?b.emoji+' '+b.nom+' — ':' '}${c.nom} (${F(c.solde)})</option>`;
+          }).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Montant (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="mt-mt" placeholder="0" min="1"></div>
+    <div class="fg"><label class="fl">Notes</label><input class="fi" id="mt-notes" placeholder="Ex: Financement paiement fournisseur Christ Déco..."></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" onclick="saveTransfert()">Transférer</button></div>`);
 }
@@ -11129,6 +11182,7 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.ventes||[]).forEach(v=>{ if(!v.bid && !v._deleted){ v.bid=defaultBid; modifie=true; } });
   (S.achats||[]).forEach(a=>{ if(!a.bid){ a.bid=defaultBid; modifie=true; } });
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
+  (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   if(modifie) saveLocal(S);
 })();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
