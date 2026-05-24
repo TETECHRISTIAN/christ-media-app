@@ -4976,26 +4976,31 @@ function rapportFournisseur(fid){
     <div class="mff"><button class="btn" onclick="closeModal()">Fermer</button></div>`);
 }
 function addFour(){
+  const boutiquesOpts=(S.boutiques||[]).map(b=>`<option value="${b.id}"${b.id==getBid()?' selected':''}>${b.emoji||'🏪'} ${b.nom}</option>`).join('');
   modal(`<div class="mft">Ajouter un fournisseur</div>
     <div class="fg"><label class="fl">Nom</label><input class="fi" id="mn" placeholder="Nom du fournisseur"></div>
     <div class="fr"><div class="fg"><label class="fl">Téléphone</label><input class="fi" id="mt" placeholder="90 00 00 00"></div>
     <div class="fg"><label class="fl">Secteur</label><select class="fs" id="ms"><option>Lingerie</option><option>Audio-Vidéo</option><option>Bureautique</option></select></div></div>
     <div class="fg"><label class="fl">Dette initiale (FCFA)</label><input class="fi" type="number" id="md" value="0"></div>
+    <div class="fg"><label class="fl">🏪 Boutique</label><select class="fs" id="mb">${boutiquesOpts}</select></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveFour()">Ajouter</button></div>`);
 }
 function saveFour(){
   const n=document.getElementById('mn').value;if(!n)return toast('❌ Nom requis');
-  S.fournisseurs.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,dette:+document.getElementById('md').value||0,statut:'Actif',bid:getBid(),ts:Date.now()});
+  const fourBid=+document.getElementById('mb')?.value||getBid();
+  S.fournisseurs.push({id:genId(),nom:n,tel:document.getElementById('mt').value,secteur:document.getElementById('ms').value,dette:+document.getElementById('md').value||0,statut:'Actif',bid:fourBid,ts:Date.now()});
   saveData();closeModal();toast('✅ Fournisseur ajouté');rFour();
 }
 function editFour(id){
   const f=gf(id);if(!f)return;
+  const boutiquesOpts=(S.boutiques||[]).map(b=>`<option value="${b.id}"${b.id==f.bid?' selected':''}>${b.emoji||'🏪'} ${b.nom}</option>`).join('');
   modal(`<div class="mft">Modifier — ${f.nom}</div>
     <div class="fg"><label class="fl">Nom</label><input class="fi" id="mn" value="${f.nom}"></div>
     <div class="fr"><div class="fg"><label class="fl">Téléphone</label><input class="fi" id="mt" value="${f.tel}"></div>
     <div class="fg"><label class="fl">Secteur</label><select class="fs" id="ms"><option${f.secteur==='Lingerie'?' selected':''}>Lingerie</option><option${f.secteur==='Audio-Vidéo'?' selected':''}>Audio-Vidéo</option><option${f.secteur==='Bureautique'?' selected':''}>Bureautique</option></select></div></div>
     <div class="fr"><div class="fg"><label class="fl">Dette (FCFA)</label><input class="fi" type="number" id="md" value="${f.dette}"></div>
     <div class="fg"><label class="fl">Statut</label><select class="fs" id="mst"><option${f.statut==='Actif'?' selected':''}>Actif</option><option${f.statut==='Inactif'?' selected':''}>Inactif</option></select></div></div>
+    <div class="fg"><label class="fl">🏪 Boutique</label><select class="fs" id="mb">${boutiquesOpts}</select></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="updateFour(${id})">Enregistrer</button></div>`);
 }
 function updateFour(id){
@@ -5003,6 +5008,7 @@ function updateFour(id){
   f.nom=document.getElementById('mn').value;f.tel=document.getElementById('mt').value;
   f.secteur=document.getElementById('ms').value;f.dette=+document.getElementById('md').value||0;
   f.statut=document.getElementById('mst').value;
+  f.bid=+document.getElementById('mb')?.value||f.bid||getBid();
   saveData();closeModal();toast('✅ Fournisseur modifié');rFour();
 }
 function delFour(id){
@@ -5507,7 +5513,7 @@ function rTresorerie(){
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
-  const foursB=(S.fournisseurs||[]).filter(isMine);
+  const foursB=(S.fournisseurs||[]).filter(f=>!f.bid||f.bid==bid);
   const clientsB=getClientsBoutique(bid);
   const detteFour=foursB.reduce((s,f)=>s+f.dette,0);
   // Emprunts perso non soldés (argent qu'on doit rembourser)
@@ -9269,7 +9275,7 @@ function rDettes(){
   const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&isMine(f));
+  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(!f.bid||f.bid==bid));
   const totalFoursDirects=foursDirects.reduce((s,f)=>s+f.dette,0);
 
   const tabs=[{id:'tout',label:'Tout'},{id:'fournisseurs',label:'📦 Fournisseurs (achats)'},{id:'foursDirects',label:'🏭 Fournisseurs (solde)'},{id:'clients',label:'👤 Clients'},{id:'emprunts',label:'📥 Emprunts'},{id:'prets',label:'📤 Prêts'}];
@@ -11230,7 +11236,7 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.achats||[]).forEach(a=>{ if(!a.bid){ a.bid=defaultBid; modifie=true; } });
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
   (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
-  (S.fournisseurs||[]).forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
+  // Fournisseurs sans bid = visibles dans toutes les boutiques (réassignation manuelle)
   (S.revenus||[]).forEach(r=>{ if(!r.bid){ r.bid=defaultBid; modifie=true; } });
   (S.charges||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   (S.services||[]).forEach(s=>{ if(!s.bid){ s.bid=defaultBid; modifie=true; } });
