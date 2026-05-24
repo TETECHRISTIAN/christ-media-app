@@ -11912,11 +11912,14 @@ function rClotureCaisse(){
 
   // ── Données du jour par boutique ──
   const ventesJour = (S.ventes||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.statut==='Payé');
+  // Avances reçues sur services (crédit partiel) — encaissées aujourd'hui
+  const svcsAvanceJour = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && (!bid || d.bid==bid));
 
   // ── Totaux par compte ──
   const comptes = (S.comptes||[]).filter(c => !bid || c.bid==bid || !c.bid);
-  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0);
+  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0)
+    + svcsAvanceJour.reduce((s,v)=>s+(v.avance||0),0);
   const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
 
   // ── Ventes par mode de paiement → compte ──
@@ -11924,6 +11927,10 @@ function rClotureCaisse(){
   ventesJour.forEach(v => {
     const key = v.cid || v.mode || 'Espèces';
     ventesParCompte[key] = (ventesParCompte[key]||0) + v.mt;
+  });
+  svcsAvanceJour.forEach(v => {
+    const key = v.cid || v.mode || 'Espèces';
+    ventesParCompte[key] = (ventesParCompte[key]||0) + (v.avance||0);
   });
   const depensesParCompte = {};
   depensesJour.forEach(d => {
@@ -11980,7 +11987,7 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid var(--green)">
         <div class="ct">Ventes encaissées</div>
         <div class="mv" style="color:var(--green)">${F(totalVentes)}</div>
-        <div style="font-size:11px;color:var(--text3)">${ventesJour.length} transaction${ventesJour.length>1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text3)">${ventesJour.length+svcsAvanceJour.length} transaction${(ventesJour.length+svcsAvanceJour.length)>1?'s':''}</div>
       </div>
       <div class="card" style="border-left:3px solid var(--red)">
         <div class="ct">Dépenses</div>
@@ -12167,6 +12174,12 @@ function rClotureCaisse(){
             articlesMap[key].qte += (it.qte||1);
             articlesMap[key].total += (it.total||it.mt||0);
           });
+        });
+        svcsAvanceJour.forEach(v => {
+          const key = '🛠 '+v.nom_service+' (avance)';
+          if(!articlesMap[key]) articlesMap[key] = {qte:0, total:0};
+          articlesMap[key].qte += (v.qte||1);
+          articlesMap[key].total += (v.avance||0);
         });
         const rows = Object.entries(articlesMap).sort((a,b)=>b[1].total-a[1].total);
         if(rows.length===0) return '<div style="text-align:center;color:var(--text3);padding:16px;font-size:13px">Aucune vente pour ce jour</div>';
@@ -12365,8 +12378,9 @@ function ouvrirModalCloture(){
   const dev = (S.parametres||{}).devise || 'FCFA';
 
   const ventesJour = (S.ventes||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const svcsAvanceJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d=>d.date&&d.date.startsWith(today)&&(!bid||d.bid==bid));
-  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0);
+  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
   const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
 
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
