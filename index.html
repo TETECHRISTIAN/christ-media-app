@@ -7172,11 +7172,13 @@ function saveVenteService(id){
 }
 function payerService(id){
   const v=S.ventes_services.find(v=>v.id==id);if(!v)return;
+  const montantRestant=v.reste!=null?v.reste:v.mt;
   modal(`<div class="mft">✅ Encaisser la prestation</div>
     <div class="total-preview" style="margin-bottom:14px">
       <div class="total-preview-row"><span>Service</span><span>${v.nom_service||'—'}</span></div>
       <div class="total-preview-row"><span>Client</span><span>${v.client||'—'}</span></div>
-      <div class="total-preview-final"><span>Montant</span><span>${F(v.mt)}</span></div>
+      ${v.avance>0?`<div class="total-preview-row"><span>Avance reçue</span><span style="color:var(--green)">${F(v.avance)}</span></div>`:''}
+      <div class="total-preview-final"><span>Reste à encaisser</span><span style="color:var(--red)">${F(montantRestant)}</span></div>
     </div>
     <div class="fg"><label class="fl">Compte encaissement</label>${selectComptes('ps-cid', premierCompteId())}</div>
     <div class="mff">
@@ -7187,10 +7189,14 @@ function payerService(id){
 function confirmerPaiementService(id){
   const v=S.ventes_services.find(v=>v.id==id);if(!v)return;
   const cid=document.getElementById('ps-cid').value;
+  const montantRestant=v.reste!=null?v.reste:v.mt;
   v.statut='Payé';v.cid=cid;v.mode=nomCompte(cid);
-  crediterCompte(cid,v.mt);
-  saveData();closeModal();toast('✅ Prestation encaissée sur "'+nomCompte(cid)+'"');rServices();
+  crediterCompte(cid,montantRestant);
+  saveData();closeModal();toast('✅ Prestation encaissée sur "'+nomCompte(cid)+'"');
+  if(typeof rDettes==='function'&&document.getElementById('content').querySelector('.st')) rDettes(); else rServices();
 }
+// Alias appelé depuis la vue Gestion des dettes
+function encaisserResteService(id){payerService(id);}
 function delVenteService(id){
   if(!confirm('Supprimer cette prestation ?'))return;
   const v=S.ventes_services&&S.ventes_services.find(x=>x.id==id);
@@ -9308,8 +9314,11 @@ function rDettes(){
 
   const dettesF=S.achats.filter(a=>a.statut==='À payer'&&isMine(a));
   const resteF=dettesF.reduce((s,a)=>s+(a.mt-(a.tranches?a.tranches.reduce((x,t)=>x+t.mt,0):0)),0);
-  const dettesC=S.ventes.filter(v=>v.statut==='Non payé'&&isMine(v));
-  const resteC=dettesC.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0);
+  const dettesC_ventes=S.ventes.filter(v=>v.statut==='Non payé'&&isMine(v));
+  const dettesC_svcs=(S.ventes_services||[]).filter(v=>v.statut==='Non payé'&&isMine(v));
+  const dettesC=[...dettesC_ventes, ...dettesC_svcs.map(v=>({...v, _type:'service', mt:v.reste||v.mt}))];
+  const resteC=dettesC_ventes.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0)
+    + dettesC_svcs.reduce((s,v)=>s+(v.reste!=null?v.reste:v.mt),0);
   const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
   const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
@@ -9432,16 +9441,26 @@ function rDettes(){
       <thead><tr><th>Date</th><th>Client</th><th>Total</th><th>Payé</th><th>Reste</th><th>%</th><th></th></tr></thead>
       <tbody>${dettesC.length===0?'<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucun impayé client</td></tr>':
         dettesC.slice().reverse().map(v=>{
-          const paye=(v.acomptes?v.acomptes.reduce((s,a)=>s+a.mt,0):0)+(v.tranches?v.tranches.reduce((s,t)=>s+t.mt,0):0);
-          const reste=v.mt-paye;const pct=Math.round(paye/v.mt*100);
+          let paye, reste, pct, totalRef;
+          if(v._type==='service'){
+            const avance=v.avance||0;
+            const montantTotal=v.mt+avance; // mt ici = reste_svc (on a remappé)
+            paye=avance; reste=v.mt; totalRef=montantTotal;
+            pct=montantTotal>0?Math.round(paye/montantTotal*100):0;
+          } else {
+            paye=(v.acomptes?v.acomptes.reduce((s,a)=>s+a.mt,0):0)+(v.tranches?v.tranches.reduce((s,t)=>s+t.mt,0):0);
+            reste=v.mt-paye; totalRef=v.mt;
+            pct=totalRef>0?Math.round(paye/totalRef*100):0;
+          }
+          const labelType=v._type==='service'?`<span style="font-size:10px;background:var(--teal-bg,#e0f7f4);color:var(--teal);border-radius:3px;padding:1px 5px;margin-left:4px">🛠 Service</span>`:''
           return`<tr>
             <td style="font-size:11px;font-family:'DM Mono',monospace">${v.date}</td>
-            <td class="tdm">${v.client||'Anonyme'}</td>
-            <td style="color:var(--navy);font-weight:600">${F(v.mt)}</td>
+            <td class="tdm">${v.client||'Anonyme'}${labelType}${v._type==='service'?`<div style="font-size:10px;color:var(--text3)">${v.nom_service||''}</div>`:''}</td>
+            <td style="color:var(--navy);font-weight:600">${F(totalRef)}</td>
             <td style="color:var(--green)">${F(paye)}</td>
             <td style="color:var(--red);font-weight:600">${F(reste)}</td>
             <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--teal);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
-            <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" onclick="gererAcompte(${v.id})">💰 Encaisser</button><button class="btn btn-sm" onclick="convertirEnEmprunt('client',${v.id})" style="font-size:11px;color:var(--teal);border-color:var(--teal)">📅 Planifier</button></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap">${v._type==='service'?`<button class="btn btn-sm btn-primary" onclick="encaisserResteService(${v.id})">💰 Encaisser</button>`:`<button class="btn btn-sm btn-primary" onclick="gererAcompte(${v.id})">💰 Encaisser</button><button class="btn btn-sm" onclick="convertirEnEmprunt('client',${v.id})" style="font-size:11px;color:var(--teal);border-color:var(--teal)">📅 Planifier</button>`}</td>
           </tr>`;}).join('')}
       </tbody></table></div>`:``}
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='emprunts')?`
