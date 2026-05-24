@@ -11957,15 +11957,21 @@ function rClotureCaisse(){
   let totalTheorique = 0;
   const detailBoutiques = boutiques.map(b => {
     const bVentes = (S.ventes||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.statut==='Payé');
+    const bSvcsAvance = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.avance>0);
     const bDeps   = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && d.bid==b.id);
+    const bRevs   = (S.revenus||[]).filter(r => r.date && r.date.startsWith(today) && r.bid==b.id);
     const bHistorique = (S.clotures_caisse||[]).filter(c => c.bid==b.id).sort((a,b2)=>b2.ts-a.ts);
     const bOuverture = bHistorique[0] ? bHistorique[0].solde_fermeture : 0;
-    const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0);
+    const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
     const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
-    const bSolde = bOuverture + bVentesTotal - bDepsTotal;
+    const bRevsTotal   = bRevs.reduce((s,r)=>s+r.mt,0);
+    const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal;
     totalTheorique += bSolde;
-    return { nom: b.nom||b.name||b.id, solde: bSolde };
+    return { nom: b.nom||b.name||b.id, solde: bSolde, ventes: bVentesTotal, deps: bDepsTotal, revs: bRevsTotal, ouverture: bOuverture };
   });
+  const totalDepsToutes = detailBoutiques.reduce((s,b)=>s+b.deps,0);
+  const totalVentesToutes = detailBoutiques.reduce((s,b)=>s+b.ventes,0);
+  const totalRevsToutes = detailBoutiques.reduce((s,b)=>s+b.revs,0);
 
   // ── Rendu ──
   const dateLabel = new Date(today+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -12013,6 +12019,41 @@ function rClotureCaisse(){
           ${detailBoutiques.map(b=>`<span style="display:block">${b.nom} : <b style="color:${b.solde>=0?'var(--green)':'var(--red)'}">${F(b.solde)}</b></span>`).join('')}
         </div>
       </div>
+    </div>
+
+    <!-- Résumé journalier toutes boutiques -->
+    <div class="card" style="margin-bottom:16px;border-left:4px solid var(--teal)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px">📊 Résumé journalier — Toutes boutiques</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="color:var(--text3);font-size:11px;text-transform:uppercase">
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)">Boutique</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border2);color:var(--green)">Ventes</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border2);color:var(--red)">Dépenses</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border2);color:var(--teal)">Revenus</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border2)">Solde</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${detailBoutiques.map(b=>`
+          <tr style="border-bottom:1px solid var(--border2)">
+            <td style="padding:8px;font-weight:600">${b.nom}</td>
+            <td style="text-align:right;padding:8px;color:var(--green);font-weight:600">${F(b.ventes)}</td>
+            <td style="text-align:right;padding:8px;color:var(--red);font-weight:600">${b.deps>0?'−'+F(b.deps):F(0)}</td>
+            <td style="text-align:right;padding:8px;color:var(--teal);font-weight:600">${b.revs>0?'+'+F(b.revs):F(0)}</td>
+            <td style="text-align:right;padding:8px;font-weight:700;color:${b.solde>=0?'var(--green)':'var(--red)'}">${F(b.solde)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--surface2)">
+            <td style="padding:8px;font-weight:700;font-size:12px">TOTAL</td>
+            <td style="text-align:right;padding:8px;color:var(--green);font-weight:700">${F(totalVentesToutes)}</td>
+            <td style="text-align:right;padding:8px;color:var(--red);font-weight:700">${totalDepsToutes>0?'−'+F(totalDepsToutes):F(0)}</td>
+            <td style="text-align:right;padding:8px;color:var(--teal);font-weight:700">${totalRevsToutes>0?'+'+F(totalRevsToutes):F(0)}</td>
+            <td style="text-align:right;padding:8px;font-weight:800;font-size:14px;color:${totalTheorique>=0?'var(--green)':'var(--red)'}">${F(totalTheorique)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
 
     <!-- Capacité fournisseur -->
