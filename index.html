@@ -12350,7 +12350,7 @@ function appliquerCorrectionOuverture(){
   if(isNaN(v)){toast('⚠️ Valeur invalide');return;}
   window._soldeOuvertureManuel=v;
   closeModal();
-  toast('✅ Solde d'ouverture corrigé à '+v.toLocaleString()+' FCFA');
+  toast('✅ Solde ouverture corrigé : '+v.toLocaleString()+' FCFA');
   rClotureCaisse();
 }
 function getBoutiqueName(){
