@@ -7059,7 +7059,7 @@ function rServices(){
       <tbody>${ventes_services.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune prestation enregistrée</td></tr>':
         S.ventes_services.slice().reverse().map(v=>`<tr>
           <td>${v.date}</td><td class="tdm">${v.nom_service}</td>
-          <td>${v.client||'—'}</td><td style="font-weight:600">${F(v.mt)}</td>
+          <td>${v.client||'—'}</td><td style="font-weight:600">${F(v.mt)}${v.avance>0&&v.statut!=='Payé'?`<br><small style='color:var(--orange)'>Avance: ${F(v.avance)} | Reste: ${F(v.reste||v.mt-v.avance)}</small>`:''}</td>
           <td><span class="badge bb">${v.cid?nomCompte(v.cid):(v.mode||'—')}</span></td><td>${sb(v.statut)}</td>
           <td><div class="td-actions">
             ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerService(${v.id})">✓</button>`:''}
@@ -7109,7 +7109,7 @@ function updateService(id){
 }
 function delService(id){
   if(!confirm('Supprimer ce service ?'))return;
-  S.services=services.filter(s=>s.id!=id);
+  S.services=S.services.filter(s=>s.id!=id);
   saveData();toast('🗑️ Service supprimé');rServices();
 }
 function vendrService(id){
@@ -7124,7 +7124,10 @@ function vendrService(id){
       ${selectComptes('ms-mode', premierCompteId())}
     </div>
     <div class="fg"><label class="fl">Statut</label>
-      <select class="fs" id="ms-statut"><option value="Payé">✅ Payé</option><option value="Non payé">⏳ À percevoir</option></select>
+      <select class="fs" id="ms-statut" onchange="toggleAvanceSvc()"><option value="Payé">✅ Payé</option><option value="Non payé">⏳ À crédit</option><option value="Avance">💰 Avance partielle</option></select>
+    </div>
+    <div id="svc-avance-block" style="display:none">
+      <div class="fg"><label class="fl">Montant avance reçue (FCFA)</label><input class="fi" type="number" id="ms-avance" value="0" min="0" placeholder="Ex: 500"></div>
     </div>
     <div id="svc-preview" class="total-preview">
       <div class="total-preview-final"><span>TOTAL</span><span id="svc-total">${F(sv.prix)}</span></div>
@@ -7138,6 +7141,11 @@ function previewServiceTotal(basePrix){
   const el=document.getElementById('svc-total');
   if(el)el.textContent=F(qte*pu);
 }
+function toggleAvanceSvc(){
+  const s=document.getElementById('ms-statut').value;
+  const bl=document.getElementById('svc-avance-block');
+  if(bl)bl.style.display=(s==='Avance')?'':'none';
+}
 function saveVenteService(id){
   const sv=S.services.find(s=>s.id==id);if(!sv)return;
   const qte=+document.getElementById('ms-qte').value||1;
@@ -7146,13 +7154,21 @@ function saveVenteService(id){
   const cid_svc=document.getElementById('ms-mode').value;
   const statut_svc=document.getElementById('ms-statut').value;
   const mt_svc=qte*pu;
+  const avance_svc=(statut_svc==='Avance')?+document.getElementById('ms-avance').value||0:0;
+  const reste_svc=mt_svc-avance_svc;
+  const statut_final=statut_svc==='Avance'?(avance_svc>=mt_svc?'Payé':'Non payé'):(statut_svc==='Payé'?'Payé':'Non payé');
   S.ventes_services.push({bid:getBid(),
     id:genId(),date:D(),sid:id,nom_service:sv.nom,
     client:document.getElementById('ms-client').value,
-    qte,pu,mt:mt_svc,mode:nomCompte(cid_svc),cid:cid_svc,statut:statut_svc,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()
+    qte,pu,mt:mt_svc,mode:nomCompte(cid_svc),cid:cid_svc,
+    statut:statut_final,avance:avance_svc,reste:reste_svc,
+    heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()
   });
   if(statut_svc==='Payé') crediterCompte(cid_svc,mt_svc);
-  saveData();closeModal();toast(`✅ Prestation enregistrée : ${F(mt_svc)}`);rServices();
+  else if(statut_svc==='Avance' && avance_svc>0) crediterCompte(cid_svc,avance_svc);
+  saveData();closeModal();
+  const msg=statut_svc==='Avance'?`✅ Prestation à crédit — Avance : ${F(avance_svc)} / Reste : ${F(reste_svc)}`:`✅ Prestation enregistrée : ${F(mt_svc)}`;
+  toast(msg);rServices();
 }
 function payerService(id){
   const v=S.ventes_services.find(v=>v.id==id);if(!v)return;
@@ -7179,7 +7195,7 @@ function delVenteService(id){
   if(!confirm('Supprimer cette prestation ?'))return;
   const v=S.ventes_services&&S.ventes_services.find(x=>x.id==id);
   if(v && v.statut==='Payé' && v.cid) debiterCompte(v.cid, v.mt);
-  S.ventes_services=ventes_services.filter(v=>v.id!=id);
+  S.ventes_services=S.ventes_services.filter(v=>v.id!=id);
   saveData();toast('🗑️ Prestation supprimée — compte mis à jour');rServices();
 }
 
