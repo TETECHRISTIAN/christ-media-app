@@ -11939,7 +11939,8 @@ function rClotureCaisse(){
 
   // ── Dernière clôture pour solde d'ouverture ──
   const derniere = historique[0];
-  const soldeOuverture = derniere ? derniere.solde_fermeture : 0;
+  const soldeOuvertureBase = derniere ? derniere.solde_fermeture : 0;
+  const soldeOuverture = (window._soldeOuvertureManuel != null) ? window._soldeOuvertureManuel : soldeOuvertureBase;
 
   // ── Solde théorique ──
   const soldeTheorique = soldeOuverture + totalVentes - totalDepenses;
@@ -11988,8 +11989,10 @@ function rClotureCaisse(){
       </div>
       <div class="card" style="border-left:3px solid var(--navy)">
         <div class="ct">Solde ouverture</div>
-        <div class="mv">${F(soldeOuverture)}</div>
-        <div style="font-size:11px;color:var(--text3)">${derniere?'Depuis clôture '+derniere.date:'Aucune clôture précédente'}</div>
+        <div class="mv" style="color:${window._soldeOuvertureManuel!=null?'var(--amber)':'inherit'}">${F(soldeOuverture)}</div>
+        <div style="font-size:11px;color:var(--text3)">${window._soldeOuvertureManuel!=null?'✏️ Corrigé manuellement':(derniere?'Depuis clôture '+derniere.date:'Aucune clôture précédente')}</div>
+        <button onclick="corrigerSoldeOuverture(${soldeOuverture})" class="btn btn-sm" style="margin-top:8px;font-size:11px;color:var(--amber);border-color:var(--amber)">✏️ Corriger</button>
+        ${window._soldeOuvertureManuel!=null?`<button onclick="window._soldeOuvertureManuel=null;rClotureCaisse()" class="btn btn-sm" style="margin-top:4px;font-size:11px">↩ Réinitialiser</button>`:''}
       </div>
       <div class="card" style="border-left:3px solid ${soldeTheorique>=0?'var(--green)':'var(--red)'}">
         <div class="ct">Solde théorique</div>
@@ -12324,6 +12327,32 @@ function validerEmpruntCaisse(){
   rClotureCaisse();
 }
 
+function corrigerSoldeOuverture(actuel){
+  modal(`<div class="mft">✏️ Corriger le solde d'ouverture</div>
+    <div style="background:var(--amber-bg);color:var(--amber);padding:10px 14px;border-radius:var(--rs);margin-bottom:14px;font-size:13px">
+      ⚠️ Utilise cette correction uniquement si le solde hérité de la clôture précédente est erroné (ex: données manquantes, erreur passée).
+    </div>
+    <div class="fg"><label class="fl">Solde actuel (hérité)</label>
+      <input class="fi" type="number" value="" disabled style="color:var(--text3)" placeholder="${actuel.toLocaleString()}">
+    </div>
+    <div class="fg"><label class="fl">Nouveau solde d'ouverture (FCFA)</label>
+      <input class="fi" type="number" id="soc-val" value="${actuel}" step="1" placeholder="Ex: 0 ou vrai montant en caisse">
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Cette correction est temporaire — elle ne modifie pas les clôtures passées.</div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="appliquerCorrectionOuverture()">✅ Appliquer</button>
+    </div>`);
+  setTimeout(()=>{ const i=document.getElementById('soc-val'); if(i){i.select();i.focus();} },100);
+}
+function appliquerCorrectionOuverture(){
+  const v=parseFloat(document.getElementById('soc-val').value);
+  if(isNaN(v)){toast('⚠️ Valeur invalide');return;}
+  window._soldeOuvertureManuel=v;
+  closeModal();
+  toast('✅ Solde d'ouverture corrigé à '+v.toLocaleString()+' FCFA');
+  rClotureCaisse();
+}
 function getBoutiqueName(){
   const bid = getBid();
   const b = (S.boutiques||[]).find(b=>b.id==bid);
@@ -12342,7 +12371,8 @@ function ouvrirModalCloture(){
 
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
   const derniere = historique[0];
-  const soldeOuverture = derniere ? derniere.solde_fermeture : 0;
+  const soldeOuvertureBase2 = derniere ? derniere.solde_fermeture : 0;
+  const soldeOuverture = (window._soldeOuvertureManuel != null) ? window._soldeOuvertureManuel : soldeOuvertureBase2;
   const soldeTheorique = soldeOuverture + totalVentes - totalDepenses;
 
   // Vérifier si clôture déjà faite aujourd'hui
@@ -12445,6 +12475,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     ts: Date.now()
   };
   S.clotures_caisse.push(cloture);
+  window._soldeOuvertureManuel = null; // reset après clôture
   saveData();
   closeModal();
 
