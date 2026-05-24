@@ -11996,6 +11996,50 @@ function rCaisse(){
 // Rapport automatique + saisie physique + historique
 // ════════════════════════════════════════════════════
 
+function _htmlStockCritiqueCloture(bid){
+  var stock = (S.stock||[]).filter(function(a){ return !bid || a.bid==bid || !a.bid; });
+  var rupture = stock.filter(function(a){ return sa(a)===0 && (a.seuil||0)>=0; });
+  var critique = stock.filter(function(a){ return sa(a)>0 && sa(a)<=(a.seuil||0); });
+  if(rupture.length===0 && critique.length===0) return '';
+  var html = '<div class="card" style="margin-bottom:16px;border-left:4px solid var(--red);padding:0;overflow:hidden">';
+  html += '<div style="padding:10px 16px;background:var(--red-bg,#fce8e8);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
+  html += '<div style="font-weight:700;font-size:13px;color:var(--red)">📦 Alerte stock critique</div>';
+  html += '<div style="display:flex;gap:8px">';
+  if(rupture.length>0) html += '<span style="background:var(--red);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">'+rupture.length+' en rupture</span>';
+  if(critique.length>0) html += '<span style="background:var(--amber);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">'+critique.length+' bas</span>';
+  html += '</div></div>';
+  html += '<div style="padding:10px 16px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+  html += '<thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase">';
+  html += '<th style="text-align:left;padding:5px 4px;border-bottom:1px solid var(--border2)">Article</th>';
+  html += '<th style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--border2)">Stock</th>';
+  html += '<th style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--border2)">Seuil</th>';
+  html += '<th style="text-align:left;padding:5px 4px;border-bottom:1px solid var(--border2)">Statut</th>';
+  html += '<th style="text-align:right;padding:5px 4px;border-bottom:1px solid var(--border2)">P. achat</th>';
+  html += '</tr></thead><tbody>';
+  var tous = rupture.concat(critique).sort(function(a,b){ return sa(a)-sa(b); });
+  tous.forEach(function(a){
+    var dispo = sa(a);
+    var estRupture = dispo===0;
+    var couleur = estRupture ? 'var(--red)' : 'var(--amber)';
+    var statut = estRupture
+      ? '<span style="background:var(--red);color:#fff;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">Rupture</span>'
+      : '<span style="background:var(--amber);color:#fff;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700">Bas</span>';
+    html += '<tr style="border-bottom:1px solid var(--border2)">';
+    html += '<td style="padding:7px 4px"><div style="font-weight:600">'+a.nom+'</div><div style="font-size:10px;color:var(--text3)">'+(a.cat||'')+'</div></td>';
+    html += '<td style="text-align:center;padding:7px 4px;font-size:16px;font-weight:800;color:'+couleur+'">'+dispo+'</td>';
+    html += '<td style="text-align:center;padding:7px 4px;color:var(--text3)">'+(a.seuil||0)+'</td>';
+    html += '<td style="padding:7px 4px">'+statut+'</td>';
+    html += '<td style="text-align:right;padding:7px 4px;color:var(--text3)">'+F(a.pa||0)+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<button class="btn btn-sm" onclick="nav(document.querySelector(&quot;[data-page=stock]&quot;),&quot;stock&quot;)" style="font-size:11px">Voir le stock &rarr;</button>';
+  html += '<button class="btn btn-sm" onclick="nav(document.querySelector(&quot;[data-page=achats]&quot;),&quot;achats&quot;)" style="font-size:11px;color:var(--teal);border-color:var(--teal)">Commander</button>';
+  html += '</div></div></div>';
+  return html;
+}
+
 function rClotureCaisse(){
   if(!S.clotures_caisse) S.clotures_caisse = [];
   const today = new Date().toISOString().slice(0,10);
@@ -12478,6 +12522,9 @@ function rClotureCaisse(){
         </table>`
       }
     </div>
+
+    <!-- Alerte stock critique -->
+    ${_htmlStockCritiqueCloture(getBid())}
 
     <!-- Bouton clôturer -->
     <div style="text-align:center;margin-bottom:20px">
