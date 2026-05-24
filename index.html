@@ -7068,7 +7068,97 @@ function rServices(){
             <button class="btn-icon btn-sm" onclick="delVenteService(${v.id})" style="color:var(--red)">✕</button>
           </div></td>
         </tr>`).join('')}
-      </tbody></table></div>`;
+      </tbody></table></div>
+    ${_htmlRentabiliteServices(services, ventes_services)}
+    ${_htmlSuiviAvances(ventes_services)}
+    `;
+}
+
+function _htmlRentabiliteServices(services, ventes_services){
+  if(ventes_services.length===0) return '';
+  var map={};
+  ventes_services.forEach(function(v){
+    var key=v.nom_service||'—';
+    if(!map[key]) map[key]={nom:key,cat:'',nb:0,ca:0,avances:0,credit:0,nbCredit:0};
+    map[key].nb++;
+    if(v.statut==='Payé'){ map[key].ca+=v.mt; }
+    else { map[key].credit+=(v.reste!=null?v.reste:v.mt); map[key].nbCredit++; }
+    if(v.avance>0) map[key].avances+=v.avance;
+    var svc=services.find(function(s){return s.nom===key;});
+    if(svc) map[key].cat=svc.cat||'';
+  });
+  var rows=Object.values(map).sort(function(a,b){return b.ca-a.ca;});
+  var totalCA=rows.reduce(function(s,r){return s+r.ca;},0);
+  var totalAv=rows.reduce(function(s,r){return s+r.avances;},0);
+  var totalCr=rows.reduce(function(s,r){return s+r.credit;},0);
+  var totalNb=rows.reduce(function(s,r){return s+r.nb;},0);
+  var html='<p class="st" style="margin-top:20px">\u{1F4CA} Rentabilit\u00e9 par service</p>';
+  html+='<div class="tbl-wrap"><table>';
+  html+='<thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase">';
+  html+='<th style="text-align:left">Service</th><th style="text-align:center">Nb</th>';
+  html+='<th style="text-align:right;color:var(--green)">CA encaiss\u00e9</th>';
+  html+='<th style="text-align:right;color:var(--teal)">Avances</th>';
+  html+='<th style="text-align:right;color:var(--red)">Reste d\u00fb</th>';
+  html+='<th style="text-align:right">Part</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var pct=totalCA>0?Math.round(r.ca/totalCA*100):0;
+    html+='<tr style="border-bottom:1px solid var(--border2)">';
+    html+='<td style="padding:8px 4px"><div style="font-weight:600">'+r.nom+'</div>'+(r.cat?'<div style="font-size:10px;color:var(--text3)">'+r.cat+'</div>':'')+'</td>';
+    html+='<td style="text-align:center;padding:8px 4px"><span style="background:var(--surface2);padding:2px 10px;border-radius:20px;font-weight:700">'+r.nb+'</span>'+(r.nbCredit>0?'<div style="font-size:10px;color:var(--amber)">'+r.nbCredit+' \u00e0 cr\u00e9dit</div>':'')+'</td>';
+    html+='<td style="text-align:right;padding:8px 4px;font-weight:700;color:var(--green)">'+F(r.ca)+'</td>';
+    html+='<td style="text-align:right;padding:8px 4px;color:var(--teal)">'+( r.avances>0?'+'+F(r.avances):'\u2014')+'</td>';
+    html+='<td style="text-align:right;padding:8px 4px;color:var(--red);font-weight:600">'+( r.credit>0?F(r.credit):'\u2014')+'</td>';
+    html+='<td style="padding:8px 4px;min-width:80px"><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--surface2);border-radius:4px;height:6px"><div style="width:'+pct+'%;background:var(--navy);height:100%;border-radius:4px"></div></div><span style="font-size:11px;font-weight:600">'+pct+'%</span></div></td>';
+    html+='</tr>';
+  });
+  html+='<tr style="background:var(--surface2);font-weight:700">';
+  html+='<td style="padding:8px 4px">TOTAL</td>';
+  html+='<td style="text-align:center;padding:8px 4px">'+totalNb+'</td>';
+  html+='<td style="text-align:right;padding:8px 4px;color:var(--green)">'+F(totalCA)+'</td>';
+  html+='<td style="text-align:right;padding:8px 4px;color:var(--teal)">'+( totalAv>0?'+'+F(totalAv):'\u2014')+'</td>';
+  html+='<td style="text-align:right;padding:8px 4px;color:var(--red)">'+( totalCr>0?F(totalCr):'\u2014')+'</td><td></td></tr>';
+  html+='</tbody></table></div>';
+  return html;
+}
+
+function _htmlSuiviAvances(ventes_services){
+  var enAttente=ventes_services.filter(function(v){return v.statut==='Non payé';});
+  if(enAttente.length===0) return '';
+  var withAge=enAttente.map(function(v){
+    var d1=new Date(v.date+'T12:00:00'), d2=new Date();
+    return Object.assign({},v,{jours:Math.floor((d2-d1)/86400000)});
+  }).sort(function(a,b){return b.jours-a.jours;});
+  var urgent=withAge.filter(function(v){return v.jours>=7;});
+  function couleurAge(j){return j>=14?'var(--red)':j>=7?'var(--amber)':'var(--text3)';}
+  var html='<p class="st" style="margin-top:20px">\u23F3 Avances clients \u2014 Suivi des restes dus</p>';
+  html+='<div class="tbl-wrap"><table>';
+  html+='<thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase">';
+  html+='<th>Date</th><th>Client</th><th>Service</th>';
+  html+='<th style="text-align:right">Total</th>';
+  html+='<th style="text-align:right;color:var(--teal)">Avance</th>';
+  html+='<th style="text-align:right;color:var(--red)">Reste</th>';
+  html+='<th style="text-align:center">Anciennet\u00e9</th><th></th></tr></thead><tbody>';
+  withAge.forEach(function(v){
+    var jours=v.jours;
+    var reste=v.reste!=null?v.reste:v.mt;
+    var total=(v.mt||0)+(v.avance||0);
+    html+='<tr style="border-bottom:1px solid var(--border2)'+( jours>=7?';'+'background:var(--amber-bg,#fff8e1)':'')+'">';
+    html+='<td style="font-size:11px">'+v.date+'</td>';
+    html+='<td style="font-weight:600">'+( v.client||'\u2014')+'</td>';
+    html+='<td style="font-size:12px">'+( v.nom_service||'\u2014')+'</td>';
+    html+='<td style="text-align:right">'+F(total)+'</td>';
+    html+='<td style="text-align:right;color:var(--teal)">'+( v.avance>0?'+'+F(v.avance):'\u2014')+'</td>';
+    html+='<td style="text-align:right;font-weight:700;color:var(--red)">'+F(reste)+'</td>';
+    html+='<td style="text-align:center"><span style="font-size:11px;font-weight:700;color:'+couleurAge(jours)+'">'+jours+'j</span>';
+    if(jours>=14) html+='<div style="font-size:9px;color:var(--red)">\u26A0\uFE0F Urgent</div>';
+    else if(jours>=7) html+='<div style="font-size:9px;color:var(--amber)">\u21BA Relancer</div>';
+    html+='</td>';
+    html+='<td><button class="btn btn-sm btn-primary" onclick="payerService('+v.id+')" style="font-size:11px">\uD83D\uDCB0 Encaisser</button></td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  if(urgent.length>0) html+='<div style="margin-top:8px;padding:8px 12px;background:var(--amber-bg,#fff8e1);border-radius:6px;font-size:12px;color:var(--amber);font-weight:600">\u26A0\uFE0F '+urgent.length+' client(s) en attente depuis 7j ou plus \u2014 penser \u00e0 relancer</div>';
+  return html;
 }
 
 function addService(){
