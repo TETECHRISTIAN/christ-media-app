@@ -1185,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8h8M4 11h5M4 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Bilan Journalier
     </div>
+    <div class="ni admin-only" data-page="rapport_mensuel" onclick="nav(this,'rapport_mensuel')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Rapport mensuel
+    </div>
     <div class="ni admin-only" data-page="comparaison" onclick="nav(this,'comparaison')">
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="6" height="10" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="3" width="6" height="10" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M7 8h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
       Comparaison boutiques
@@ -2665,7 +2669,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2751,7 +2755,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2784,7 +2788,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>''  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2802,7 +2806,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -8814,7 +8818,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -12126,6 +12130,231 @@ function rCaisse(){
 // Rapport automatique + saisie physique + historique
 // ════════════════════════════════════════════════════
 
+
+
+// ─── RAPPORT MENSUEL ───
+var _rapMoisNav = new Date().toISOString().slice(0,7);
+
+function rRapNavMois(delta){
+  var parts = _rapMoisNav.split('-').map(Number);
+  var y=parts[0], m=parts[1];
+  m+=delta; if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  var next = y+'-'+String(m).padStart(2,'0');
+  var today = new Date().toISOString().slice(0,7);
+  if(next<=today){ _rapMoisNav=next; rRapportMensuel(); }
+}
+
+function imprimerRapportMensuel(){
+  var el=document.getElementById('rapport-mensuel-print');
+  if(!el)return;
+  var win=window.open('','_blank');
+  win.document.write('<html><head><title>Rapport mensuel</title><style>body{font-family:DM Sans,system-ui,sans-serif;font-size:13px;color:#111;padding:24px} table{width:100%;border-collapse:collapse;margin-bottom:16px} th,td{padding:8px 12px;border:1px solid #e5e7eb;text-align:left} th{background:#f4f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.5px} .section{margin-bottom:24px} .title{font-size:20px;font-weight:800;margin-bottom:4px} .subtitle{color:#6b7280;font-size:13px;margin-bottom:20px} .kpi{display:inline-block;width:22%;margin:0 1%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;vertical-align:top} .kpi-v{font-size:22px;font-weight:800} .kpi-l{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-top:4px} @media print{body{padding:12px}}</style></head><body>');
+  win.document.write(el.innerHTML);
+  win.document.write('</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 400);
+}
+
+function rRapportMensuel(){
+  var mois = _rapMoisNav;
+  var today = new Date().toISOString().slice(0,7);
+  var estCourant = mois===today;
+  var bid = getBid();
+
+  // Data
+  var noms=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var parts=mois.split('-').map(Number);
+  var label=noms[parts[1]-1]+' '+parts[0];
+
+  // Mois précédent
+  var prevM=parts[1]-1, prevY=parts[0];
+  if(prevM<1){prevM=12;prevY--;}
+  var prevMois=prevY+'-'+String(prevM).padStart(2,'0');
+
+  function moisData(m, b){
+    var ventes=(S.ventes||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Payé';});
+    var svcs=(S.ventes_services||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b);});
+    var deps=(S.depenses||[]).filter(function(d){return d.date&&d.date.startsWith(m)&&(!b||d.bid==b);});
+    var revs=(S.revenus||[]).filter(function(r){return r.date&&r.date.startsWith(m)&&(!b||r.bid==b);});
+    var achats=(S.achats||[]).filter(function(a){return a.date&&a.date.startsWith(m)&&(!b||a.bid==b);});
+    var svcPaids=svcs.filter(function(v){return v.statut==='Payé';});
+    var svcAv=svcs.filter(function(v){return v.avance>0;});
+    var ca=ventes.reduce(function(s,v){return s+v.mt;},0)
+      +svcPaids.reduce(function(s,v){return s+v.mt;},0)
+      +svcAv.reduce(function(s,v){return s+(v.avance||0);},0);
+    var dep=deps.reduce(function(s,d){return s+d.mt;},0);
+    var rev=revs.reduce(function(s,r){return s+r.mt;},0);
+    var achat=achats.reduce(function(s,a){return s+(a.total||a.mt||0);},0);
+    var nbTx=ventes.length+svcPaids.length+svcAv.length;
+    var panier=nbTx>0?Math.round(ca/nbTx):0;
+    var benefice=ca+rev-dep;
+    var marge=ca>0?Math.round(benefice/ca*100):0;
+
+    // Top articles
+    var artMap={};
+    ventes.forEach(function(v){
+      var items=v.items||(v.article?[{nom:v.article,qte:v.qte||1,total:v.mt}]:[]);
+      items.forEach(function(it){
+        var k=it.nom||'—';
+        if(!artMap[k])artMap[k]={qte:0,total:0};
+        artMap[k].qte+=(it.qte||1);artMap[k].total+=(it.total||it.mt||0);
+      });
+    });
+    var topArts=Object.entries(artMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,8);
+
+    // Top services
+    var svcMap={};
+    svcs.forEach(function(v){
+      var k=v.nom_service||'—';
+      if(!svcMap[k])svcMap[k]={nb:0,total:0};
+      svcMap[k].nb++;svcMap[k].total+=(v.statut==='Payé'?v.mt:0)+(v.avance||0);
+    });
+    var topSvcs=Object.entries(svcMap).sort(function(a,b){return b[1].total-a[1].total;});
+
+    // Dépenses par catégorie
+    var depMap={};
+    deps.forEach(function(d){var k=d.cat||'Autres';if(!depMap[k])depMap[k]=0;depMap[k]+=d.mt;});
+    var depCats=Object.entries(depMap).sort(function(a,b){return b[1]-a[1];});
+
+    // Clients impayés
+    var impayes=(S.ventes||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
+      .reduce(function(s,v){return s+(v.mt-((v.acomptes||[]).reduce(function(x,a){return x+a.mt;},0)));},0)
+      +(S.ventes_services||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
+      .reduce(function(s,v){return s+(v.reste!=null?v.reste:v.mt);},0);
+
+    return {ca:ca,dep:dep,rev:rev,achat:achat,nbTx:nbTx,panier:panier,benefice:benefice,marge:marge,topArts:topArts,topSvcs:topSvcs,depCats:depCats,impayes:impayes};
+  }
+
+  var d=moisData(mois,bid);
+  var p=moisData(prevMois,bid);
+  var boutName=(S.boutiques||[]).find(function(b){return b.id==bid;});
+  boutName=boutName?(boutName.nom||boutName.name):'';
+
+  function evo(cur,prev){
+    if(!prev||prev===0)return cur>0?'<span style="color:var(--green);font-size:11px">▲ nouveau</span>':'<span style="color:var(--text3);font-size:11px">—</span>';
+    var pct=Math.round((cur-prev)/prev*100);
+    return '<span style="color:'+(pct>=0?'var(--green)':'var(--red)')+';font-size:11px">'+(pct>=0?'▲ +':'▼ ')+Math.abs(pct)+'%</span>';
+  }
+
+  function kpiCard(label,val,prev,color,prefix){
+    prefix=prefix||'';
+    return '<div class="card" style="border-left:4px solid '+color+'">'
+      +'<div class="ct">'+label+'</div>'
+      +'<div class="mv" style="color:'+color+'">'+F(val)+'</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px">'
+      +'<span style="color:var(--text3)">Préc: '+F(prev)+'</span>'+evo(val,prev)+'</div></div>';
+  }
+
+  var html='<div class="page" id="rapport-mensuel-print">';
+
+  // En-tête
+  html+='<div style="background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:var(--r);padding:20px 24px;margin-bottom:20px;color:#fff;box-shadow:0 5px 0 #060e1f,0 8px 20px rgba(15,31,61,.35)">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">';
+  html+='<div><div style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">Rapport mensuel</div>';
+  html+='<div style="font-size:26px;font-weight:800;letter-spacing:-.5px">'+label+'</div>';
+  html+=(boutName?'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-top:4px">'+boutName+'</div>':'');
+  html+=estCourant?'<div style="display:inline-block;margin-top:8px;background:rgba(255,255,255,.15);border-radius:20px;padding:2px 12px;font-size:11px">Mois en cours</div>':'';
+  html+='</div>';
+  html+='<div style="display:flex;gap:8px;align-items:center">';
+  html+='<button class="btn btn-sm" onclick="rRapNavMois(-1)" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.2)">◀ Préc.</button>';
+  html+='<button class="btn btn-sm" onclick="rRapNavMois(+1)" '+(estCourant?'disabled style="opacity:.4"':'')+' style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.2)">Suiv. ▶</button>';
+  html+='</div></div></div>';
+
+  // KPI cards
+  html+='<div class="g4" style="margin-bottom:6px">';
+  html+=kpiCard('💰 CA encaissé',d.ca,p.ca,'var(--green)');
+  html+=kpiCard('💸 Dépenses',d.dep,p.dep,'var(--red)');
+  html+=kpiCard('✅ Bénéfice net',d.benefice,p.benefice,'var(--purple)');
+  html+=kpiCard('📈 Revenus divers',d.rev,p.rev,'var(--teal)');
+  html+='</div>';
+  html+='<div class="g4" style="margin-bottom:20px">';
+  html+='<div class="card"><div class="ct">🔢 Transactions</div><div class="mv">'+d.nbTx+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Préc: '+p.nbTx+' '+evo(d.nbTx,p.nbTx)+'</div></div>';
+  html+='<div class="card"><div class="ct">🧾 Panier moyen</div><div class="mv">'+F(d.panier)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Préc: '+F(p.panier)+' '+evo(d.panier,p.panier)+'</div></div>';
+  html+='<div class="card"><div class="ct">📊 Marge nette</div><div class="mv" style="color:'+(d.marge>=0?'var(--green)':'var(--red)')+'">'+d.marge+'%</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Préc: '+p.marge+'%</div></div>';
+  html+='<div class="card"><div class="ct">🛒 Achats stock</div><div class="mv" style="color:var(--amber)">'+F(d.achat)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Préc: '+F(p.achat)+' '+evo(d.achat,p.achat)+'</div></div>';
+  html+='</div>';
+
+  // Alerte impayés
+  if(d.impayes>0){
+    html+='<div style="background:var(--amber-bg);border:1px solid var(--amber-light);border-radius:var(--rs);padding:10px 16px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:10px">';
+    html+='<span style="font-size:18px">⚠️</span><span>Impayés clients ce mois : <strong style="color:var(--amber)">'+F(d.impayes)+'</strong> à encaisser</span></div>';
+  }
+
+  // Tableau Top articles + dépenses side by side
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">';
+
+  // Top articles
+  html+='<div class="card" style="padding:0;overflow:hidden">';
+  html+='<div style="padding:14px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border);background:var(--surface2)">🏆 Top articles du mois</div>';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html+='<thead><tr><th style="padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">#</th><th style="padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Article</th><th style="text-align:right;padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">CA</th><th style="text-align:right;padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Qté</th></tr></thead><tbody>';
+  if(d.topArts.length===0){
+    html+='<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--text3)">Aucune vente ce mois</td></tr>';
+  } else {
+    d.topArts.forEach(function(e,i){
+      html+='<tr style="border-bottom:1px solid var(--border)">';
+      html+='<td style="padding:8px 12px;color:var(--text3);font-weight:700">'+(i+1)+'</td>';
+      html+='<td style="padding:8px 12px;font-weight:600">'+e[0]+'</td>';
+      html+='<td style="text-align:right;padding:8px 12px;font-weight:700;color:var(--green)">'+F(e[1].total)+'</td>';
+      html+='<td style="text-align:right;padding:8px 12px;color:var(--text3)">'+e[1].qte+'</td>';
+      html+='</tr>';
+    });
+  }
+  html+='</tbody></table></div>';
+
+  // Dépenses par catégorie
+  html+='<div class="card" style="padding:0;overflow:hidden">';
+  html+='<div style="padding:14px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border);background:var(--surface2)">💸 Dépenses par catégorie</div>';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html+='<thead><tr><th style="padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Catégorie</th><th style="text-align:right;padding:8px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Montant</th><th style="padding:8px 12px;font-size:10px;border-bottom:1px solid var(--border)">Part</th></tr></thead><tbody>';
+  if(d.depCats.length===0){
+    html+='<tr><td colspan="3" style="padding:16px;text-align:center;color:var(--text3)">Aucune dépense ce mois</td></tr>';
+  } else {
+    d.depCats.forEach(function(e){
+      var pct=d.dep>0?Math.round(e[1]/d.dep*100):0;
+      html+='<tr style="border-bottom:1px solid var(--border)">';
+      html+='<td style="padding:8px 12px;font-weight:600">'+e[0]+'</td>';
+      html+='<td style="text-align:right;padding:8px 12px;font-weight:700;color:var(--red)">'+F(e[1])+'</td>';
+      html+='<td style="padding:8px 12px;min-width:80px"><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--surface2);border-radius:3px;height:6px"><div style="width:'+pct+'%;background:var(--red);height:100%;border-radius:3px"></div></div><span style="font-size:10px">'+pct+'%</span></div></td>';
+      html+='</tr>';
+    });
+  }
+  html+='</tbody></table></div>';
+  html+='</div>';
+
+  // Services
+  if(d.topSvcs.length>0){
+    html+='<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">';
+    html+='<div style="padding:14px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border);background:var(--surface2)">🛠 Prestations de services</div>';
+    html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>';
+    html+='<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Service</th>';
+    html+='<th style="text-align:center;padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">Nb</th>';
+    html+='<th style="text-align:right;padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border)">CA</th>';
+    html+='</tr></thead><tbody>';
+    d.topSvcs.forEach(function(e){
+      html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:9px 14px;font-weight:600">'+e[0]+'</td><td style="text-align:center;padding:9px 14px">'+e[1].nb+'</td><td style="text-align:right;padding:9px 14px;font-weight:700;color:var(--teal)">'+F(e[1].total)+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  // Synthèse finale
+  html+='<div class="card" style="background:var(--navy);color:#fff;border:none;box-shadow:0 5px 0 #060e1f,0 8px 20px rgba(15,31,61,.35);margin-bottom:16px">';
+  html+='<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.5px;font-size:11px">📋 Synthèse du mois</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">';
+  html+='<div><div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">CA TOTAL</div><div style="font-size:20px;font-weight:800;color:#4ade80">'+F(d.ca)+'</div></div>';
+  html+='<div><div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">CHARGES</div><div style="font-size:20px;font-weight:800;color:#f87171">'+F(d.dep+d.achat)+'</div></div>';
+  html+='<div><div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">BÉNÉFICE</div><div style="font-size:20px;font-weight:800;color:'+(d.benefice>=0?'#4ade80':'#f87171')+'">'+F(d.benefice)+'</div></div>';
+  html+='</div>';
+  if(d.benefice<0){
+    html+='<div style="margin-top:12px;padding:10px;background:rgba(248,113,113,.15);border-radius:8px;font-size:12px;color:#fca5a5">⚠️ Ce mois est en déficit de '+F(Math.abs(d.benefice))+'. Analyser les dépenses pour les réduire.</div>';
+  } else {
+    html+='<div style="margin-top:12px;padding:10px;background:rgba(74,222,128,.1);border-radius:8px;font-size:12px;color:#86efac">✅ Bonne performance ce mois — marge nette de '+d.marge+'%</div>';
+  }
+  html+='</div>';
+  html+='</div>';
+
+  document.getElementById('content').innerHTML=html;
+}
 
 // ─── COMPARAISON BOUTIQUES ───
 function cmpSetPeriode(p){
