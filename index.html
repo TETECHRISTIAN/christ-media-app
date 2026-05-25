@@ -1185,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8h8M4 11h5M4 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Bilan Journalier
     </div>
+    <div class="ni admin-only" data-page="hist_clotures" onclick="nav(this,'hist_clotures')">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="13" cy="11" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M13 9.5v1.5l1 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Historique clôtures
+    </div>
     <div class="ni admin-only" data-page="obj_article" onclick="nav(this,'obj_article')">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg>
       Objectifs articles
@@ -2673,7 +2677,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2759,7 +2763,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2792,7 +2796,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>''  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2810,7 +2814,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -8825,7 +8829,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -12363,6 +12367,151 @@ function rRapportMensuel(){
   document.getElementById('content').innerHTML=html;
 }
 
+
+
+// ─── HISTORIQUE DES CLÔTURES ───
+var _histClotBoutique = 'toutes';
+var _histClotMois = '';
+
+function exporterHistClotures(){
+  var bid = _histClotBoutique==='toutes' ? null : _histClotBoutique;
+  var rows = (S.clotures_caisse||[])
+    .filter(function(c){ return !bid || c.bid==bid; })
+    .sort(function(a,b){ return b.ts-a.ts; });
+  if(rows.length===0){ toast('Aucune clôture à exporter'); return; }
+  var csv = 'Date,Boutique,Solde ouverture,Ventes,Depenses,Solde theorique,Cash compte,Ecart,Cloture par,Notes\n';
+  rows.forEach(function(c){
+    var bName = (S.boutiques||[]).find(function(b){ return b.id==c.bid; });
+    bName = bName ? (bName.nom||bName.name) : c.bid||'—';
+    var ventes = c.solde_theorique - c.solde_ouverture;
+    csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
+  });
+  var blob = new Blob([csv], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'historique_clotures_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+function supprimerCloture(id){
+  if(!confirm('Supprimer cette clôture ?')) return;
+  S.clotures_caisse = (S.clotures_caisse||[]).filter(function(c){ return c.id!=id; });
+  saveData();
+  toast('🗑 Clôture supprimée');
+  rHistClotures();
+}
+
+function rHistClotures(){
+  var boutiques = S.boutiques || [];
+  var toutes = (S.clotures_caisse||[]).sort(function(a,b){ return b.ts-a.ts; });
+
+  // Filtres boutique
+  var bid = _histClotBoutique==='toutes' ? null : _histClotBoutique;
+  var filtered = bid ? toutes.filter(function(c){ return c.bid==bid; }) : toutes;
+
+  // Filtre mois
+  if(_histClotMois) filtered = filtered.filter(function(c){ return c.date && c.date.startsWith(_histClotMois); });
+
+  // KPI globaux
+  var totalJours = filtered.length;
+  var equilibres = filtered.filter(function(c){ return c.ecart===0; }).length;
+  var excedents  = filtered.filter(function(c){ return c.ecart>0; }).length;
+  var deficits   = filtered.filter(function(c){ return c.ecart<0; }).length;
+  var ecartTotal = filtered.reduce(function(s,c){ return s+(c.ecart||0); }, 0);
+  var totalVentes= filtered.reduce(function(s,c){ return s+(c.solde_theorique-c.solde_ouverture); }, 0);
+  var meilleurJour = filtered.length ? filtered.reduce(function(best,c){
+    var v = c.solde_theorique-c.solde_ouverture;
+    return v > (best.solde_theorique-best.solde_ouverture) ? c : best;
+  }) : null;
+
+  // Mois disponibles
+  var moisDispo = [...new Set(toutes.map(function(c){ return c.date ? c.date.slice(0,7) : ''; }).filter(Boolean))].sort().reverse();
+  var noms = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  function moisLabel(m){ var p=m.split('-'); return noms[+p[1]-1]+' '+p[0]; }
+
+  var html = '<div class="page">';
+
+  // Filtres
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">';
+  html += '<span style="font-size:12px;color:var(--text3);font-weight:600">Boutique :</span>';
+  html += '<button class="btn btn-sm'+(_histClotBoutique==='toutes'?' btn-primary':'')+'" onclick="window._histClotBoutique=\'toutes\';rHistClotures()">Toutes</button>';
+  boutiques.forEach(function(b){
+    html += '<button class="btn btn-sm'+(_histClotBoutique==b.id?' btn-primary':'')+'" onclick="window._histClotBoutique=\''+b.id+'\';rHistClotures()">'+(b.emoji||'🏪')+' '+(b.nom||b.name)+'</button>';
+  });
+  html += '</div>';
+
+  // Filtre mois
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
+  html += '<span style="font-size:12px;color:var(--text3);font-weight:600">Mois :</span>';
+  html += '<button class="btn btn-sm'+(!_histClotMois?' btn-primary':'')+'" onclick="window._histClotMois=\'\';rHistClotures()">Tous</button>';
+  moisDispo.slice(0,8).forEach(function(m){
+    html += '<button class="btn btn-sm'+(_histClotMois===m?' btn-primary':'')+'" onclick="window._histClotMois=\''+m+'\';rHistClotures()">'+moisLabel(m)+'</button>';
+  });
+  html += '</div>';
+
+  // KPI cards
+  html += '<div class="g4" style="margin-bottom:16px">';
+  html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">Clôtures totales</div><div class="mv">'+totalJours+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">jours clôturés</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--green)"><div class="ct">✅ Équilibrées</div><div class="mv" style="color:var(--green)">'+equilibres+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">écart = 0</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--teal)"><div class="ct">💰 Excédents</div><div class="mv" style="color:var(--teal)">'+excedents+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">cash > théorique</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--red)"><div class="ct">⚠️ Déficits</div><div class="mv" style="color:var(--red)">'+deficits+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">cash < théorique</div></div>';
+  html += '</div>';
+
+  // Ligne résumé
+  if(filtered.length>0){
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">';
+    html += '<div class="card"><div class="ct">CA Total période</div><div class="mv" style="color:var(--green)">'+F(totalVentes)+'</div></div>';
+    html += '<div class="card"><div class="ct">Écart cumulé</div><div class="mv" style="color:'+(ecartTotal>=0?'var(--teal)':'var(--red)')+'">'+F(ecartTotal)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+(ecartTotal>0?'Excédent cumulé':ecartTotal<0?'Déficit cumulé':'Parfaitement équilibré')+'</div></div>';
+    if(meilleurJour){
+      var mv = meilleurJour.solde_theorique - meilleurJour.solde_ouverture;
+      html += '<div class="card"><div class="ct">🏆 Meilleur jour</div><div class="mv" style="color:var(--green)">'+F(mv)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+meilleurJour.date+'</div></div>';
+    }
+    html += '</div>';
+  }
+
+  // Tableau
+  if(filtered.length===0){
+    html += '<div style="text-align:center;padding:48px;color:var(--text3);background:var(--surface);border-radius:var(--r);border:1px solid var(--border)">Aucune clôture enregistrée pour cette période</div>';
+  } else {
+    html += '<div class="tbl-wrap"><table><thead><tr>';
+    html += '<th>Date</th><th>Boutique</th>';
+    html += '<th style="text-align:right">Ouverture</th>';
+    html += '<th style="text-align:right">CA jour</th>';
+    html += '<th style="text-align:right">Théorique</th>';
+    html += '<th style="text-align:right">Cash compté</th>';
+    html += '<th style="text-align:center">Écart</th>';
+    html += '<th>Clôturé par</th>';
+    html += '<th>Notes</th>';
+    html += '<th></th>';
+    html += '</tr></thead><tbody>';
+
+    filtered.forEach(function(c){
+      var bName = (boutiques).find(function(b){ return b.id==c.bid; });
+      bName = bName ? ((bName.emoji||'🏪')+' '+(bName.nom||bName.name)) : (c.bid||'—');
+      var caJour = c.solde_theorique - c.solde_ouverture;
+      var ecart = c.ecart||0;
+      var ecartCol = ecart===0?'var(--green)':ecart>0?'var(--teal)':'var(--red)';
+      var ecartTxt = ecart===0?'✅ 0':ecart>0?'+'+F(ecart):F(ecart);
+      var dateF = new Date(c.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'2-digit'});
+
+      html += '<tr style="border-bottom:1px solid var(--border)">';
+      html += '<td style="padding:9px 12px;font-weight:600;white-space:nowrap">'+dateF+'</td>';
+      html += '<td style="padding:9px 12px;font-size:12px">'+bName+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;color:var(--text3)">'+F(c.solde_ouverture)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--green)">'+F(caJour)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700">'+F(c.solde_theorique)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px">'+F(c.cash_compte||0)+'</td>';
+      html += '<td style="text-align:center;padding:9px 12px;font-weight:700;color:'+ecartCol+'">'+ecartTxt+'</td>';
+      html += '<td style="padding:9px 12px;font-size:12px;color:var(--text3)">'+( c.par||'—')+'</td>';
+      html += '<td style="padding:9px 12px;font-size:11px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(c.notes||'')+'">'+( c.notes||'—')+'</td>';
+      html += '<td style="padding:9px 8px"><button class="btn-icon btn-sm" onclick="supprimerCloture('+c.id+')" style="color:var(--red)" title="Supprimer">✕</button></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+}
 
 // ─── OBJECTIFS PAR ARTICLE ───
 var _objArtFiltre = 'tous'; // tous | manque | ok | rupture
