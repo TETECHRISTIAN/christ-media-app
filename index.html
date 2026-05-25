@@ -1185,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8h8M4 11h5M4 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Bilan Journalier
     </div>
+    <div class="ni admin-only" data-page="obj_article" onclick="nav(this,'obj_article')">
+      <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg>
+      Objectifs articles
+    </div>
     <div class="ni admin-only" data-page="rapport_mensuel" onclick="nav(this,'rapport_mensuel')">
       <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       Rapport mensuel
@@ -2669,7 +2673,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2755,7 +2759,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2788,7 +2792,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>'  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>''  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2806,7 +2810,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -4538,7 +4542,8 @@ async function saveArt(){
     pv,pv2,pv3,
     si:+document.getElementById('msi').value||0,
     qv:0,ea:0,
-    seuil:+document.getElementById('mse').value||5
+    seuil:+document.getElementById('mse').value||5,
+    stock_cible:+(document.getElementById('msc')?.value)||0
   });
   saveData();closeModal();toast('✅ Article ajouté');rStock();
   // Upload photo si sélectionnée
@@ -4567,6 +4572,7 @@ function editArticle(id){
     ${isAdmin()?`<div class="fr">
       <div class="fg"><label class="fl">Prix achat (${devise})</label><input class="fi" type="number" id="mpa" value="${a.pa}" oninput="previewPrixArt()"></div>
       <div class="fg"><label class="fl">Seuil alerte</label><input class="fi" type="number" id="mse" value="${a.seuil}"></div>
+      <div class="fg"><label class="fl">Stock cible 🎯</label><input class="fi" type="number" id="msc" value="${a.stock_cible||''}" placeholder="Ex: 20"><div style="font-size:11px;color:var(--text3);margin-top:3px">Quantité idéale à maintenir en stock</div></div>
     </div>`:''}
     <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">💰 Prix de vente</div>
@@ -4595,6 +4601,7 @@ function updateArt(id){
   a.nom=document.getElementById('mn').value;
   a.cat=document.getElementById('mcat').value;
   if(isAdmin()) a.pa=+document.getElementById('mpa')?.value||a.pa;
+  if(isAdmin()){ const sc=document.getElementById('msc'); if(sc) a.stock_cible=+sc.value||0; }
   a.pv=+document.getElementById('mpv').value||0;
   a.pv2=+document.getElementById('mpv2')?.value||a.pv;
   a.pv3=+document.getElementById('mpv3')?.value||a.pv;
@@ -8818,7 +8825,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -12354,6 +12361,167 @@ function rRapportMensuel(){
   html+='</div>';
 
   document.getElementById('content').innerHTML=html;
+}
+
+
+// ─── OBJECTIFS PAR ARTICLE ───
+var _objArtFiltre = 'tous'; // tous | manque | ok | rupture
+
+function setObjArtFiltre(f){ window._objArtFiltre=f; rObjArticle(); }
+
+function sauvegarderCibleArticle(id, val){
+  var a = ga(id); if(!a) return;
+  a.stock_cible = +val || 0;
+  saveData();
+  toast('🎯 Cible mise à jour');
+  rObjArticle();
+}
+
+function rObjArticle(){
+  var bid = getBid();
+  var stock = (S.stock||[]).filter(function(a){ return !bid||a.bid==bid||!a.bid; });
+
+  // Calcul vitesse de vente 30 jours
+  var now = new Date();
+  var d30 = new Date(now); d30.setDate(d30.getDate()-30);
+  var debut30 = d30.toISOString().slice(0,10);
+
+  var rows = stock.map(function(a){
+    var dispo = sa(a);
+    var cible = a.stock_cible || 0;
+    var seuil = a.seuil || 0;
+    // Ventes 30 jours
+    var ventes30 = (S.ventes||[]).filter(function(v){
+      return v.date>=debut30 && v.statut==='Payé' && (!bid||v.bid==bid);
+    });
+    var qteSold30 = 0;
+    ventes30.forEach(function(v){
+      var items=v.items||(v.article?[{aid:v.aid,qte:v.qte||1}]:[]);
+      items.forEach(function(it){ if(it.aid==a.id||it.nom==a.nom) qteSold30+=(it.qte||1); });
+    });
+    var vitesseJour = qteSold30/30;
+    var joursStock = vitesseJour>0 ? Math.round(dispo/vitesseJour) : null;
+    var aCommander = cible>0 ? Math.max(0, cible-dispo) : 0;
+    var pctCible = cible>0 ? Math.min(100,Math.round(dispo/cible*100)) : null;
+    var statut = dispo===0 ? 'rupture' : cible>0&&dispo<cible ? 'manque' : 'ok';
+    return {a:a, dispo:dispo, cible:cible, seuil:seuil, qteSold30:qteSold30, vitesseJour:vitesseJour, joursStock:joursStock, aCommander:aCommander, pctCible:pctCible, statut:statut};
+  });
+
+  // Filtrer
+  var filtre = window._objArtFiltre || 'tous';
+  var filtered = filtre==='tous' ? rows : rows.filter(function(r){ return r.statut===filtre; });
+
+  // Stats globales
+  var nbCible = rows.filter(function(r){ return r.cible>0; }).length;
+  var nbManque = rows.filter(function(r){ return r.statut==='manque'; }).length;
+  var nbRupture = rows.filter(function(r){ return r.statut==='rupture'; }).length;
+  var nbOk = rows.filter(function(r){ return r.statut==='ok'&&r.cible>0; }).length;
+  var totalACommander = rows.reduce(function(s,r){ return s+r.aCommander*(r.a.pa||0); },0);
+
+  var html = '<div class="page">';
+
+  // KPI résumé
+  html += '<div class="g4" style="margin-bottom:16px">';
+  html += '<div class="card" style="border-left:4px solid var(--navy);cursor:pointer" onclick="setObjArtFiltre(\'tous\')">'
+    +'<div class="ct">Articles avec cible</div><div class="mv">'+nbCible+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">sur '+stock.length+' articles</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--green);cursor:pointer" onclick="setObjArtFiltre(\'ok\')">'
+    +'<div class="ct">✅ Objectif atteint</div><div class="mv" style="color:var(--green)">'+nbOk+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">stock >= cible</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--amber);cursor:pointer" onclick="setObjArtFiltre(\'manque\')">'
+    +'<div class="ct">⚠️ En dessous cible</div><div class="mv" style="color:var(--amber)">'+nbManque+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">à réapprovisionner</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--red);cursor:pointer" onclick="setObjArtFiltre(\'rupture\')">'
+    +'<div class="ct">🔴 En rupture</div><div class="mv" style="color:var(--red)">'+nbRupture+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">stock = 0</div></div>';
+  html += '</div>';
+
+  // Budget commande estimé
+  if(totalACommander>0){
+    html += '<div style="background:var(--navy-bg);border:1px solid var(--navy-light);border-radius:var(--rs);padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
+    html += '<div><div style="font-size:12px;font-weight:700;color:var(--navy)">💰 Budget estimé pour atteindre tous les objectifs</div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-top:2px">Bas\u00e9 sur les prix d\'achat \u00d7 quantit\u00e9s manquantes</div></div>';
+    html += '<div style="font-size:22px;font-weight:800;color:var(--navy)">'+F(totalACommander)+'</div>';
+    html += '</div>';
+  }
+
+  // Filtres
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">';
+  [['tous','Tous ('+rows.length+')'],['ok','✅ OK'],['manque','⚠️ Manque'],['rupture','🔴 Rupture']].forEach(function(f){
+    html += '<button class="btn btn-sm'+(filtre===f[0]?' btn-primary':'')+'" onclick="setObjArtFiltre(\''+f[0]+'\')">'+f[1]+'</button>';
+  });
+  html += '</div>';
+
+  // Tableau
+  html += '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th>Article</th><th style="text-align:center">Stock actuel</th>';
+  html += '<th style="text-align:center">Cible 🎯</th><th>Progression</th>';
+  html += '<th style="text-align:center">À commander</th>';
+  html += '<th style="text-align:center">Vendu/30j</th>';
+  html += '<th style="text-align:center">Jours de stock</th>';
+  html += '<th style="text-align:right">Coût commande</th>';
+  html += '</tr></thead><tbody>';
+
+  if(filtered.length===0){
+    html += '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Aucun article dans ce filtre</td></tr>';
+  } else {
+    filtered.forEach(function(r){
+      var a=r.a;
+      var couleurStatut = r.statut==='rupture'?'var(--red)':r.statut==='manque'?'var(--amber)':'var(--green)';
+      var bgRow = r.statut==='rupture'?'background:var(--red-bg)':r.statut==='manque'?'background:var(--amber-bg)':'';
+      html += '<tr style="border-bottom:1px solid var(--border);'+bgRow+'">';
+      // Article
+      html += '<td style="padding:10px 12px"><div style="font-weight:600">'+a.nom+'</div><div style="font-size:10px;color:var(--text3)">'+( a.cat||'')+'</div></td>';
+      // Stock actuel
+      html += '<td style="text-align:center;padding:10px 12px;font-size:18px;font-weight:800;color:'+couleurStatut+'">'+r.dispo+'</td>';
+      // Cible éditable
+      html += '<td style="text-align:center;padding:10px 8px">';
+      html += '<input type="number" value="'+(r.cible||'')+'" placeholder="—" min="0" '
+        +'onchange="sauvegarderCibleArticle('+a.id+',this.value)" '
+        +'style="width:60px;text-align:center;padding:4px 6px;border:1.5px solid var(--border2);border-radius:6px;font-size:13px;font-weight:700;font-family:inherit;background:var(--surface)">';
+      html += '</td>';
+      // Progression
+      html += '<td style="padding:10px 12px;min-width:110px">';
+      if(r.cible>0){
+        html += '<div style="display:flex;align-items:center;gap:6px">'
+          +'<div style="flex:1;background:var(--surface2);border-radius:4px;height:8px"><div style="width:'+r.pctCible+'%;background:'+couleurStatut+';height:100%;border-radius:4px;transition:width .3s"></div></div>'
+          +'<span style="font-size:11px;font-weight:700;min-width:32px;color:'+couleurStatut+'">'+r.pctCible+'%</span>'
+          +'</div>';
+      } else {
+        html += '<span style="font-size:11px;color:var(--text3)">Pas de cible</span>';
+      }
+      html += '</td>';
+      // À commander
+      html += '<td style="text-align:center;padding:10px 12px">';
+      if(r.aCommander>0){
+        html += '<span style="font-weight:800;color:var(--red);font-size:16px">+'+r.aCommander+'</span>';
+      } else if(r.cible>0){
+        html += '<span style="color:var(--green);font-size:12px">✅</span>';
+      } else {
+        html += '<span style="color:var(--text3);font-size:12px">—</span>';
+      }
+      html += '</td>';
+      // Vendu 30j
+      html += '<td style="text-align:center;padding:10px 12px;font-weight:600">'+r.qteSold30+'</td>';
+      // Jours de stock
+      html += '<td style="text-align:center;padding:10px 12px">';
+      if(r.joursStock!==null){
+        var cJ=r.joursStock<7?'var(--red)':r.joursStock<15?'var(--amber)':'var(--green)';
+        html += '<span style="font-weight:700;color:'+cJ+'">'+r.joursStock+'j</span>';
+      } else {
+        html += '<span style="color:var(--text3)">—</span>';
+      }
+      html += '</td>';
+      // Coût commande
+      html += '<td style="text-align:right;padding:10px 12px;font-weight:600;color:'+(r.aCommander>0?'var(--red)':'var(--text3)')+'">'+( r.aCommander>0?F(r.aCommander*(a.pa||0)):'—')+'</td>';
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table></div>';
+  html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Clique sur la colonne <b>Cible 🎯</b> pour modifier l\'objectif directement dans le tableau.</div>';
+  html += '</div>';
+
+  document.getElementById('content').innerHTML = html;
 }
 
 // ─── COMPARAISON BOUTIQUES ───
