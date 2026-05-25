@@ -12128,6 +12128,17 @@ function rCaisse(){
 
 
 // ─── COMPARAISON BOUTIQUES ───
+function cmpNavJour(delta){
+  var today = new Date().toISOString().slice(0,10);
+  var cur = window._cmpDatePerso || today;
+  var d = new Date(cur + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  var newDate = d.toISOString().slice(0,10);
+  if(newDate <= today){
+    window._cmpDatePerso = newDate;
+    rComparaison();
+  }
+}
 var _cmpPeriode = 'jour';
 var _cmpDatePerso = null;
 
@@ -12204,10 +12215,18 @@ function rComparaison(){
     var eq=(v1===v2);
     var best1=!eq&&(inverse?v1<v2:v1>v2);
     var best2=!eq&&!best1;
+    var c1=best1?color:'var(--text)';
+    var c2=best2?color:'var(--text)';
     return '<tr style="border-bottom:1px solid var(--border2)">'
-      +'<td style="padding:10px 14px;font-size:12px;color:var(--text3)">'+label+'</td>'
-      +'<td style="text-align:right;padding:10px 14px;font-weight:700;color:'+(best1?color:'var(--text)')+'">'+f(v1)+(best1?'<span style="color:var(--green);font-size:11px;margin-left:4px">▲</span>':'')+'</td>'
-      +'<td style="text-align:right;padding:10px 14px;font-weight:700;color:'+(best2?color:'var(--text)')+'">'+f(v2)+(best2?'<span style="color:var(--green);font-size:11px;margin-left:4px">▲</span>':'')+'</td>'
+      +'<td style="padding:11px 16px;font-size:12px;color:var(--text3);white-space:nowrap">'+label+'</td>'
+      +'<td style="padding:11px 16px;font-weight:800;color:'+c1+';font-size:15px;letter-spacing:-.3px;border-left:1px solid var(--border)">'
+        +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">'
+        +(best1?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700">▲ Mieux</span>':'')
+        +'<span>'+f(v1)+'</span></div></td>'
+      +'<td style="padding:11px 16px;font-weight:800;color:'+c2+';font-size:15px;letter-spacing:-.3px;border-left:1px solid var(--border)">'
+        +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">'
+        +(best2?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700">▲ Mieux</span>':'')
+        +'<span>'+f(v2)+'</span></div></td>'
       +'</tr>';
   }
 
@@ -12312,8 +12331,8 @@ function rComparaison(){
   html+='<div style="font-size:13px;font-weight:600;color:var(--navy)">\uD83D\uDCC6 '+dateAffichee+'</div>';
   if(_cmpPeriode==='jour'){
     html+='<input type="date" value="'+(_cmpDatePerso||today)+'" max="'+today+'" onchange="window._cmpDatePerso=this.value;rComparaison()" style="padding:5px 10px;border:1.5px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:12px;background:var(--surface)">';
-    html+='<button class="btn btn-sm" onclick="var d=new Date(\'' +(_cmpDatePerso||today)+ '\'T12:00:00);d.setDate(d.getDate()-1);window._cmpDatePerso=d.toISOString().slice(0,10);rComparaison()" style="font-size:18px;padding:2px 8px">◀</button>';
-    html+='<button class="btn btn-sm" onclick="var d=new Date(\'' +(_cmpDatePerso||today)+ '\'T12:00:00);d.setDate(d.getDate()+1);if(d.toISOString().slice(0,10)<=\"'+today+'\"){window._cmpDatePerso=d.toISOString().slice(0,10);rComparaison()}" style="font-size:18px;padding:2px 8px">▶</button>';
+    html+='<button class="btn btn-sm" onclick="cmpNavJour(-1)" style="font-size:16px;padding:4px 12px" title="Jour précédent">◀</button>';
+    html+='<button class="btn btn-sm" onclick="cmpNavJour(+1)" style="font-size:16px;padding:4px 12px" title="Jour suivant">▶</button>';
   }
   html+='</div>';
 
@@ -12325,7 +12344,7 @@ function rComparaison(){
   html+='<div style="padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12)">'+b2.nom+'</div>';
   html+='</div>';
   html+='<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  html+='<colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup>';
+  html+='<colgroup><col style="width:36%"><col style="width:32%"><col style="width:32%"></colgroup>';
   html+=kpiRow('\uD83D\uDCB0 CA encaissé',b1.ca,b2.ca,'fcfa','var(--green)');
   html+=kpiRow('\uD83D\uDCC8 Revenus divers',b1.rev,b2.rev,'fcfa','var(--teal)');
   html+=kpiRow('\uD83D\uDCB8 D\u00e9penses',b1.dep,b2.dep,'fcfa','var(--red)',true);
