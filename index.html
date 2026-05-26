@@ -1185,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8h8M4 11h5M4 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Bilan Journalier
     </div>
+    <div class="ni admin-only" data-page="calc_commande" onclick="nav(this,'calc_commande')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Calculateur commande
+    </div>
     <div class="ni admin-only" data-page="relances" onclick="nav(this,'relances')">
       <svg viewBox="0 0 16 16" fill="none"><path d="M13 3a5 5 0 1 0-1.5 9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M11 8h4M13 6l2 2-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Relances clients
@@ -2681,7 +2685,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2767,7 +2771,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2800,7 +2804,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>'  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2818,7 +2822,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -8884,7 +8888,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures','relances'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures','relances','calc_commande'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -12424,6 +12428,207 @@ function rRapportMensuel(){
 
 
 
+
+
+// ─── CALCULATEUR DE COMMANDE ───
+var _calcPeriode = 30;
+var _calcFournisseur = '';
+var _calcCat = '';
+var _calcSelections = {}; // {aid: qte}
+
+function setCalcPeriode(p){ window._calcPeriode=p; rCalcCommande(); }
+function setCalcFournisseur(f){ window._calcFournisseur=f; rCalcCommande(); }
+function setCalcCat(c){ window._calcCat=c; rCalcCommande(); }
+
+function toggleCalcSelect(aid, qte){
+  if(window._calcSelections[aid]) delete window._calcSelections[aid];
+  else window._calcSelections[aid] = qte;
+  // Mettre à jour juste la checkbox sans rerendre
+  var cb = document.getElementById('cb-'+aid);
+  var row = document.getElementById('calc-row-'+aid);
+  if(cb){ cb.checked = !!window._calcSelections[aid]; }
+  if(row){ row.style.background = window._calcSelections[aid]?'var(--navy-bg)':''; }
+  updateCalcTotal();
+}
+
+function updateCalcTotal(){
+  var total = 0;
+  var nb = 0;
+  Object.entries(window._calcSelections||{}).forEach(function(e){
+    var a = (S.stock||[]).find(function(x){ return x.id==e[0]; });
+    if(a){ total += e[1]*(a.pa||0); nb++; }
+  });
+  var el = document.getElementById('calc-total');
+  var el2 = document.getElementById('calc-nb');
+  if(el) el.textContent = F(total);
+  if(el2) el2.textContent = nb+' article'+(nb>1?'s':'');
+}
+
+function genererCommandeAuto(){
+  var sels = window._calcSelections||{};
+  var lignes = Object.entries(sels).map(function(e){
+    var a = (S.stock||[]).find(function(x){ return x.id==e[0]; });
+    if(!a) return null;
+    return {aid:a.id,nom:a.nom,qte:e[1],pu:a.pa||0};
+  }).filter(Boolean);
+  if(lignes.length===0){ toast('\u26A0\uFE0F S\u00e9lectionnez des articles d\u2019abord'); return; }
+  // Créer une commande
+  if(!S.commandes) S.commandes=[];
+  var cmd = {
+    id:genId(), bid:getBid(), date:D(),
+    fournisseur:_calcFournisseur||'Auto', statut:'En attente',
+    lignes:lignes,
+    total:lignes.reduce(function(s,l){ return s+l.qte*l.pu; },0),
+    note:'G\u00e9n\u00e9r\u00e9 par le calculateur de commande',
+    ts:Date.now()
+  };
+  S.commandes.push(cmd);
+  window._calcSelections={};
+  saveData();
+  toast('\u2705 Commande cr\u00e9\u00e9e avec '+lignes.length+' articles');
+  nav(document.querySelector('[data-page=commandes]'),'commandes');
+}
+
+function rCalcCommande(){
+  var bid = getBid();
+  var periode = window._calcPeriode||30;
+  var filtreFourn = window._calcFournisseur||'';
+  var filtreCat = window._calcCat||'';
+  if(!window._calcSelections) window._calcSelections={};
+
+  var now = new Date();
+  var debutPeriode = new Date(now); debutPeriode.setDate(debutPeriode.getDate()-periode);
+  var debutStr = debutPeriode.toISOString().slice(0,10);
+
+  var stock = (S.stock||[]).filter(function(a){ return !bid||a.bid==bid||!a.bid; });
+  if(filtreCat) stock=stock.filter(function(a){ return a.cat===filtreCat; });
+
+  // Calcul vitesse de vente par article
+  var rows = stock.map(function(a){
+    var ventesPeriode = (S.ventes||[]).filter(function(v){
+      return v.date>=debutStr && v.statut==='Payé' && (!bid||v.bid==bid);
+    });
+    var qteSold=0;
+    ventesPeriode.forEach(function(v){
+      var items=v.items||(v.article?[{aid:v.aid,qte:v.qte||1}]:[]);
+      items.forEach(function(it){ if(it.aid==a.id||it.nom==a.nom) qteSold+=(it.qte||1); });
+    });
+    var vitJour = qteSold/periode;
+    var dispo = sa(a);
+    var joursStock = vitJour>0 ? Math.round(dispo/vitJour) : null;
+    var cible = a.stock_cible||0;
+    var seuil = a.seuil||0;
+    // Suggestion: couvrir 30j supplémentaires + atteindre cible
+    var qte30j = Math.ceil(vitJour*30);
+    var qteManque = cible>0 ? Math.max(0,cible-dispo) : 0;
+    var qteSugg = Math.max(qte30j, qteManque, dispo===0?5:0);
+    // Fournisseur lié
+    var fourn = (S.fournisseurs||[]).find(function(f){ return f.articles&&f.articles.includes(a.id); });
+    if(filtreFourn && (!fourn||fourn.id!=filtreFourn)) return null;
+    return {
+      a:a, qteSold:qteSold, vitJour:vitJour, dispo:dispo,
+      joursStock:joursStock, qte30j:qte30j, qteManque:qteManque,
+      qteSugg:qteSugg, fourn:fourn,
+      urgence: dispo===0?3 : joursStock!==null&&joursStock<7?2 : joursStock!==null&&joursStock<15?1:0
+    };
+  }).filter(Boolean);
+
+  // Trier: ruptures en premier, puis stock bas, puis par vitesse
+  rows.sort(function(a,b){ return b.urgence-a.urgence || b.vitJour-a.vitJour; });
+
+  // Stats
+  var nbRupture = rows.filter(function(r){ return r.dispo===0; }).length;
+  var nbBas = rows.filter(function(r){ return r.dispo>0&&r.urgence>=1; }).length;
+  var totalBudget = rows.reduce(function(s,r){ return s+r.qteSugg*(r.a.pa||0); },0);
+  var nbRotation = rows.filter(function(r){ return r.vitJour>0; }).length;
+
+  // Catégories et fournisseurs pour filtres
+  var cats = [...new Set(stock.map(function(a){ return a.cat; }).filter(Boolean))].sort();
+  var fourns = (S.fournisseurs||[]).filter(function(f){ return !bid||f.bid==bid||!f.bid; });
+
+  var html = '<div class="page">';
+
+  // KPI
+  html += '<div class="g4" style="margin-bottom:16px">';
+  html += '<div class="card" style="border-left:4px solid var(--red)"><div class="ct">🔴 En rupture</div><div class="mv" style="color:var(--red)">'+nbRupture+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">stock = 0</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--amber)"><div class="ct">⚠️ Stock bas</div><div class="mv" style="color:var(--amber)">'+nbBas+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">moins de 15 jours</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--teal)"><div class="ct">📦 Articles actifs</div><div class="mv" style="color:var(--teal)">'+nbRotation+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">avec ventes sur '+periode+'j</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">💰 Budget suggéré</div><div class="mv" style="color:var(--navy)">'+F(totalBudget)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">basé sur '+periode+'j de ventes</div></div>';
+  html += '</div>';
+
+  // Filtres
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">';
+  html += '<span style="font-size:12px;font-weight:600;color:var(--text3)">Période analyse :</span>';
+  [7,15,30,60].forEach(function(p){
+    html += '<button class="btn btn-sm'+(periode===p?' btn-primary':'')+'" onclick="setCalcPeriode('+p+')">'+p+'j</button>';
+  });
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">';
+  html += '<span style="font-size:12px;font-weight:600;color:var(--text3)">Catégorie :</span>';
+  html += '<button class="btn btn-sm'+(filtreCat===''?' btn-primary':'')+'" onclick="setCalcCat(\'\')">Toutes</button>';
+  cats.forEach(function(c){
+    html += '<button class="btn btn-sm'+(filtreCat===c?' btn-primary':'')+'" onclick="setCalcCat(\''+c+'\')">'+c+'</button>';
+  });
+  html += '</div>';
+
+  // Sélection + total flottant
+  html += '<div style="background:var(--navy);border-radius:var(--rs);padding:10px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 5px 0 #060e1f,0 8px 20px rgba(15,31,61,.35)">';
+  html += '<div style="color:rgba(255,255,255,.7);font-size:12px"><span id="calc-nb">0 article</span> sélectionné(s)</div>';
+  html += '<div style="display:flex;align-items:center;gap:12px">';
+  html += '<div style="color:#fff;font-weight:800;font-size:18px"><span id="calc-total">0 FCFA</span></div>';
+  html += '<button class="btn btn-sm" onclick="genererCommandeAuto()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.2);font-weight:600">✅ Commander</button>';
+  html += '</div></div>';
+
+  // Tableau
+  html += '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th style="width:32px"><input type="checkbox" onchange="(function(all){(document.querySelectorAll(\'[data-calc-cb]\').forEach(function(cb){cb.checked=all;var aid=cb.dataset.calcCb;var row=document.getElementById(\'calc-row-\'+aid);if(all){var qte=+cb.dataset.qte;window._calcSelections[aid]=qte;if(row)row.style.background=\'var(--navy-bg)\';}else{delete window._calcSelections[aid];if(row)row.style.background=\'\';}}))})(this.checked);updateCalcTotal()"></th>';
+  html += '<th>Article</th><th style="text-align:center">Stock</th>';
+  html += '<th style="text-align:center">Vendu/'+periode+'j</th>';
+  html += '<th style="text-align:center">Vitesse/j</th>';
+  html += '<th style="text-align:center">Jours restants</th>';
+  html += '<th style="text-align:center">Qté suggérée</th>';
+  html += '<th style="text-align:center">Qté commande</th>';
+  html += '<th style="text-align:right">Coût estimé</th>';
+  html += '</tr></thead><tbody>';
+
+  if(rows.length===0){
+    html += '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Aucun article trouvé</td></tr>';
+  } else {
+    rows.forEach(function(r){
+      var a=r.a;
+      var selected = !!window._calcSelections[a.id];
+      var qteCmd = window._calcSelections[a.id]||r.qteSugg;
+      var bgRow = selected?'background:var(--navy-bg)':'';
+      var urgColor = r.urgence===3?'var(--red)':r.urgence===2?'var(--red)':r.urgence===1?'var(--amber)':'var(--green)';
+      var urgLabel = r.urgence===3?'🔴':r.urgence===2?'🟠':r.urgence===1?'🟡':'🟢';
+      var joursLabel = r.joursStock!==null?r.joursStock+'j':'∞';
+      var joursColor = r.joursStock!==null&&r.joursStock<7?'var(--red)':r.joursStock!==null&&r.joursStock<15?'var(--amber)':'var(--green)';
+
+      html += '<tr id="calc-row-'+a.id+'" style="border-bottom:1px solid var(--border);cursor:pointer;'+bgRow+'" onclick="toggleCalcSelect('+a.id+','+r.qteSugg+')">';
+      html += '<td style="padding:10px 8px;text-align:center"><input type="checkbox" id="cb-'+a.id+'" data-calc-cb="'+a.id+'" data-qte="'+r.qteSugg+'" '+(selected?'checked':'')+' onchange="event.stopPropagation();toggleCalcSelect('+a.id+','+r.qteSugg+')" onclick="event.stopPropagation()"></td>';
+      html += '<td style="padding:10px 12px"><div style="font-weight:600">'+urgLabel+' '+a.nom+'</div><div style="font-size:10px;color:var(--text3)">'+( a.cat||'')+(r.fourn?' · '+r.fourn.nom:'')+'</div></td>';
+      html += '<td style="text-align:center;padding:10px 8px;font-size:18px;font-weight:800;color:'+urgColor+'">'+r.dispo+'</td>';
+      html += '<td style="text-align:center;padding:10px 8px;font-weight:600">'+r.qteSold+'</td>';
+      html += '<td style="text-align:center;padding:10px 8px;font-size:12px;color:var(--text3)">'+(r.vitJour>0?r.vitJour.toFixed(1)+'u/j':'—')+'</td>';
+      html += '<td style="text-align:center;padding:10px 8px;font-weight:700;color:'+joursColor+'">'+joursLabel+'</td>';
+      html += '<td style="text-align:center;padding:10px 8px"><span style="background:var(--navy-bg);color:var(--navy);font-weight:800;padding:2px 10px;border-radius:12px;font-size:14px">'+r.qteSugg+'</span></td>';
+      html += '<td style="text-align:center;padding:10px 8px" onclick="event.stopPropagation()">'
+        +'<input type="number" value="'+r.qteSugg+'" min="0" style="width:64px;text-align:center;padding:4px;border:1.5px solid var(--border2);border-radius:6px;font-family:inherit;font-weight:700;font-size:13px" '
+        +'onchange="window._calcSelections['+a.id+']=+this.value;updateCalcTotal()" '
+        +'onfocus="if(!window._calcSelections['+a.id+']){window._calcSelections['+a.id+']=+this.value;document.getElementById(\'cb-'+a.id+'\').checked=true;var row=document.getElementById(\'calc-row-'+a.id+'\');if(row)row.style.background=\'var(--navy-bg)\';updateCalcTotal()}">'
+        +'</td>';
+      html += '<td style="text-align:right;padding:10px 12px;font-weight:600;color:var(--navy)">'+( r.qteSugg>0?F(r.qteSugg*(a.pa||0)):'—')+'</td>';
+      html += '</tr>';
+    });
+  }
+
+  html += '</tbody></table></div>';
+  html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Cochez les articles à commander, ajustez les quantités si besoin, puis cliquez <b>✅ Commander</b> pour créer la commande automatiquement.</div>';
+  html += '</div>';
+
+  document.getElementById('content').innerHTML = html;
+  updateCalcTotal();
+}
 
 // ─── RELANCES CLIENTS ───
 var _relanceOnglet = 'debiteurs'; // debiteurs | inactifs | services | tous
