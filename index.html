@@ -3654,7 +3654,8 @@ function setTypePrix(t){
 }
 function setRemise(){
   const type=document.getElementById('remise-type')?.value||'%';
-  const val=+document.getElementById('remise-val')?.value||0;
+  let val=+document.getElementById('remise-val')?.value||0;
+  if(type==='%'&&val>100){val=100;const el=document.getElementById('remise-val');if(el)el.value=100;}
   window.remise={type,val};
   rVente();
 }
@@ -3670,7 +3671,7 @@ function rVente(){
   const ventesB = getVentesBoutique(bid);
 
   const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*window.remise.val/100):Math.min(window.remise.val||0,sousTotal);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
   const totalFinal=Math.max(0,sousTotal-remiseMt);
   const totalQte=window.panier.reduce((s,l)=>s+l.qte,0);
 
@@ -3826,7 +3827,7 @@ function retirerUnDuPanier(aid){
 function ouvrirPanierModal(){
   if(!window.panier||window.panier.length===0)return toast('⚠️ Panier vide');
   const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*window.remise.val/100):Math.min(window.remise.val||0,sousTotal);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
   const totalFinal=Math.max(0,sousTotal-remiseMt);
 
   modal(`<div class="mft">🛒 Panier — ${window.panier.length} article${window.panier.length>1?'s':''}</div>
@@ -3864,7 +3865,7 @@ function ouvrirPanierModal(){
         <option value="FCFA"${window.remise.type==='FCFA'?' selected':''}>Montant</option>
       </select>
       <input class="fi" type="number" id="remise-val" min="0" value="${window.remise.val}"
-        oninput="setRemise()" style="width:80px;padding:4px 8px;font-size:12px" placeholder="0">
+        ${window.remise.type==='%'?'max="100"':''} oninput="setRemise()" style="width:80px;padding:4px 8px;font-size:12px" placeholder="0">
       ${remiseMt>0?`<span class="remise-badge">−${F(remiseMt)}</span>`:''}
     </div>
     <!-- Totaux -->
@@ -3949,7 +3950,7 @@ function majLignePanier(i,champ,val){
   if(elLigne)elLigne.textContent=F(window.panier[i].mt);
   // Recalculer le total avec remise
   const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*window.remise.val/100):Math.min(window.remise.val||0,sousTotal);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
   const total=Math.max(0,sousTotal-remiseMt);
   const el=document.querySelector('.panier-total-val');
   if(el)el.textContent=F(total);
@@ -3971,7 +3972,7 @@ function validerPanier(){
   const _bidFinal = _paBoutique ? parseInt(_paBoutique.value) : getBid();
   const montantRecu=+document.getElementById('pa-recu')?.value||0;
   const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*window.remise.val/100):Math.min(window.remise.val||0,sousTotal);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
   const mt=Math.max(0,sousTotal-remiseMt);
 
   // Vérifier stocks
@@ -14566,7 +14567,7 @@ function renderCaisseRapide(){
               <option value="FCFA" ${crRemise.type==='FCFA'?'selected':''}>Montant</option>
             </select>
             <input type="number" min="0" placeholder="0" value="${crRemise.val||''}"
-              oninput="crRemise.val=+this.value||0;crMajTotal()"
+              oninput="crRemise.val=(crRemise.type==='%'?Math.min(+this.value||0,100):+this.value||0);if(crRemise.type==='%'&&(+this.value||0)>100)this.value=100;crMajTotal()"
               style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface);color:var(--text)">
             ${remiseMt>0?`<span style="font-size:11px;color:var(--green);font-weight:600">−${F(remiseMt)}</span>`:''}
           </div>
@@ -14619,7 +14620,7 @@ function renderCaisseRapide(){
 
 function crMajTotal(){
   const sousTotal=crPanier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=crRemise.type==='%'?Math.round(sousTotal*crRemise.val/100):Math.min(crRemise.val||0,sousTotal);
+  const remiseMt=crRemise.type==='%'?Math.round(sousTotal*Math.min(crRemise.val||0,100)/100):Math.min(crRemise.val||0,sousTotal);
   const total=Math.max(0,sousTotal-remiseMt);
   const el=document.getElementById('cr-total-val');
   if(el)el.textContent=F(total);
@@ -14630,7 +14631,7 @@ function crMajTotal(){
 
 function crMajMonnaie(){
   const sousTotal=crPanier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt=crRemise.type==='%'?Math.round(sousTotal*crRemise.val/100):Math.min(crRemise.val||0,sousTotal);
+  const remiseMt=crRemise.type==='%'?Math.round(sousTotal*Math.min(crRemise.val||0,100)/100):Math.min(crRemise.val||0,sousTotal);
   const total=Math.max(0,sousTotal-remiseMt);
   // Si monnaie saisie, recalc rendu sans re-render complet
   if(crMonnaie>0){
@@ -14702,7 +14703,7 @@ function crRetirer(i){
 function crValider(){
   if(!crPanier || crPanier.length===0) return toast('⚠️ Panier vide');
   const sousTotal = crPanier.reduce((s,l)=>s+l.mt,0);
-  const remiseMt = crRemise.type==='%'?Math.round(sousTotal*crRemise.val/100):Math.min(crRemise.val||0,sousTotal);
+  const remiseMt = crRemise.type==='%'?Math.round(sousTotal*Math.min(crRemise.val||0,100)/100):Math.min(crRemise.val||0,sousTotal);
   const total = Math.max(0, sousTotal-remiseMt);
   for(const l of crPanier){
     const a=ga(l.aid);
