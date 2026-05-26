@@ -1185,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M4 8h8M4 11h5M4 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Bilan Journalier
     </div>
+    <div class="ni admin-only" data-page="relances" onclick="nav(this,'relances')">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M13 3a5 5 0 1 0-1.5 9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M11 8h4M13 6l2 2-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Relances clients
+    </div>
     <div class="ni admin-only" data-page="hist_clotures" onclick="nav(this,'hist_clotures')">
       <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="13" cy="11" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M13 9.5v1.5l1 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       Historique clôtures
@@ -2677,7 +2681,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2763,7 +2767,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2796,7 +2800,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>'  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2814,7 +2818,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -8880,7 +8884,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures','relances'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -12419,6 +12423,233 @@ function rRapportMensuel(){
 }
 
 
+
+
+// ─── RELANCES CLIENTS ───
+var _relanceOnglet = 'debiteurs'; // debiteurs | inactifs | services | tous
+
+function setRelanceOnglet(o){ window._relanceOnglet=o; rRelances(); }
+
+function relancerClientRelance(id){
+  relancerClientWA(id);
+  setTimeout(rRelances, 400);
+}
+
+function genMsgRelance(c, type, extra){
+  var p = S.parametres||{};
+  var shop = p.nom||'Christ Media';
+  if(type==='debiteur'){
+    var montant = extra.montant || c.solde;
+    var details = extra.details || '';
+    return 'Bonjour '+c.nom+',\n\nNous vous contactons de la part de '+shop+' concernant votre solde impay\u00e9.\n\nMontant d\u00fb : '+F(montant)+(details?'\n\nD\u00e9tail :\n'+details:'')+'\n\nMerci de r\u00e9gulariser dans les meilleurs d\u00e9lais.\n\n-- '+shop;
+  } else if(type==='inactif'){
+    var jours = extra.jours||30;
+    return 'Bonjour '+c.nom+' !\n\nVous nous manquez ! Cela fait '+jours+' jours que nous ne vous avons pas vu(e).\n\nNous avons de nouveaux articles qui pourraient vous int\u00e9resser chez '+shop+'.\n\nN\u2019h\u00e9sitez pas \u00e0 passer nous voir !\n\nA bient\u00f4t !\n-- '+shop;
+  } else if(type==='service'){
+    var reste = extra.reste||0;
+    var svcNom = extra.svcNom||'prestation';
+    return 'Bonjour '+c.nom+',\n\nNous vous rappelons qu\u2019un solde de '+F(reste)+' reste d\u00fb pour : '+svcNom+'.\n\nMerci de r\u00e9gulariser votre paiement.\n\n-- '+shop;
+  }
+  return '';
+}
+
+function ouvrirWARelance(id, type, extra){
+  var c = S.clients.find(function(x){ return x.id==id; });
+  if(!c||!c.tel){ toast('\u26A0\uFE0F Num\u00e9ro de t\u00e9l\u00e9phone manquant'); return; }
+  var msg = genMsgRelance(c, type, extra||{});
+  var tel = (c.tel||'').replace(/[\s\-\(\)]/g,'');
+  var url = 'https://wa.me/228'+tel.replace(/^228/,'')+'\u003ftext='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+  c.derniereRelance = new Date().toISOString().slice(0,10);
+  saveData();
+  toast('\uD83D\uDCF1 WhatsApp ouvert pour '+c.nom);
+  rRelances();
+}
+
+function copierMsgRelance(id, type, extra){
+  var c = S.clients.find(function(x){ return x.id==id; });
+  if(!c) return;
+  var msg = genMsgRelance(c, type, extra||{});
+  navigator.clipboard.writeText(msg).then(function(){ toast('\uD83D\uDCCB Message copi\u00e9 !'); });
+}
+
+function rRelances(){
+  var today = new Date();
+  var todayStr = today.toISOString().slice(0,10);
+  var bid = getBid();
+  var onglet = window._relanceOnglet || 'debiteurs';
+
+  // 1. Débiteurs (ventes impayées + services en attente)
+  var debiteurs = S.clients.filter(function(c){
+    var soldeV = (S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
+      .reduce(function(s,v){ return s+(v.mt-((v.acomptes||[]).reduce(function(x,a){ return x+a.mt; },0))); },0);
+    var soldeS = (S.ventes_services||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
+      .reduce(function(s,v){ return s+(v.reste!=null?v.reste:v.mt); },0);
+    c._totalDu = soldeV + soldeS + (c.solde||0);
+    return c._totalDu > 0;
+  }).sort(function(a,b){ return b._totalDu - a._totalDu; });
+
+  // 2. Services en attente
+  var svcsEnAttente = (S.ventes_services||[]).filter(function(v){ return v.statut==='Non payé'; }).map(function(v){
+    var c = S.clients.find(function(c){ return c.nom===v.client; });
+    var d1=new Date(v.date+'T12:00:00');
+    var jours=Math.floor((today-d1)/86400000);
+    return Object.assign({},v,{_client:c,_jours:jours});
+  }).sort(function(a,b){ return b._jours-a._jours; });
+
+  // 3. Inactifs (>30j sans achat)
+  var inactifs = S.clients.filter(function(c){
+    if(c._totalDu>0) return false;
+    var ventes=(S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; });
+    var svcs=(S.ventes_services||[]).filter(function(v){ return v.client===c.nom; });
+    var all=[...ventes,...svcs];
+    if(all.length===0) return false;
+    var derniere=all.sort(function(a,b){ return b.date.localeCompare(a.date); })[0].date;
+    c._joursInactif=Math.floor((today-new Date(derniere+'T12:00:00'))/86400000);
+    c._derniereVisite=derniere;
+    return c._joursInactif>30;
+  }).sort(function(a,b){ return b._joursInactif-a._joursInactif; });
+
+  // Stats
+  var totalCreances = debiteurs.reduce(function(s,c){ return s+c._totalDu; },0);
+  var nbAvecTel = debiteurs.filter(function(c){ return c.tel; }).length;
+  var nbSvcsAttente = svcsEnAttente.length;
+  var totalSvcsAttente = svcsEnAttente.reduce(function(s,v){ return s+(v.reste!=null?v.reste:v.mt); },0);
+
+  var html = '<div class="page">';
+
+  // KPI
+  html += '<div class="g4" style="margin-bottom:16px">';
+  html += '<div class="card" style="border-left:4px solid var(--red);cursor:pointer" onclick="setRelanceOnglet(\'debiteurs\')">'
+    +'<div class="ct">⚠️ Débiteurs</div><div class="mv" style="color:var(--red)">'+debiteurs.length+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+F(totalCreances)+' à encaisser</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--teal);cursor:pointer" onclick="setRelanceOnglet(\'services\')">'
+    +'<div class="ct">🛠 Services en attente</div><div class="mv" style="color:var(--teal)">'+nbSvcsAttente+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+F(totalSvcsAttente)+' restants</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--amber);cursor:pointer" onclick="setRelanceOnglet(\'inactifs\')">'
+    +'<div class="ct">😴 Clients inactifs</div><div class="mv" style="color:var(--amber)">'+inactifs.length+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">30+ jours sans achat</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--green)">'
+    +'<div class="ct">📱 Avec WhatsApp</div><div class="mv" style="color:var(--green)">'+nbAvecTel+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">débiteurs joignables</div></div>';
+  html += '</div>';
+
+  // Onglets
+  html += '<div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:8px">';
+  [['debiteurs','⚠️ Débiteurs ('+debiteurs.length+')'],['services','🛠 Services ('+nbSvcsAttente+')'],['inactifs','😴 Inactifs ('+inactifs.length+')']].forEach(function(o){
+    html += '<button class="btn btn-sm'+(onglet===o[0]?' btn-primary':'')+'" onclick="setRelanceOnglet(\''+o[0]+'\')">'+o[1]+'</button>';
+  });
+  html += '</div>';
+
+  // === ONGLET DÉBITEURS ===
+  if(onglet==='debiteurs'){
+    if(debiteurs.length===0){
+      html += '<div style="text-align:center;padding:48px;color:var(--text3);background:var(--surface);border-radius:var(--r);border:1px solid var(--border)">🎉 Aucun débiteur !</div>';
+    } else {
+      html += '<div class="tbl-wrap"><table><thead><tr>'
+        +'<th>Client</th><th>Téléphone</th><th style="text-align:right">Montant dû</th>'
+        +'<th style="text-align:center">Ancienneté</th><th>Dernière relance</th><th style="text-align:center">Actions</th>'
+        +'</tr></thead><tbody>';
+      debiteurs.forEach(function(c){
+        var jRelance = c.derniereRelance
+          ? Math.floor((today-new Date(c.derniereRelance+'T12:00:00'))/86400000) : null;
+        var urgence = c._totalDu>50000?'var(--red)':c._totalDu>10000?'var(--amber)':'var(--text)';
+        // Détail créances pour message
+        var vImpayees=(S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; });
+        var details=vImpayees.slice(0,3).map(function(v){
+          var lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu||v.mt}];
+          var noms=lignes.map(function(l){ var a=ga(l.aid); return a?a.nom:'Article'; }).join(', ');
+          return '  - '+noms+' : '+F(v.mt)+' ('+v.date+')';
+        }).join('\n');
+        var extraData = JSON.stringify({montant:c._totalDu,details:details}).replace(/'/g,"\\'");
+        html += '<tr style="border-bottom:1px solid var(--border)">';
+        html += '<td style="padding:10px 12px"><div style="font-weight:600">'+c.nom+'</div>'
+          +(c.notes?'<div style="font-size:10px;color:var(--text3)">'+c.notes+'</div>':'')+'</td>';
+        html += '<td style="padding:10px 12px;font-size:13px">'+( c.tel||'<span style="color:var(--text3)">—</span>')+'</td>';
+        html += '<td style="text-align:right;padding:10px 12px;font-weight:800;font-size:16px;color:'+urgence+'">'+F(c._totalDu)+'</td>';
+        html += '<td style="text-align:center;padding:10px 12px">'
+          +(jRelance!==null?'<span style="font-size:12px;color:'+(jRelance<3?'var(--green)':'var(--amber)')+'">'+jRelance+'j</span>':'<span style="color:var(--text3)">jamais</span>')+'</td>';
+        html += '<td style="padding:10px 12px;font-size:11px;color:var(--text3)">'+( c.derniereRelance||'—')+'</td>';
+        html += '<td style="padding:10px 8px"><div style="display:flex;gap:4px;justify-content:center">';
+        if(c.tel){
+          html += '<button class="btn btn-sm btn-success" onclick="ouvrirWARelance('+c.id+',\'debiteur\',{montant:'+c._totalDu+'})" title="WhatsApp">📱</button>';
+        }
+        html += '<button class="btn btn-sm" onclick="copierMsgRelance('+c.id+',\'debiteur\',{montant:'+c._totalDu+'})" title="Copier message">📋</button>';
+        html += '<button class="btn btn-sm" onclick="ouvrirFicheClient('+c.id+')" title="Fiche">👤</button>';
+        html += '</div></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+  }
+
+  // === ONGLET SERVICES ===
+  else if(onglet==='services'){
+    if(svcsEnAttente.length===0){
+      html += '<div style="text-align:center;padding:48px;color:var(--text3);background:var(--surface);border-radius:var(--r);border:1px solid var(--border)">✅ Aucun service en attente !</div>';
+    } else {
+      html += '<div class="tbl-wrap"><table><thead><tr>'
+        +'<th>Client</th><th>Service</th><th style="text-align:right">Total</th>'
+        +'<th style="text-align:right;color:var(--teal)">Avance</th><th style="text-align:right;color:var(--red)">Reste</th>'
+        +'<th style="text-align:center">Ancienneté</th><th>Actions</th>'
+        +'</tr></thead><tbody>';
+      svcsEnAttente.forEach(function(v){
+        var c = v._client;
+        var reste = v.reste!=null?v.reste:v.mt;
+        var urgColor = v._jours>=14?'var(--red)':v._jours>=7?'var(--amber)':'var(--text3)';
+        html += '<tr style="border-bottom:1px solid var(--border)'+(v._jours>=7?';background:var(--amber-bg)':'\'>"');
+        html = html.slice(0,-1); // remove extra quote
+        html += '<td style="padding:10px 12px;font-weight:600">'+( v.client||'—')+'</td>';
+        html += '<td style="padding:10px 12px;font-size:12px">'+( v.nom_service||'—')+'</td>';
+        html += '<td style="text-align:right;padding:10px 12px">'+F(v.mt+(v.avance||0))+'</td>';
+        html += '<td style="text-align:right;padding:10px 12px;color:var(--teal)">'+( v.avance>0?'+'+F(v.avance):'—')+'</td>';
+        html += '<td style="text-align:right;padding:10px 12px;font-weight:800;color:var(--red)">'+F(reste)+'</td>';
+        html += '<td style="text-align:center;padding:10px 12px"><span style="font-weight:700;color:'+urgColor+'">'+v._jours+'j</span>'
+          +(v._jours>=14?'<div style="font-size:9px;color:var(--red)">⚠️ Urgent</div>':v._jours>=7?'<div style="font-size:9px;color:var(--amber)">↺ Relancer</div>':'')+'</td>';
+        html += '<td style="padding:10px 8px"><div style="display:flex;gap:4px">';
+        html += '<button class="btn btn-sm btn-primary" onclick="payerService('+v.id+')" title="Encaisser">💰</button>';
+        if(c&&c.tel){
+          html += '<button class="btn btn-sm btn-success" onclick="ouvrirWARelance('+( c?c.id:'null')+',\'service\',{reste:'+reste+',svcNom:\''+( v.nom_service||'').replace(/'/g,'')+'\'})">📱</button>';
+        }
+        html += '</div></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+  }
+
+  // === ONGLET INACTIFS ===
+  else if(onglet==='inactifs'){
+    if(inactifs.length===0){
+      html += '<div style="text-align:center;padding:48px;color:var(--text3);background:var(--surface);border-radius:var(--r);border:1px solid var(--border)">🎉 Tous les clients sont actifs !</div>';
+    } else {
+      html += '<div class="tbl-wrap"><table><thead><tr>'
+        +'<th>Client</th><th>Téléphone</th><th style="text-align:center">Absence</th>'
+        +'<th>Dernière visite</th><th style="text-align:right">CA historique</th><th>Actions</th>'
+        +'</tr></thead><tbody>';
+      inactifs.forEach(function(c){
+        var ca = (S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; })
+          .reduce(function(s,v){ return s+v.mt; },0);
+        var couleur = c._joursInactif>90?'var(--red)':c._joursInactif>60?'var(--amber)':'var(--text3)';
+        html += '<tr style="border-bottom:1px solid var(--border)">';
+        html += '<td style="padding:10px 12px;font-weight:600">'+c.nom+'</td>';
+        html += '<td style="padding:10px 12px;font-size:13px">'+( c.tel||'<span style="color:var(--text3)">—</span>')+'</td>';
+        html += '<td style="text-align:center;padding:10px 12px"><span style="font-weight:800;color:'+couleur+'">'+c._joursInactif+' jours</span></td>';
+        html += '<td style="padding:10px 12px;font-size:12px;color:var(--text3)">'+c._derniereVisite+'</td>';
+        html += '<td style="text-align:right;padding:10px 12px;font-weight:600;color:var(--green)">'+( ca>0?F(ca):'—')+'</td>';
+        html += '<td style="padding:10px 8px"><div style="display:flex;gap:4px">';
+        if(c.tel){
+          html += '<button class="btn btn-sm btn-primary" onclick="ouvrirWARelance('+c.id+',\'inactif\',{jours:'+c._joursInactif+'})" title="WhatsApp">📱</button>';
+          html += '<button class="btn btn-sm" onclick="copierMsgRelance('+c.id+',\'inactif\',{jours:'+c._joursInactif+'})" title="Copier">📋</button>';
+        }
+        html += '<button class="btn btn-sm" onclick="ouvrirFicheClient('+c.id+')" title="Fiche">👤</button>';
+        html += '</div></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+  }
+
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+}
 
 // ─── HISTORIQUE DES CLÔTURES ───
 var _histClotBoutique = 'toutes';
