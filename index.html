@@ -4797,13 +4797,29 @@ function rClients(){
 }
 function ouvrirFicheClient(id){
   const c=S.clients.find(c=>c.id==id);if(!c)return;
+  const bid=getBid();
+  // Ventes toutes boutiques pour ce client
+  const vcTout=(S.ventes||[]).filter(v=>v.client===c.nom);
+  // Ventes boutique active uniquement
   const vc2=getVentesBoutique(bid).filter(v=>v.client===c.nom);
+  // Services (toutes boutiques)
+  const svcs=(S.ventes_services||[]).filter(v=>v.client===c.nom);
+  const svcsPaids=svcs.filter(v=>v.statut==='Payé');
+  const svcsEnAttente=svcs.filter(v=>v.statut==='Non payé');
+  const totalSvcs=svcsPaids.reduce((s,v)=>s+v.mt,0)+svcs.filter(v=>v.avance>0).reduce((s,v)=>s+(v.avance||0),0);
+  const resteServices=svcsEnAttente.reduce((s,v)=>s+(v.reste!=null?v.reste:v.mt),0);
   const vp2=vc2.filter(v=>v.statut==='Payé');
   const tot=vp2.reduce((s,v)=>s+v.mt,0);
-  const dv=vc2.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const totToutes=vcTout.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0)+totalSvcs;
+  const dernierAchat=[...vc2,...svcs].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const dv=dernierAchat;
   const now=new Date();
   const joursDepuis=dv?Math.floor((now-new Date(dv.date))/86400000):null;
   const panierMoy=vp2.length>0?Math.round(tot/vp2.length):0;
+  // Créances: solde ventes + reste services
+  const soldeVentes=(S.ventes||[]).filter(v=>v.client===c.nom&&v.statut==='Non payé')
+    .reduce((s,v)=>s+(v.mt-((v.acomptes||[]).reduce((x,a)=>x+a.mt,0))),0);
+  const totalCreances=soldeVentes+resteServices+(c.solde||0);
 
   // ── Top articles achetés ──
   const artMap={};
@@ -4919,7 +4935,26 @@ function ouvrirFicheClient(id){
           <div style="font-size:10px;color:var(--text3)">Depuis dernière visite</div>
         </div>
       </div>
-      ${c.solde>0?`<div style="margin-top:8px;background:var(--red-bg);border-radius:var(--rs);padding:8px 10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--red);font-weight:600">Solde dû</span><span style="font-size:14px;font-weight:800;color:var(--red)">${F(c.solde)}</span></div>`:''}
+      ${totalCreances>0?`
+        <div style="margin-top:8px;background:var(--red-bg);border:1px solid var(--red-light);border-radius:var(--rs);padding:10px 12px">
+          <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ Créances totales : ${F(totalCreances)}</div>
+          ${soldeVentes>0?`<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);padding:2px 0"><span>Ventes impayées</span><span style="font-weight:700">${F(soldeVentes)}</span></div>`:''}
+          ${resteServices>0?`<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);padding:2px 0"><span>Services en attente</span><span style="font-weight:700">${F(resteServices)}</span></div>`:''}
+          ${c.solde>0?`<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);padding:2px 0"><span>Solde manuel</span><span style="font-weight:700">${F(c.solde)}</span></div>`:''}
+        </div>`:''
+      }
+      ${totalSvcs>0?`
+        <div style="margin-top:8px;background:var(--teal-bg);border-radius:var(--rs);padding:8px 10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--teal);font-weight:600">🛠 Services (encaissés)</span>
+          <span style="font-size:13px;font-weight:800;color:var(--teal)">${F(totalSvcs)}</span>
+        </div>`:''
+      }
+      ${totToutes!==tot?`
+        <div style="margin-top:8px;background:var(--navy-bg);border-radius:var(--rs);padding:8px 10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--navy);font-weight:600">🏪 Total toutes boutiques</span>
+          <span style="font-size:13px;font-weight:800;color:var(--navy)">${F(totToutes)}</span>
+        </div>`:''
+      }
     </div>
 
     <!-- Activité mensuelle -->
@@ -4968,26 +5003,42 @@ function ouvrirFicheClient(id){
     </div>`:''}
 
     <!-- Historique complet -->
-    <div class="cp-section">
-      <div class="cp-sec-title">🕒 Historique complet (${vc2.length})</div>
-      ${vc2.length===0?'<div style="font-size:13px;color:var(--text3);padding:8px 0">Aucun achat enregistré</div>':
-        vc2.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(v=>{
-          const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu}];
-          const noms=lignes.map(l=>{const a=S.stock.find(a=>a.id==l.aid);return a?a.nom:'?'}).join(', ');
-          return`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${v.date}</span>
-              <span style="font-weight:700;font-size:13px;color:${v.statut==='Payé'?'var(--green)':'var(--amber)'}">${F(v.mt)}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noms}">${noms}</div>
-            <div style="display:flex;gap:6px;margin-top:3px;align-items:center">
-              ${sb(v.statut)}
-              ${v.mode?`<span class="badge bb" style="font-size:10px">${v.mode}</span>`:''}
-              ${v.caissier_nom?`<span style="font-size:10px;color:var(--text3)">${v.caissier_emoji||''} ${v.caissier_nom}</span>`:''}
-            </div>
-          </div>`;
-        }).join('')}
-    </div>
+    ${(()=>{
+      // Combiner ventes articles + services
+      const allHist=[
+        ...vc2.map(v=>({...v,_type:'vente'})),
+        ...svcs.map(v=>({...v,_type:'service',mt:v.mt||(v.avance||0)}))
+      ].sort((a,b)=>b.date.localeCompare(a.date));
+      if(allHist.length===0) return '<div class="cp-section"><div class="cp-sec-title">🕒 Historique</div><div style="font-size:13px;color:var(--text3);padding:8px 0">Aucun historique</div></div>';
+      return '<div class="cp-section"><div class="cp-sec-title">🕒 Historique complet ('+allHist.length+')</div>'+
+        allHist.map(v=>{
+          let label='',mt=v.mt,couleur=v.statut==='Payé'?'var(--green)':'var(--amber)';
+          if(v._type==='service'){
+            label=v.nom_service||'Service';
+            mt=v.avance>0&&v.statut!=='Payé'?(v.avance||0):(v.mt||0);
+            couleur=v.statut==='Payé'?'var(--teal)':'var(--amber)';
+          } else {
+            const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu}];
+            label=lignes.map(l=>{const a=S.stock.find(a=>a.id==l.aid);return a?a.nom:'?';}).join(', ');
+          }
+          return '<div style="padding:9px 0;border-bottom:1px solid var(--border)">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center">'+
+              '<div style="display:flex;align-items:center;gap:6px">'+
+                '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+(v._type==='service'?'var(--teal-bg)':'var(--navy-bg)')+';color:'+(v._type==='service'?'var(--teal)':'var(--navy)')+';font-weight:700">'+(v._type==='service'?'🛠':'🛒')+'</span>'+
+                '<span style="font-size:11px;color:var(--text3);font-family:monospace">'+v.date+'</span>'+
+              '</div>'+
+              '<span style="font-weight:800;font-size:13px;color:'+couleur+'">'+F(mt)+(v.avance>0&&v.statut!=='Payé'?' <span style="font-size:10px">(avance)</span>':'')+'</span>'+
+            '</div>'+
+            '<div style="font-size:12px;color:var(--text2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</div>'+
+            '<div style="display:flex;gap:6px;margin-top:3px;align-items:center">'+
+              sb(v.statut)+
+              (v.reste>0?'<span style="font-size:10px;color:var(--red)">Reste: '+F(v.reste)+'</span>':'')+
+              (v.mode?'<span class="badge bb" style="font-size:10px">'+v.mode+'</span>':'')+
+            '</div>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    })()}
 
     <!-- Actions -->
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px">
