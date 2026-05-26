@@ -3880,7 +3880,7 @@ function ouvrirPanierModal(){
     <div id="zone-recu-panier" style="margin-top:4px">
       <div class="fr">
         <div class="fg"><label class="fl">💵 Montant remis</label>
-          <input class="fi" type="number" id="pa-recu" placeholder="${totalFinal}" oninput="calcMonnaieInline(${totalFinal})" style="font-weight:700">
+          <input class="fi" type="number" id="pa-recu" placeholder="${totalFinal}" value="${totalFinal}" oninput="calcMonnaieInline(${totalFinal})" style="font-weight:700">
         </div>
         <div class="fg"><label class="fl">🪙 Monnaie à rendre</label>
           <input class="fi" type="number" id="pa-monnaie" readonly style="background:var(--green-bg);color:var(--green);font-weight:700;font-size:15px">
@@ -3893,6 +3893,7 @@ function ouvrirPanierModal(){
       <button class="btn btn-danger btn-sm" onclick="viderPanier();closeModal()">🗑️ Vider</button>
       <button class="btn btn-success" onclick="validerPanier()">✓ Valider — ${F(totalFinal)}</button>
     </div>`);
+  setTimeout(()=>calcMonnaieInline(totalFinal),0);
 }
 
 
