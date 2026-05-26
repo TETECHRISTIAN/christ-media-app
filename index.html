@@ -9440,12 +9440,16 @@ function toggleChampRecu(statut, total){
   if(z) z.style.display = statut === 'Payé' ? '' : 'none';
 }
 function calcMonnaieInline(total){
+  // Toujours recalculer depuis le panier actuel pour éviter les valeurs figées
+  const sousTotal=(window.panier||[]).reduce((s,l)=>s+l.mt,0);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
+  const totalReel=Math.max(0,sousTotal-remiseMt);
   const recu = +document.getElementById('pa-recu')?.value || 0;
-  const monnaie = Math.max(0, recu - total);
+  const monnaie = Math.max(0, recu - totalReel);
   const el = document.getElementById('pa-monnaie');
   if(el){
     el.value = monnaie;
-    el.style.color = recu < total ? 'var(--red)' : 'var(--green)';
+    el.style.color = recu < totalReel ? 'var(--red)' : 'var(--green)';
   }
 }
 function calcMonnaie(total){
