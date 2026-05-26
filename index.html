@@ -3954,6 +3954,16 @@ function majLignePanier(i,champ,val){
   const total=Math.max(0,sousTotal-remiseMt);
   const el=document.querySelector('.panier-total-val');
   if(el)el.textContent=F(total);
+  // Mettre à jour aussi le TOTAL À PAYER dans le modal (rendu statique à l'ouverture)
+  const elPreviewFinal=document.querySelector('.total-preview-final span:last-child');
+  if(elPreviewFinal)elPreviewFinal.textContent=F(total);
+  // Mettre à jour ligne sous-total si visible
+  const elRows=document.querySelectorAll('.total-preview-row span:last-child');
+  if(elRows.length>=1){
+    const remiseMt2=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
+    if(remiseMt2>0&&elRows.length>=2){elRows[0].textContent=F(sousTotal);elRows[1].textContent='−'+F(remiseMt2);}
+    else if(sousTotal!==total&&elRows.length>=1){elRows[0].textContent=F(sousTotal);}
+  }
   const btn=document.querySelector('.btn.btn-success[onclick*="validerPanier"]');
   if(btn)btn.textContent='✓ Valider — '+F(total);
   calcMonnaieInline(total);
