@@ -3732,7 +3732,7 @@ function rVente(){
         const imgEl=a.photo
           ?`<img class="prod-card-img" src="${a.photo}" onerror="this.outerHTML='<div class=\'prod-card-img-placeholder\'>📦</div>'">`
           :`<div class="prod-card-img-placeholder">${a.cat==='Lingerie'?'👗':a.cat==='Audio-Vidéo'?'🎧':'📦'}</div>`;
-        const prixPromo=getPrixPromo(a.id);
+        const prixPromo=getPrixPromo(a.id,window.typePrix||'detail');
         const infoPromo=prixPromo!==null?getInfoPromo(a.id):null;
         return`
         <div class="prod-card${inPanier?' in-panier':''}${dispo<=0?' rupture':''}" onclick="ajouterProduitRapide(${a.id})">
@@ -3801,7 +3801,7 @@ function ajouterProduitRapide(aid){
   const dispo=sa(a); // Vente autorisée même stock épuisé
   const type=window.typePrix||'detail';
   // Appliquer prix promo si disponible
-  const prixPromo=getPrixPromo(a.id);
+  const prixPromo=getPrixPromo(a.id,type);
   const pu=prixPromo!==null?prixPromo:getPrixParType(a,type);
   const existant=window.panier.findIndex(l=>l.aid===aid);
   if(existant>=0){
@@ -14466,7 +14466,7 @@ function renderCaisseRapide(){
   }
 
   const getPrix = (a) => {
-    const promo = getPrixPromo(a.id);
+    const promo = getPrixPromo(a.id, crTypePrix);
     if(promo!==null) return promo;
     if(crTypePrix==='gros') return a.pv3||a.pv;
     if(crTypePrix==='semi') return a.pv2||a.pv;
@@ -14646,7 +14646,7 @@ function crSetTypePrix(t){
   // Mettre à jour les prix dans le panier
   crPanier.forEach(l=>{
     const a=ga(l.aid); if(!a) return;
-    const promo=getPrixPromo(l.aid);
+    const promo=getPrixPromo(l.aid,t);
     l.pu=promo!==null?promo:(t==='gros'?(a.pv3||a.pv):t==='semi'?(a.pv2||a.pv):a.pv);
     l.mt=l.qte*l.pu;
     l.typePrix=t;
@@ -14677,7 +14677,7 @@ function crSetPu(i,val){
 
 function crAjouter(aid){
   const a = ga(aid); if(!a) return;
-  const promo = getPrixPromo(a.id);
+  const promo = getPrixPromo(a.id, crTypePrix);
   const pu = promo!==null ? promo : (crTypePrix==='gros'?(a.pv3||a.pv):crTypePrix==='semi'?(a.pv2||a.pv):a.pv);
   const idx = crPanier.findIndex(l => l.aid === aid);
   if(idx >= 0){
@@ -15903,24 +15903,27 @@ function getPromosActives(){
 }
 
 // Obtenir le prix promo d'un article (null si pas de promo)
-function getPrixPromo(aid){
+function getPrixPromo(aid, typePrix){
   const promos = getPromosActives();
+  const type = typePrix || window.typePrix || 'detail';
   for(const promo of promos){
     // Promo sur article spécifique
     if(promo.type === 'article' && promo.aids && promo.aids.includes(aid)){
-      return appliquerPromo(S.stock.find(a=>a.id==aid)?.pv || 0, promo);
+      const a = S.stock.find(a=>a.id==aid);
+      const pvBase = a ? getPrixParType(a, type) : 0;
+      return appliquerPromo(pvBase, promo);
     }
     // Promo sur catégorie
     if(promo.type === 'categorie'){
       const a = S.stock.find(a=>a.id==aid);
       if(a && a.cat === promo.categorie){
-        return appliquerPromo(a.pv, promo);
+        return appliquerPromo(getPrixParType(a, type), promo);
       }
     }
     // Promo globale
     if(promo.type === 'global'){
       const a = S.stock.find(a=>a.id==aid);
-      if(a) return appliquerPromo(a.pv, promo);
+      if(a) return appliquerPromo(getPrixParType(a, type), promo);
     }
   }
   return null;
