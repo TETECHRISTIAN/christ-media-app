@@ -3508,6 +3508,7 @@ function rDash(){
         </button>`).join('')}
     </div>
     ${al.length?`<div class="alert alert-r">⚠️ ${al.length} article(s) en stock bas : ${al.slice(0,3).map(a=>`<strong>${a.nom}</strong> (${sa(a)} restants)`).join(' · ')}${al.length>3?` +${al.length-3} autres`:''}</div>`:''}
+    ${(()=>{const nL=ventesB.filter(v=>v.livraison==='Non livré');if(!nL.length)return '';const ret=nL.filter(v=>Math.floor((Date.now()-new Date(v.date).getTime())/864e5)>=2);return`<div class="alert" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-light);cursor:pointer" onclick="window.venteLivrFilter='Non livré';nav(document.querySelector('[data-page=vente]'),'vente')">📦 ${nL.length} vente(s) non livrée(s)${ret.length?` · <strong>${ret.length} en retard (+2j)</strong>`:''} — Voir →</div>`;})()}
     <p class="st">Vue d'ensemble <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">${curM}</span></p>
     <div class="g4">
       <div class="card"><div class="ct">Solde net</div><div class="mv" style="color:${solde>=0?'var(--green)':'var(--red)'}">${F(solde)}</div><span class="badge ${solde>=0?'bg':'br'}">${solde>=0?'Bénéfice':'Déficit'}</span></div>
@@ -3757,19 +3758,29 @@ function rVente(){
     <p class="st" style="margin-top:24px">Historique des ventes</p>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Heure</th><th>Articles</th><th>Montant</th><th>Client</th><th>Compte</th><th>Statut</th><th></th></tr></thead>
-      <tbody>${ventesB.slice().reverse().map(v=>{
+      <tbody>${(()=>{
+        let vList=ventesB.slice().reverse();
+        if(window.venteLivrFilter==='Non livré') vList=vList.filter(v=>v.livraison==='Non livré');
+        else if(window.venteLivrFilter==='Livré') vList=vList.filter(v=>v.livraison==='Livré'||!v.livraison);
+        return vList.map(v=>{
         const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu,mt:v.mt}];
         const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
-        return`<tr>
+        const estNL=v.livraison==='Non livré';
+        const livrBadge=estNL
+          ?`<span class="badge" style="background:var(--amber-bg);color:var(--amber);cursor:pointer" onclick="marquerLivre(${v.id})" title="Cliquer pour marquer livré">📦 Non livré</span>`
+          :`<span class="badge bg" style="font-size:10px">✅ Livré</span>`;
+        return`<tr style="${estNL?'border-left:3px solid var(--amber);':''}">
           <td style="font-family:'DM Mono',monospace;font-size:12px">${v.date}</td>
           <td style="font-size:11px;color:var(--text3);white-space:nowrap">${v.heure||'—'}</td>
-          <td class="tdm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noms}">${noms}</td>
+          <td class="tdm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noms}">${noms}</td>
           <td style="font-weight:600">${F(v.mt)}</td>
           <td>${v.client||'—'}</td>
           <td><span class="badge bb">${v.cid?nomCompte(v.cid):(v.mode||'—')}</span></td>
           <td>${sb(v.statut)}</td>
+          <td>${livrBadge}</td>
           <td><div class="td-actions">
             ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerVente(${v.id})" title="Encaisser">✓</button><button class="btn-icon btn-sm" onclick="gererAcompte(${v.id})" title="Acompte">💰</button>`:''}
+            ${estNL?`<button class="btn-icon btn-sm" onclick="marquerLivre(${v.id})" title="Marquer livré" style="color:var(--amber)">📦</button>`:''}
             <button class="btn-icon btn-sm" onclick="demanderMontantRecu(${v.id})" title="Reçu A4">🖨️</button>
             <button class="btn-icon btn-sm" onclick="imprimerThermique(${v.id})" title="Reçu thermique 58mm" style="color:var(--teal)">🧾</button>
             <button class="btn-icon btn-sm" onclick="configurerTranches(${v.id})" title="Tranches">💳</button>
@@ -3777,7 +3788,8 @@ function rVente(){
             <button class="btn-icon btn-sm" onclick="partagerWhatsApp(${v.id},'recu')" title="WhatsApp">📱</button>
             <button class="btn-icon btn-sm" onclick="delVente(${v.id})" title="Supprimer" style="color:var(--red)">✕</button>
           </div></td>
-        </tr>`;}).join('')}
+        </tr>`;}).join('');
+        })()}
       </tbody></table></div>`;
 }
 
@@ -3876,6 +3888,13 @@ function ouvrirPanierModal(){
     </div>
     <div class="fg"><label class="fl">Statut</label>
       <select class="fs" id="pa-statut" onchange="toggleChampRecu(this.value,${totalFinal})"><option value="Payé">✅ Payé</option><option value="Non payé">⏳ À percevoir</option></select>
+    </div>
+    <!-- Livraison différée -->
+    <div style="margin:8px 0 4px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px;display:flex;align-items:center;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--amber)">
+        <input type="checkbox" id="pa-livraison-diff" style="width:16px;height:16px;accent-color:var(--amber)">
+        📦 Livraison différée (non remis au client)
+      </label>
     </div>
     <div id="zone-recu-panier" style="margin-top:4px">
       <div class="fr">
@@ -3984,7 +4003,8 @@ function validerPanier(){
       caissier_role:S.session?.role||null,
       heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
       montant_recu: statut==='Payé' && montantRecu > 0 ? montantRecu : null,
-      monnaie: statut==='Payé' && montantRecu > 0 ? Math.max(0, montantRecu - mt) : null
+      monnaie: statut==='Payé' && montantRecu > 0 ? Math.max(0, montantRecu - mt) : null,
+      livraison: document.getElementById('pa-livraison-diff')?.checked ? 'Non livré' : 'Livré'
     });
     window.panier=[];
     window.remise={type:'%',val:0};
