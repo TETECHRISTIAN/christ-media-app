@@ -7060,8 +7060,16 @@ function majLogo(){
   if(!p)return;
   const ln=document.getElementById('logo-name');
   const ls=document.getElementById('logo-sub');
-  if(ln)ln.textContent=p.planNom||p.nom||'Christ Media';
-  if(ls)ls.textContent=p.planSub||p.ville||'Lomé, Togo';
+  let nomAff=p.planNom||p.nom||'Christ Media';
+  let subAff=p.planSub||p.ville||'Lomé, Togo';
+  if(!window._modeDemo){
+    if(nomAff.indexOf('DEMO')>=0||nomAff.indexOf('Demo')>=0||nomAff.indexOf('DÉMO')>=0||nomAff.indexOf('Démo')>=0) nomAff='Christ Media';
+    if(subAff==='Mode Demo'||subAff==='Mode Demo') subAff='Lomé, Togo';
+    if((p.planNom||'').indexOf('DEMO')>=0||(p.planNom||'').indexOf('DÉMO')>=0||(p.planNom||'').indexOf('Démo')>=0){p.planNom='Christ Media';saveData();}
+    if(p.planSub==='Mode Demo'||p.planSub==='Mode Démo'){p.planSub='Lomé, Togo';saveData();}
+  }
+  if(ln)ln.textContent=nomAff;
+  if(ls)ls.textContent=subAff;
 }
 
 function sauvegarderPlanTravail(){
