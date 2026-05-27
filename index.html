@@ -13395,20 +13395,22 @@ function rRevArticle(){
   else debut='2000-01-01';
 
   // Ventes filtrées par boutique et période
+  // bid=0 ou null = pas de boutique configurée (mode démo) → pas de filtre bid
   var ventes = (S.ventes||[]).filter(function(v){
-    return v.statut==='Payé' && v.date && v.date>=debut && v.date<=today && (!bid||v.bid==bid);
+    return v.statut==='Payé' && v.date && v.date>=debut && v.date<=today && (!bid||!v.bid||v.bid==bid);
   });
 
   // Agréger par article
   var map = {};
   ventes.forEach(function(v){
-    var items = v.items || (v.article ? [{aid:v.aid||null, nom:v.article, qte:v.qte||1, pu:v.pu||v.mt||(v.qte?v.mt/v.qte:v.mt)||0}] : []);
+    // Supporte: items[], lignes[], ou vente mono-article (aid/article/qte/pu)
+    var items = v.items || v.lignes || (v.article||v.aid ? [{aid:v.aid||null, nom:v.article||null, qte:v.qte||1, pu:v.pu||(v.qte&&v.qte>0?v.mt/v.qte:v.mt)||0}] : []);
     items.forEach(function(it){
       var key = it.aid || it.nom || 'Inconnu';
       var nom = it.nom || (function(){ var a=(S.stock||[]).find(function(s){return s.id==it.aid;}); return a?a.nom:'Article #'+it.aid; })();
       var qte = it.qte||1;
-      var pu = it.pu || (qte>0?(v.mt/qte):0);
-      var ca = pu*qte;
+      var pu = it.pu || (qte>0?(it.mt||0)/qte:0);
+      var ca = it.mt || (pu*qte);
       // Chercher le prix d'achat dans le stock
       var artStock = (S.stock||[]).find(function(s){ return s.id==it.aid||(it.nom&&s.nom===it.nom); });
       var pa = artStock ? (artStock.pa||0) : 0;
