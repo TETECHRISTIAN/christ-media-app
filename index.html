@@ -10763,6 +10763,9 @@ function updateModCatSelect(){
   const cur=(document.getElementById('mod-cat')||{}).value||'';
   const wrap=document.getElementById('mod-cat-wrap');
   if(wrap) wrap.innerHTML=buildModCatSelect(type, cur);
+  // Afficher/masquer le champ compte destination selon le type
+  const wrapCid2=document.getElementById('mod-cid2-wrap');
+  if(wrapCid2) wrapCid2.style.display=type==='transfert'?'':'none';
 }
 function addModele(){
   const type='depense';
@@ -10788,8 +10791,13 @@ function addModele(){
       <div class="fg"><label class="fl">Montant (${(S.parametres&&S.parametres.devise)||'FCFA'})</label>
         <input class="fi" type="number" id="mod-mt" placeholder="0">
       </div>
-      <div class="fg"><label class="fl">Compte par défaut</label>
+      <div class="fg"><label class="fl">Compte source</label>
         ${selectComptes('mod-cid', premierCompteId())}
+      </div>
+    </div>
+    <div class="fr" id="mod-cid2-wrap" style="display:none">
+      <div class="fg"><label class="fl">Compte destination</label>
+        ${selectComptes('mod-cid2', premierCompteId())}
       </div>
     </div>
     <div class="fg"><label class="fl">Notes / Description</label>
@@ -10803,12 +10811,14 @@ function saveModele(){
   if(!nom)return toast('❌ Nom requis');
   if(!mt)return toast('❌ Montant requis');
   if(!S.modeles)S.modeles=[];
+  const modType=document.getElementById('mod-type').value;
   S.modeles.push({
     id:genId(),nom,
-    type:document.getElementById('mod-type').value,
+    type:modType,
     cat:document.getElementById('mod-cat').value,
     montant:mt,
     cid:document.getElementById('mod-cid').value,
+    cid2:modType==='transfert'?(document.getElementById('mod-cid2')?.value||''):'',
     notes:document.getElementById('mod-notes').value
   });
   saveData();closeModal();toast('✅ Modèle créé');rModeles();
@@ -10843,8 +10853,13 @@ function editModele(id){
       <div class="fg"><label class="fl">Montant (${devise})</label>
         <input class="fi" type="number" id="mod-mt" value="${m.montant||0}">
       </div>
-      <div class="fg"><label class="fl">Compte par défaut</label>
+      <div class="fg"><label class="fl">Compte source</label>
         ${selectComptes('mod-cid', m.cid||premierCompteId())}
+      </div>
+    </div>
+    <div class="fr" id="mod-cid2-wrap" style="display:${m.type==='transfert'?'':'none'}">
+      <div class="fg"><label class="fl">Compte destination</label>
+        ${selectComptes('mod-cid2', m.cid2||premierCompteId())}
       </div>
     </div>
     <div class="fg"><label class="fl">Notes / Description</label>
@@ -10866,6 +10881,7 @@ function saveEditModele(id){
   m.cat=document.getElementById('mod-cat').value;
   m.montant=mt;
   m.cid=document.getElementById('mod-cid').value;
+  m.cid2=m.type==='transfert'?(document.getElementById('mod-cid2')?.value||''):'';
   m.notes=document.getElementById('mod-notes').value;
   saveData();closeModal();toast('✅ Modèle modifié');rModeles();
 }
@@ -10880,7 +10896,8 @@ function appliquerModele(id){
     </div>
     <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="app-date" value="${D()}"></div>
     <div class="fg"><label class="fl">Montant (modifiable)</label><input class="fi" type="number" id="app-mt" value="${m.montant}"></div>
-    <div class="fg"><label class="fl">Compte</label>${selectComptes('app-cid', m.cid||premierCompteId())}</div>
+    <div class="fg"><label class="fl">${m.type==='transfert'?'Compte source':'Compte'}</label>${selectComptes('app-cid', m.cid||premierCompteId())}</div>
+    ${m.type==='transfert'?`<div class="fg"><label class="fl">Compte destination</label>${selectComptes('app-cid2', m.cid2||premierCompteId())}</div>`:''}
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="app-notes" value="${m.notes||''}"></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-success" onclick="confirmerModele(${id})">✅ Confirmer</button></div>`);
 }
@@ -10922,6 +10939,13 @@ function confirmerModele(id){
     if(!S.revenus)S.revenus=[];
     S.revenus.push({id:genId(),date,desc:m.nom,cat:m.cat||'Modèle',mt,mode:nomCompte(cid),cid,bid:getBid(),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
     crediterCompte(cid,mt);
+  }else if(m.type==='transfert'){
+    const cid2=document.getElementById('app-cid2')?.value||m.cid2||'';
+    if(!cid2||cid2===cid)return toast('❌ Choisissez un compte destination différent');
+    if(!S.transferts)S.transferts=[];
+    S.transferts.push({id:genId(),date,desc:m.nom,mt,cidSrc:cid,cidDst:cid2,notes,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+    debiterCompte(cid,mt);
+    crediterCompte(cid2,mt);
   }
   saveData();closeModal();
   toast(`✅ ${m.nom} — ${F(mt)} enregistré`);
