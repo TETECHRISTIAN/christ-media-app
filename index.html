@@ -6264,76 +6264,173 @@ let calcExpr='', calcResult='0', calcJustEval=false;
 function rCalc(){
   const p=document.getElementById('content');
   p.innerHTML=`
-  <div class="page" style="display:flex;flex-direction:column;align-items:center;padding-top:32px">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:320px;box-shadow:var(--shadow);overflow:hidden">
-      <!-- Écran -->
-      <div style="background:var(--navy);padding:20px 18px 14px;min-height:90px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end">
-        <div id="calc-expr" style="font-size:13px;color:rgba(255,255,255,.45);min-height:18px;word-break:break-all;text-align:right">${calcExpr||'&nbsp;'}</div>
-        <div id="calc-disp" style="font-size:36px;font-weight:700;color:#fff;letter-spacing:-1px;word-break:break-all;text-align:right">${calcResult}</div>
+  <div class="page" style="display:flex;flex-direction:column;align-items:center;padding:24px 16px 40px">
+    <div id="calc-wrap" style="width:100%;max-width:360px;background:var(--navy);border-radius:28px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+
+      <!-- ÉCRAN -->
+      <div style="padding:28px 24px 20px;min-height:140px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;position:relative">
+        <!-- Mémoire -->
+        <div id="calc-mem-bar" style="position:absolute;top:12px;left:20px;font-size:11px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:1px;display:none">M</div>
+        <!-- Expression -->
+        <div id="calc-expr" style="font-size:15px;color:rgba(255,255,255,.4);min-height:22px;word-break:break-all;text-align:right;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&nbsp;</div>
+        <!-- Résultat principal -->
+        <div id="calc-disp" style="font-size:52px;font-weight:300;color:#fff;letter-spacing:-2px;word-break:break-all;text-align:right;line-height:1;margin-top:6px;transition:font-size .15s">0</div>
       </div>
-      <!-- Boutons -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
+
+      <!-- HISTORIQUE COMPACT -->
+      <div id="calc-hist-strip" style="padding:0 20px 10px;max-height:72px;overflow-y:auto;scrollbar-width:none">
+        <div id="calc-hist-inner" style="display:flex;flex-direction:column;gap:3px"></div>
+      </div>
+
+      <!-- GRILLE BOUTONS -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px 28px;background:rgba(255,255,255,.04)">
         ${[
-          ['C','±','%','÷'],
-          ['7','8','9','×'],
-          ['4','5','6','−'],
-          ['1','2','3','+'],
-          ['00','0',',','=']
-        ].map(row=>row.map((k,i)=>{
-          const isOp=['÷','×','−','+','='].includes(k);
-          const isClear=k==='C';
-          const isWide=false;
-          const bg=isOp?'var(--navy)':isClear?'var(--red-bg)':'var(--surface)';
-          const color=isOp?'#fff':isClear?'var(--red)':'var(--text)';
-          const fw=isOp||isClear?'700':'500';
-          return `<button onclick="calcKey('${k}')" style="padding:18px 0;font-size:18px;font-weight:${fw};background:${bg};color:${color};border:none;cursor:pointer;font-family:inherit;transition:opacity .1s;-webkit-tap-highlight-color:transparent" onmousedown="this.style.opacity='.7'" onmouseup="this.style.opacity='1'" onmouseleave="this.style.opacity='1'">${k}</button>`;
+          [{l:'AC',t:'fn'},{l:'±',t:'fn'},{l:'%',t:'fn'},{l:'÷',t:'op'}],
+          [{l:'7'},{l:'8'},{l:'9'},{l:'×',t:'op'}],
+          [{l:'4'},{l:'5'},{l:'6'},{l:'−',t:'op'}],
+          [{l:'1'},{l:'2'},{l:'3'},{l:'+'  ,t:'op'}],
+          [{l:'00'},{l:'0'},{l:','},  {l:'=',t:'eq'}]
+        ].map(row=>row.map(({l,t='num'})=>{
+          const bg=t==='op'?'rgba(255,149,0,.85)':t==='eq'?'rgba(255,149,0,1)':t==='fn'?'rgba(255,255,255,.22)':'rgba(255,255,255,.12)';
+          const col=t==='fn'?'#1c1c1e':'#fff';
+          const fw=t==='op'||t==='eq'?'400':'400';
+          const hover=t==='op'||t==='eq'?'rgba(255,168,60,1)':'rgba(255,255,255,.22)';
+          return `<button onclick="calcKey('${l}')"
+            style="aspect-ratio:1;border-radius:50%;border:none;cursor:pointer;font-size:${l.length>1?'20':'24'}px;font-weight:${fw};font-family:inherit;
+                   background:${bg};color:${col};
+                   display:flex;align-items:center;justify-content:center;
+                   transition:transform .08s,filter .08s;-webkit-tap-highlight-color:transparent;position:relative;overflow:hidden"
+            onpointerdown="this.style.filter='brightness(1.25)';this.style.transform='scale(.92)'"
+            onpointerup="this.style.filter='';this.style.transform=''"
+            onpointerleave="this.style.filter='';this.style.transform=''">${l}</button>`;
         }).join('')).join('')}
       </div>
-      <!-- Bande historique -->
-      <div style="padding:10px 14px;border-top:1px solid var(--border);max-height:140px;overflow-y:auto" id="calc-hist">
-        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Historique</div>
-        <div id="calc-hist-list" style="font-size:12px;color:var(--text2);line-height:1.9">${(calcHistory||[]).slice(-6).reverse().map(h=>`<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">${h.expr}</span><span style="font-weight:600">${h.res}</span></div>`).join('')||'<span style="color:var(--text3)">Aucun calcul</span>'}</div>
-      </div>
+    </div>
+
+    <!-- Raccourcis rapides -->
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button onclick="calcInjectStock()" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 16px;font-size:12px;color:var(--text2);cursor:pointer">📦 Stock total</button>
+      <button onclick="calcInjectCA()" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 16px;font-size:12px;color:var(--text2);cursor:pointer">💰 CA du jour</button>
+      <button onclick="calcVider()" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 16px;font-size:12px;color:var(--red);cursor:pointer">🗑️ Vider historique</button>
     </div>
   </div>`;
+  calcRenderHist();
+  calcAdaptFontSize();
 }
+
 let calcHistory=[];
+let calcMem=null;
+
+function calcAdaptFontSize(){
+  const el=document.getElementById('calc-disp');
+  if(!el)return;
+  const len=(el.textContent||'').replace(/\s/g,'').length;
+  el.style.fontSize=len>12?'28px':len>9?'36px':len>6?'44px':'52px';
+}
+
+function calcRenderHist(){
+  const el=document.getElementById('calc-hist-inner');
+  if(!el)return;
+  const list=(calcHistory||[]).slice(-5).reverse();
+  el.innerHTML=list.length===0?'<div style="font-size:11px;color:rgba(255,255,255,.2);text-align:right;padding:2px 0">Aucun calcul</div>':
+    list.map((h,i)=>`<div onclick="calcInjectHist('${h.rawRes}')" style="display:flex;justify-content:space-between;font-size:12px;cursor:pointer;padding:1px 0;opacity:${1-i*0.18}">
+      <span style="color:rgba(255,255,255,.35);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${h.expr}</span>
+      <span style="color:rgba(255,255,255,.7);font-weight:500;margin-left:8px">${h.res}</span>
+    </div>`).join('');
+}
+
+function calcInjectHist(val){
+  calcExpr=val; calcResult=parseFloat(val).toLocaleString('fr-FR'); calcJustEval=true;
+  const de=document.getElementById('calc-disp');
+  const ee=document.getElementById('calc-expr');
+  if(de){de.textContent=calcResult;calcAdaptFontSize();}
+  if(ee) ee.textContent='↩ '+calcResult;
+}
+
+function calcInjectStock(){
+  const total=(S.stock||[]).reduce((s,a)=>{const bid=getBid();const st=(a.stocks&&a.stocks[bid]!==undefined)?a.stocks[bid]:(a.stock||0);return s+(st*(a.pv||0));},0);
+  calcInjectHist(String(total));
+  toast('📦 Valeur stock injectée');
+}
+function calcInjectCA(){
+  const today=D();const bid=getBid();
+  const ca=(S.ventes||[]).filter(v=>v.date===today&&(v.bid===bid||!v.bid)).reduce((s,v)=>s+(+v.mt||0),0);
+  calcInjectHist(String(ca));
+  toast('💰 CA du jour injecté');
+}
+function calcVider(){
+  calcHistory=[];calcRenderHist();toast('🗑️ Historique vidé');
+}
+
 function calcKey(k){
-  if(k==='C'){calcExpr='';calcResult='0';calcJustEval=false;}
+  if(k==='AC'){calcExpr='';calcResult='0';calcJustEval=false;}
+  else if(k==='⌫'){
+    if(calcJustEval){calcExpr='';calcResult='0';calcJustEval=false;}
+    else{calcExpr=calcExpr.slice(0,-1)||'';
+      const last=calcExpr.split(/[+\-×÷]/).pop().replace(',','.');
+      try{calcResult=last?parseFloat(last).toLocaleString('fr-FR'):'0';}catch{calcResult='0';}
+    }
+  }
   else if(k==='='){
     try{
       const expr=calcExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/,/g,'.');
       if(!expr)return;
       const res=Function('"use strict";return ('+expr+')')();
+      if(!isFinite(res))throw new Error();
       const fmt=parseFloat(res.toFixed(10)).toLocaleString('fr-FR');
-      calcHistory.push({expr:calcExpr,res:fmt});
+      calcHistory.push({expr:calcExpr,res:fmt,rawRes:String(parseFloat(res.toFixed(10)))});
       calcExpr=String(parseFloat(res.toFixed(10)));
       calcResult=fmt;
       calcJustEval=true;
     }catch{calcResult='Erreur';calcExpr='';}
   }
   else if(k==='±'){
-    try{const v=parseFloat(calcResult.replace(/\s/g,'').replace(',','.'));calcResult=parseFloat((-v).toFixed(10)).toLocaleString('fr-FR');calcExpr=String(-parseFloat(calcResult.replace(/\s/g,'').replace(',','.')));}catch{}
+    try{
+      if(calcExpr&&!calcJustEval){
+        const last=calcExpr.split(/([+×÷]|(?<=[0-9])−)/).pop();
+        const neg=calcExpr.slice(0,-last.length)+'('+'-'+last+')';
+        calcExpr=neg;
+      }else{
+        const v=parseFloat(calcResult.replace(/\s/g,'').replace(',','.'));
+        if(!isNaN(v)){const neg=-v;calcResult=neg.toLocaleString('fr-FR');calcExpr=String(neg);}
+      }
+    }catch{}
   }
   else if(k==='%'){
-    try{const v=parseFloat(calcResult.replace(/\s/g,'').replace(',','.'));calcResult=parseFloat((v/100).toFixed(10)).toLocaleString('fr-FR');}catch{}
+    try{
+      const v=parseFloat(calcResult.replace(/\s/g,'').replace(',','.'));
+      if(!isNaN(v)){const pct=v/100;calcResult=parseFloat(pct.toFixed(10)).toLocaleString('fr-FR');calcExpr=String(pct);}
+    }catch{}
   }
   else{
-    if(calcJustEval&&['+','−','×','÷'].includes(k)){calcExpr=calcExpr+k;calcJustEval=false;}
+    // Bouton AC → si des chiffres existent, agit comme ⌫ contextuel (on garde AC pour tout effacer)
+    if(calcJustEval&&['+','−','×','÷'].includes(k)){calcExpr+=k;calcJustEval=false;}
     else if(calcJustEval){calcExpr=k;calcJustEval=false;}
     else{calcExpr+=k;}
-    // Affichage courant
     const last=calcExpr.split(/[+\-×÷]/).pop().replace(',','.');
-    try{calcResult=parseFloat(last).toLocaleString('fr-FR');}catch{}
+    try{const v=parseFloat(last);if(!isNaN(v))calcResult=v.toLocaleString('fr-FR');}catch{}
   }
-  // Refresh écran uniquement
+  // Mettre à jour AC vs ⌫
+  // Refresh DOM
   const de=document.getElementById('calc-disp');
   const ee=document.getElementById('calc-expr');
-  const hl=document.getElementById('calc-hist-list');
-  if(de) de.textContent=calcResult;
+  if(de){de.textContent=calcResult||'0';calcAdaptFontSize();}
   if(ee) ee.textContent=calcExpr||'\u00a0';
-  if(hl) hl.innerHTML=(calcHistory||[]).slice(-6).reverse().map(h=>`<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">${h.expr}</span><span style="font-weight:600">${h.res}</span></div>`).join('')||'<span style="color:var(--text3)">Aucun calcul</span>';
+  calcRenderHist();
 }
+
+// Clavier physique
+(function(){
+  if(window._calcKbBound)return;
+  window._calcKbBound=true;
+  document.addEventListener('keydown',e=>{
+    if(currentPage!=='calculatrice')return;
+    const m={'Enter':'=','Backspace':'⌫','Escape':'AC','*':'×','/':'÷','-':'−','+'  :'+','.':',',','  :','};
+    const k=m[e.key]||(/^[0-9]$/.test(e.key)?e.key:null)||(/^[0-9]{2}$/.test(e.key)?e.key:null);
+    if(k){e.preventDefault();calcKey(k);}
+  });
+})();
+
 
 // ─── PARAMÈTRES ───
 function rParametres(){
