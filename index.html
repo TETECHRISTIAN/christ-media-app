@@ -1201,6 +1201,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg>
       Objectifs articles
     </div>
+    <div class="ni admin-only" data-page="rev_article" onclick="nav(this,'rev_article')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="10" width="3" height="5" rx="0.8" stroke="currentColor" stroke-width="1.3"/><rect x="6" y="6" width="3" height="9" rx="0.8" stroke="currentColor" stroke-width="1.3"/><rect x="11" y="2" width="3" height="13" rx="0.8" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 9l4-4 4-2 3-1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Revenus par article
+    </div>
     <div class="ni admin-only" data-page="rapport_mensuel" onclick="nav(this,'rapport_mensuel')">
       <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       Rapport mensuel
@@ -2685,7 +2689,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -2771,7 +2775,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -2804,7 +2808,7 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>'  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -2822,7 +2826,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -9064,7 +9068,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','hist_clotures','relances','calc_commande'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -13362,6 +13366,171 @@ function rObjArticle(){
   html += '</div>';
 
   document.getElementById('content').innerHTML = html;
+}
+
+// ─── REVENUS PAR ARTICLE ───
+var _revArtPeriode = 'mois';
+var _revArtSort = 'ca'; // ca | qte | marge | nom
+var _revArtSortDir = -1; // -1 desc, 1 asc
+var _revArtSearch = '';
+
+function revArtSetSort(col){
+  if(_revArtSort===col){ _revArtSortDir*=-1; } else { _revArtSort=col; _revArtSortDir=-1; }
+  rRevArticle();
+}
+
+function rRevArticle(){
+  var bid = getBid();
+  var periode = window._revArtPeriode || _revArtPeriode;
+  var now = new Date();
+  var today = now.toISOString().slice(0,10);
+  var debutSem = (function(){ var d=new Date(now); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
+  var debutMois = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
+  var debutAnnee = now.getFullYear()+'-01-01';
+
+  var debut;
+  if(periode==='semaine') debut=debutSem;
+  else if(periode==='mois') debut=debutMois;
+  else if(periode==='annee') debut=debutAnnee;
+  else debut='2000-01-01';
+
+  // Ventes filtrées par boutique et période
+  var ventes = (S.ventes||[]).filter(function(v){
+    return v.statut==='Payé' && v.date && v.date>=debut && v.date<=today && (!bid||v.bid==bid);
+  });
+
+  // Agréger par article
+  var map = {};
+  ventes.forEach(function(v){
+    var items = v.items || (v.article ? [{aid:v.aid||null, nom:v.article, qte:v.qte||1, pu:v.pu||v.mt||(v.qte?v.mt/v.qte:v.mt)||0}] : []);
+    items.forEach(function(it){
+      var key = it.aid || it.nom || 'Inconnu';
+      var nom = it.nom || (function(){ var a=(S.stock||[]).find(function(s){return s.id==it.aid;}); return a?a.nom:'Article #'+it.aid; })();
+      var qte = it.qte||1;
+      var pu = it.pu || (qte>0?(v.mt/qte):0);
+      var ca = pu*qte;
+      // Chercher le prix d'achat dans le stock
+      var artStock = (S.stock||[]).find(function(s){ return s.id==it.aid||(it.nom&&s.nom===it.nom); });
+      var pa = artStock ? (artStock.pa||0) : 0;
+      var cat = artStock ? (artStock.cat||'—') : '—';
+      var marge = ca - pa*qte;
+      if(!map[key]){ map[key]={nom:nom,cat:cat,qte:0,ca:0,marge:0,pa:pa,nbVentes:0}; }
+      map[key].qte += qte;
+      map[key].ca += ca;
+      map[key].marge += marge;
+      map[key].nbVentes++;
+    });
+  });
+
+  var rows = Object.values(map);
+
+  // Filtre recherche
+  var search = (_revArtSearch||'').toLowerCase();
+  if(search) rows = rows.filter(function(r){ return r.nom.toLowerCase().indexOf(search)>=0||r.cat.toLowerCase().indexOf(search)>=0; });
+
+  // Tri
+  rows.sort(function(a,b){
+    var va = _revArtSort==='nom'?a.nom:_revArtSort==='qte'?a.qte:_revArtSort==='marge'?a.marge:a.ca;
+    var vb = _revArtSort==='nom'?b.nom:_revArtSort==='qte'?b.qte:_revArtSort==='marge'?b.marge:b.ca;
+    if(typeof va==='string') return _revArtSortDir*(va.localeCompare(vb));
+    return _revArtSortDir*(vb-va);
+  });
+
+  // Totaux
+  var totalCA = rows.reduce(function(s,r){return s+r.ca;},0);
+  var totalQte = rows.reduce(function(s,r){return s+r.qte;},0);
+  var totalMarge = rows.reduce(function(s,r){return s+r.marge;},0);
+  var tauxMarge = totalCA>0?Math.round(totalMarge/totalCA*100):0;
+
+  var periodeLabel = {semaine:'Cette semaine',mois:'Ce mois',annee:'Cette année',tout:'Tout'};
+  var sortIcon = function(col){ return _revArtSort===col?(_revArtSortDir===-1?' ↓':' ↑'):''; };
+
+  var html = '<div class="page">';
+
+  // KPIs
+  html += '<div class="g4" style="margin-bottom:16px">';
+  html += '<div class="card" style="border-left:4px solid var(--green)"><div class="ct">Chiffre d\'affaires</div><div class="mv" style="color:var(--green)">'+F(totalCA)+'</div><div style="font-size:11px;color:var(--text3)">'+periodeLabel[periode]+'</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">Quantité vendue</div><div class="mv">'+totalQte+'</div><div style="font-size:11px;color:var(--text3)">unités</div></div>';
+  html += '<div class="card" style="border-left:4px solid '+(totalMarge>=0?'var(--teal)':'var(--red)')+'"><div class="ct">Marge brute</div><div class="mv" style="color:'+(totalMarge>=0?'var(--teal)':'var(--red)')+'">'+F(totalMarge)+'</div><div style="font-size:11px;color:var(--text3)">Taux : '+tauxMarge+'%</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--amber)"><div class="ct">Articles vendus</div><div class="mv">'+rows.length+'</div><div style="font-size:11px;color:var(--text3)">références</div></div>';
+  html += '</div>';
+
+  // Barre de recherche
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
+  html += '<input class="fi" type="text" placeholder="🔍 Rechercher un article..." value="'+(_revArtSearch||'')+'" oninput="_revArtSearch=this.value;rRevArticle()" style="flex:1;min-width:180px;max-width:300px">';
+  html += '<span style="font-size:12px;color:var(--text3)">'+rows.length+' article(s)</span>';
+  html += '</div>';
+
+  if(rows.length===0){
+    html += '<div class="card" style="text-align:center;padding:40px;color:var(--text3)">Aucune vente enregistrée pour cette période.</div>';
+  } else {
+    // Top 5 visuel
+    var top5 = rows.slice().sort(function(a,b){return b.ca-a.ca;}).slice(0,5);
+    var maxCA = top5[0]?top5[0].ca:1;
+    html += '<div class="card" style="margin-bottom:16px">';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:12px">🏆 Top 5 articles</div>';
+    top5.forEach(function(r,i){
+      var pct = Math.round(r.ca/maxCA*100);
+      var pctTotal = totalCA>0?Math.round(r.ca/totalCA*100):0;
+      var colors = ['var(--gold,#f59e0b)','var(--silver,#94a3b8)','var(--bronze,#b45309)','var(--navy)','var(--teal)'];
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+      html += '<span style="font-size:12px;font-weight:700"><span style="color:'+colors[i]+';margin-right:6px">'+(i+1)+'.</span>'+r.nom+'</span>';
+      html += '<span style="font-size:12px;color:var(--text2)">'+F(r.ca)+' <span style="color:var(--text3)">('+pctTotal+'%)</span></span>';
+      html += '</div>';
+      html += '<div style="background:var(--surface2);border-radius:4px;height:8px"><div style="width:'+pct+'%;background:'+colors[i]+';height:100%;border-radius:4px;transition:width .4s"></div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Tableau complet
+    html += '<div class="tbl-wrap"><table><thead><tr>';
+    html += '<th onclick="revArtSetSort(\'nom\')" style="cursor:pointer">Article'+sortIcon('nom')+'</th>';
+    html += '<th style="text-align:center">Catégorie</th>';
+    html += '<th style="text-align:right;cursor:pointer" onclick="revArtSetSort(\'qte\')">Qté'+sortIcon('qte')+'</th>';
+    html += '<th style="text-align:right;cursor:pointer" onclick="revArtSetSort(\'ca\')">CA'+sortIcon('ca')+'</th>';
+    html += '<th style="text-align:right">PU moyen</th>';
+    html += '<th style="text-align:right;cursor:pointer" onclick="revArtSetSort(\'marge\')">Marge'+sortIcon('marge')+'</th>';
+    html += '<th style="text-align:right">% CA</th>';
+    html += '</tr></thead><tbody>';
+
+    rows.forEach(function(r){
+      var puMoyen = r.qte>0?r.ca/r.qte:0;
+      var pctCA = totalCA>0?Math.round(r.ca/totalCA*100):0;
+      var margePct = r.ca>0?Math.round(r.marge/r.ca*100):0;
+      html += '<tr style="border-bottom:1px solid var(--border)">';
+      html += '<td style="padding:9px 12px;font-weight:600">'+r.nom+'</td>';
+      html += '<td style="text-align:center;padding:9px 12px"><span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px">'+r.cat+'</span></td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700">'+r.qte+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--green)">'+F(r.ca)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;color:var(--text2)">'+F(Math.round(puMoyen))+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:600;color:'+(r.marge>=0?'var(--teal)':'var(--red)')+'">'+F(r.marge)+(r.pa>0?' <span style="font-size:10px;color:var(--text3)">('+margePct+'%)</span>':'')+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px">';
+      html += '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">';
+      html += '<div style="width:50px;background:var(--surface2);border-radius:3px;height:6px"><div style="width:'+pctCA+'%;background:var(--navy);height:100%;border-radius:3px"></div></div>';
+      html += '<span style="font-size:11px;font-weight:700;min-width:28px;text-align:right">'+pctCA+'%</span>';
+      html += '</div></td>';
+      html += '</tr>';
+    });
+
+    // Ligne total
+    html += '<tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--border2)">';
+    html += '<td style="padding:10px 12px">TOTAL</td><td></td>';
+    html += '<td style="text-align:right;padding:10px 12px">'+totalQte+'</td>';
+    html += '<td style="text-align:right;padding:10px 12px;color:var(--green)">'+F(totalCA)+'</td>';
+    html += '<td></td>';
+    html += '<td style="text-align:right;padding:10px 12px;color:'+(totalMarge>=0?'var(--teal)':'var(--red)')+'">'+F(totalMarge)+' <span style="font-size:10px">('+tauxMarge+'%)</span></td>';
+    html += '<td style="text-align:right;padding:10px 12px">100%</td>';
+    html += '</tr>';
+    html += '</tbody></table></div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Clique sur les en-têtes de colonnes pour trier. La marge est calculée si le prix d\'achat est renseigné dans le stock.</div>';
+  }
+
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+  // Sync le select période dans le header
+  var sel = document.getElementById('rev-art-period');
+  if(sel) sel.value = periode;
 }
 
 // ─── COMPARAISON BOUTIQUES ───
