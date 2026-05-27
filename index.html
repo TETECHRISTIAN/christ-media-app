@@ -4392,8 +4392,8 @@ function delAchat(id){
       const restedu=ac.mt-totalPaye;
       const f=S.fournisseurs.find(f=>f.id==ac.fid);
       if(f) f.dette=Math.max(0,(f.dette||0)-restedu);
-      // Supprimer de dettesAchats
-      if(S.dettesAchats) S.dettesAchats=S.dettesAchats.filter(d=>d.id!=id);
+      // FIX soft delete : marquer _deleted au lieu de filter (évite réapparition après sync Firebase)
+      if(S.dettesAchats){ const _daA=S.dettesAchats.find(d=>d.id==id); if(_daA){_daA._deleted=true;_daA.ts=Date.now();} }
     }
   }
   S.achats=S.achats.filter(a=>a.id!=id);
@@ -7703,7 +7703,7 @@ function getNotifs(){
     notifs.push({icon:'📦',msg:`${achatsAPayer.length} achat(s) à régler`,sub:`Total dû : ${F(total)}`,type:'fourn',urgent:total>100000,action:"nav(document.querySelector('[data-page=achats]'),'achats')"});
   }
   if(S.dettesAchats){
-    const retard=S.dettesAchats.filter(d=>d.statut!=='Soldé'&&d.echeance&&d.echeance<today);
+    const retard=S.dettesAchats.filter(d=>!d._deleted&&d.statut!=='Soldé'&&d.echeance&&d.echeance<today);
     retard.forEach(d=>{
       const jours=Math.ceil((new Date()-new Date(d.echeance))/864e5);
       const f=(S.fournisseurs||[]).find(f=>f.id==d.fid);
@@ -7742,9 +7742,9 @@ function getNotifs(){
 
   // ── AGENDA / PLANNINGS ──
   if(S.agenda){
-    const retard=S.agenda.filter(a=>!a.fait&&a.date<today);
+    const retard=S.agenda.filter(a=>!a._deleted&&!a.fait&&a.date<today);
     if(retard.length>0) notifs.push({icon:'📅',msg:`${retard.length} tâche(s) en retard`,sub:'Agenda',type:'agenda',urgent:true,action:"nav(document.querySelector('[data-page=agenda]'),'agenda')"});
-    S.agenda.filter(a=>!a.fait&&a.date===today).forEach(op=>{
+    S.agenda.filter(a=>!a._deleted&&!a.fait&&a.date===today).forEach(op=>{
       notifs.push({icon:'📅',msg:`Aujourd'hui : ${op.titre}`,sub:op.montant?F(op.montant):'',type:'agenda',urgent:false,action:"nav(document.querySelector('[data-page=agenda]'),'agenda')"});
     });
   }
@@ -8647,24 +8647,26 @@ function delDevis(id){
 function rPlanning(){
   if(!S.plannings)S.plannings=[];
   const today=D();
-  const urgents=S.plannings.filter(p=>p.date<today&&p.statut!=='Terminé');
-  const proches=S.plannings.filter(p=>p.date===today&&p.statut!=='Terminé');
+  // FIX : exclure les plannings soft-deleted
+  const _plannings = S.plannings.filter(p=>!p._deleted);
+  const urgents=_plannings.filter(p=>p.date<today&&p.statut!=='Terminé');
+  const proches=_plannings.filter(p=>p.date===today&&p.statut!=='Terminé');
   // Tâches dont la date d'alerte est atteinte ou dépassée (et non terminées)
-  const alertesActives=S.plannings.filter(p=>p.dateAlerte&&p.statut!=='Terminé'&&p.dateAlerte<=today);
+  const alertesActives=_plannings.filter(p=>p.dateAlerte&&p.statut!=='Terminé'&&p.dateAlerte<=today);
   // Tâches avec alerte à venir (dans les 7 prochains jours)
-  const alertesProches=S.plannings.filter(p=>p.dateAlerte&&p.statut!=='Terminé'&&p.dateAlerte>today&&Math.ceil((new Date(p.dateAlerte)-new Date())/864e5)<=7);
+  const alertesProches=_plannings.filter(p=>p.dateAlerte&&p.statut!=='Terminé'&&p.dateAlerte>today&&Math.ceil((new Date(p.dateAlerte)-new Date())/864e5)<=7);
 
   document.getElementById('content').innerHTML=`
     ${urgents.length?`<div class="alert alert-r">⏰ ${urgents.length} tâche(s) en retard !</div>`:''}
     ${proches.length?`<div class="alert alert-a">📅 ${proches.length} tâche(s) pour aujourd'hui</div>`:''}
     ${alertesActives.length?`<div class="alert" style="background:var(--purple-bg);color:var(--purple);border:1px solid #c5aef0">🔔 ${alertesActives.length} alerte(s) de rappel déclenchée(s)</div>`:''}
     <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="ct">Total tâches</div><div class="mv">${N(S.plannings.length)}</div></div>
-      <div class="card"><div class="ct">En cours</div><div class="mv" style="color:var(--navy)">${N(S.plannings.filter(p=>p.statut==='En cours').length)}</div></div>
-      <div class="card"><div class="ct">Terminées</div><div class="mv" style="color:var(--green)">${N(S.plannings.filter(p=>p.statut==='Terminé').length)}</div></div>
+      <div class="card"><div class="ct">Total tâches</div><div class="mv">${N(_plannings.length)}</div></div>
+      <div class="card"><div class="ct">En cours</div><div class="mv" style="color:var(--navy)">${N(_plannings.filter(p=>p.statut==='En cours').length)}</div></div>
+      <div class="card"><div class="ct">Terminées</div><div class="mv" style="color:var(--green)">${N(_plannings.filter(p=>p.statut==='Terminé').length)}</div></div>
     </div>
     <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="ct">🔴 Haute priorité</div><div class="mv" style="color:var(--red)">${N(S.plannings.filter(p=>p.priorite==='haute'&&p.statut!=='Terminé').length)}</div></div>
+      <div class="card"><div class="ct">🔴 Haute priorité</div><div class="mv" style="color:var(--red)">${N(_plannings.filter(p=>p.priorite==='haute'&&p.statut!=='Terminé').length)}</div></div>
       <div class="card"><div class="ct">🔔 Alertes actives</div><div class="mv" style="color:var(--purple)">${N(alertesActives.length)}</div></div>
       <div class="card"><div class="ct">⏳ À venir (7j)</div><div class="mv" style="color:var(--amber)">${N(alertesProches.length)}</div></div>
     </div>
@@ -8688,8 +8690,8 @@ function rPlanning(){
       }).join('')}
     </div>`:''}
     <p class="st">Tâches & Rappels</p>
-    ${S.plannings.length===0?'<div class="empty"><p>Aucune tâche planifiée</p><small>Ajoutez des rappels de paiement, livraisons, rendez-vous...</small></div>':
-    S.plannings.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p=>{
+    ${_plannings.length===0?'<div class="empty"><p>Aucune tâche planifiée</p><small>Ajoutez des rappels de paiement, livraisons, rendez-vous...</small></div>':
+    _plannings.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p=>{
       const diff=Math.ceil((new Date(p.date)-new Date())/864e5);
       const cls=diff<0?'urgent':diff<=3?'proche':'ok';
       const dateLbl=diff<0?`Retard ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui':diff===1?'Demain':`Dans ${diff}j`;
@@ -8755,7 +8757,9 @@ function terminerPlan(id){
   majNotifBadge();
 }
 function delPlan(id){
-  S.plannings=S.plannings.filter(p=>p.id!=id);
+  // FIX soft delete : marquer _deleted au lieu de filter physique (évite réapparition après sync Firebase)
+  const _pl=S.plannings.find(p=>p.id==id);
+  if(_pl){_pl._deleted=true;_pl.ts=Date.now();}
   saveData();toast('🗑️ Tâche supprimée');rPlanning();
 }
 
@@ -9772,7 +9776,8 @@ function saveTrancheAchat(acid){
   if(restant===0){
     ac.statut='Payé';
     ac.solde=true;
-    if(S.dettesAchats) S.dettesAchats=S.dettesAchats.filter(d=>d.id!=acid);
+    // FIX soft delete : marquer _deleted au lieu de filter (évite réapparition après sync)
+    if(S.dettesAchats){ const _da=S.dettesAchats.find(d=>d.id==acid); if(_da){_da._deleted=true;_da.ts=Date.now();} }
     toast(`✅ Achat soldé ! ${F(mt)} débité sur "${mode}"`);
   } else {
     toast(`✅ ${F(mt)} débité sur "${mode}" · Reste: ${F(restant)}`);
@@ -14032,7 +14037,7 @@ function rClotureCaisse(){
       // La vraie liquidité disponible = solde théorique du jour de la boutique active
       // (pas la somme brute des comptes qui ne reflète pas la journée en cours)
       const liquiditeJour = soldeTheorique;
-      const totalDettes = (S.dettesAchats||[]).filter(d=>d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+      const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
       const liquiditeNette = liquiditeJour - totalDettes;
 
       const cmdsActives = (S.commandes||[]).filter(c=>c.statut!=='Reçue');
@@ -18808,7 +18813,7 @@ function renderBilan(){
   const stock = getStockBoutique(bid);
   const comptes = S.comptes||[];
   const dettesC = (S.dettesPerso||[]).filter(d=>d.type==='client'||!d.type);
-  const dettesF = (S.dettesAchats||[]);
+  const dettesF = (S.dettesAchats||[]).filter(d=>!d._deleted);
   const valStock = stock.reduce((s,a)=>(s+(a.si||0)*(a.pa||0)),0);
   const totalCreances = dettesC.filter(d=>d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
   const totalCaisse = comptes.reduce((s,c)=>(s+(c.solde||0)),0);
@@ -19329,7 +19334,7 @@ function renderFourniOverview(){
     const dernier = ach.sort((a,b)=>b.date.localeCompare(a.date))[0];
     const evals = (S.fourni_evals||[]).filter(e=>e.fid==f.id);
     const score = evals.length ? Math.round(evals.reduce((s,e)=>s+e.score,0)/evals.length*10)/10 : null;
-    const dettes = (S.dettesAchats||[]).filter(d=>d.fid==f.id&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+    const dettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.fid==f.id&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
     return {...f, total, totalYear, dernier, score, dettes, nbCommandes:ach.length};
   }).sort((a,b)=>b.totalYear-a.totalYear);
 
@@ -19423,7 +19428,7 @@ function renderFourniEval(){
 function renderFourniDelais(){
   const bid = getBid();
   const today = D();
-  const dettes = (S.dettesAchats||[]).filter(d=>d.statut!=='Soldé');
+  const dettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé');
   const achats = getAchatsBoutique(bid).filter(a=>a.statut==='À payer');
   const totalDu = dettes.reduce((s,d)=>s+(d.montant||0),0);
   const enRetard = dettes.filter(d=>d.echeance&&d.echeance<today);
@@ -19536,7 +19541,7 @@ function renderFourniCapacite(){
   const pct = liquidite>0&&totalCmds>0 ? Math.min(100,Math.round(liquidite/totalCmds*100)) : (liquidite>0?100:0);
 
   // 5. Dettes fournisseurs non soldées
-  const totalDettes = (S.dettesAchats||[]).filter(d=>d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+  const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
   const liquiditeNette = liquidite - totalDettes;
 
   const jauge = (val,max,color)=>{
@@ -20332,11 +20337,11 @@ async function masterSave(){
     at: new Date().toISOString()
   };
 
-  // FIX : bloquer la réception du signal sur CET appareil pendant 15s
-  // (évite que le PC s'écrase lui-même avec les données Firebase après un Master Save)
+  // FIX : bloquer la réception du signal sur CET appareil pendant 30s
+  // (Firebase peut prendre jusqu'à 20s à propager selon la connexion)
   _justDidMasterSave = true;
   clearTimeout(_justDidMasterSaveTimer);
-  _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 15000);
+  _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 30000);
 
   await db.ref('christmedia/master_save').set(signal);
 
@@ -20369,8 +20374,8 @@ function activerListenerMasterSave(){
       console.log('[MASTER SAVE] Signal ignoré — cet appareil vient d\'émettre le Master Save');
       return;
     }
-    // Sécurité supplémentaire : même email + moins de 15s
-    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 15000);
+    // Sécurité supplémentaire : même email + moins de 30s
+    const estEmetteur = (S.session?.email === signal.email) && (Date.now() - signal.ts < 30000);
     _dernierMasterSaveTs = signal.ts;
     if(estEmetteur) return;
 
