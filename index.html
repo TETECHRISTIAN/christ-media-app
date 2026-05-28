@@ -11560,13 +11560,32 @@ function delAgendaDefinitif(id){
   saveData();rAgenda();toast('🗑️ Opération supprimée définitivement sur tous les appareils');
 }
 
-function resetToutAgenda(){
-  if(!S.agenda||S.agenda.length===0){toast('ℹ️ Aucune opération à supprimer');return;}
-  const total=S.agenda.filter(a=>!a._deleted).length;
-  if(!confirm(`⚠️ Réinitialisation complète\n\nCela va supprimer TOUTES les ${total} opération(s) récurrentes sur tous les appareils.\n\nCette action est irréversible. Continuer ?`))return;
-  const now=Date.now();
-  S.agenda.forEach(a=>{ a._deleted=true; a.ts=now; });
-  saveData();rAgenda();toast('✅ Agenda réinitialisé — toutes les opérations supprimées');
+async function resetToutAgenda(){
+  const total=(S.agenda||[]).filter(a=>!a._deleted).length;
+  if(total===0){toast('ℹ️ Aucune opération à supprimer');return;}
+  if(!confirm(`⚠️ Réinitialisation complète
+
+Cela va supprimer DÉFINITIVEMENT toutes les ${total} opération(s) sur TOUS les appareils.
+
+Les données Firebase seront écrasées. Continuer ?`))return;
+
+  // 1. Vider complètement en mémoire (pas de soft-delete — tableau vide = rien à fusionner)
+  S.agenda = [];
+
+  // 2. Écraser directement Firebase avec [] — empêche tout re-import lors du prochain sync
+  if(fbReady && db){
+    try{
+      await db.ref('christmedia/data/agenda').set([]);
+      toast('🔥 Firebase agenda écrasé');
+    } catch(e){
+      console.warn('Firebase agenda reset error:', e);
+    }
+  }
+
+  // 3. Sauvegarder l'état local et Firebase complet
+  saveData();
+  rAgenda();
+  toast('✅ Agenda réinitialisé sur tous les appareils');
 }
 
 // Vérifier les opérations en retard au démarrage
