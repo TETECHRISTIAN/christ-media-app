@@ -11552,7 +11552,9 @@ function delAgendaDefinitif(id){
     let match=false;
     if(a.id==id) match=true;
     else if(a.parent_id && (a.parent_id===parentId || a.parent_id===id)) match=true;
-    else if(!a.fait && a.titre===titre && a.type===type && a.recurrence===rec) match=true;
+    // Attraper les occurrences sans parent_id (créées avant l'intro de parent_id)
+    // On compare titre+type+recurrence sur TOUTES les occurrences (faites ou non)
+    else if(a.titre===titre && a.type===type && a.recurrence===rec) match=true;
     if(match){ a._deleted=true; a.ts=now; }
   });
   saveData();rAgenda();toast('🗑️ Opération supprimée définitivement sur tous les appareils');
