@@ -11227,7 +11227,7 @@ function rAgenda(){
           ${comptesOpts}
         </select>
       </div>`:''}
-      <button class="btn btn-sm" onclick="agendaFiltrePeriode='tout';agendaFiltreType='tout';agendaFiltreCompte='tout';rAgenda()" style="margin-top:14px">↺ Réinitialiser</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px">        <button class="btn btn-sm" onclick="agendaFiltrePeriode='tout';agendaFiltreType='tout';agendaFiltreCompte='tout';rAgenda()">↺ Réinitialiser filtres</button>        <button class="btn btn-sm" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="resetToutAgenda()">🗑️ Tout supprimer</button>      </div>
     </div>
 
     ${enRetard.length?`<p class="st" style="color:var(--red)">🚨 En retard (${enRetard.length})</p>${renderOps(enRetard)}<div style="margin-bottom:16px"></div>`:''}
@@ -11558,6 +11558,15 @@ function delAgendaDefinitif(id){
     if(match){ a._deleted=true; a.ts=now; }
   });
   saveData();rAgenda();toast('🗑️ Opération supprimée définitivement sur tous les appareils');
+}
+
+function resetToutAgenda(){
+  if(!S.agenda||S.agenda.length===0){toast('ℹ️ Aucune opération à supprimer');return;}
+  const total=S.agenda.filter(a=>!a._deleted).length;
+  if(!confirm(`⚠️ Réinitialisation complète\n\nCela va supprimer TOUTES les ${total} opération(s) récurrentes sur tous les appareils.\n\nCette action est irréversible. Continuer ?`))return;
+  const now=Date.now();
+  S.agenda.forEach(a=>{ a._deleted=true; a.ts=now; });
+  saveData();rAgenda();toast('✅ Agenda réinitialisé — toutes les opérations supprimées');
 }
 
 // Vérifier les opérations en retard au démarrage
