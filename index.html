@@ -11046,9 +11046,10 @@ function saveEditModele(id){
   m.notes=document.getElementById('mod-notes').value;
   saveData();closeModal();toast('✅ Modèle modifié');rModeles();
 }
-function appliquerModele(id){
+function appliquerModele(id, agendaOpId){
   const m=S.modeles.find(x=>x.id==id);if(!m)return;
   const devise=(S.parametres&&S.parametres.devise)||'FCFA';
+  const _agendaRef=agendaOpId||null;
   modal(`<div class="mft">▶ Appliquer — ${m.nom}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:14px;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Type</span><strong>${m.type}</strong></div>
@@ -11060,9 +11061,9 @@ function appliquerModele(id){
     <div class="fg"><label class="fl">${m.type==='transfert'?'Compte source':'Compte'}</label>${selectComptes('app-cid', m.cid||premierCompteId())}</div>
     ${m.type==='transfert'?`<div class="fg"><label class="fl">Compte destination</label>${selectComptes('app-cid2', m.cid2||premierCompteId())}</div>`:''}
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="app-notes" value="${m.notes||''}"></div>
-    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-success" onclick="confirmerModele(${id})">✅ Confirmer</button></div>`);
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-success" onclick="confirmerModele(${id},${_agendaRef})">✅ Confirmer</button></div>`);
 }
-function confirmerModele(id){
+function confirmerModele(id, agendaOpId){
   const m=S.modeles.find(x=>x.id==id);if(!m)return;
   const mt=+document.getElementById('app-mt').value||m.montant;
   const cid=document.getElementById('app-cid').value;
@@ -11108,8 +11109,22 @@ function confirmerModele(id){
     debiterCompte(cid,mt);
     crediterCompte(cid2,mt);
   }
+  // Si appelé depuis l'agenda (bouton ▶), marquer l'opération comme faite et générer la suivante
+  if(agendaOpId){
+    const agOp=S.agenda&&S.agenda.find(a=>a.id==agendaOpId);
+    if(agOp && !agOp.fait){
+      agOp.fait=true; agOp.dateFait=date;
+      if(agOp.recurrence){
+        const baseDate=agOp.date>D()?agOp.date:D();
+        const nextDate=_nextRecDate(baseDate, agOp.recurrence);
+        const parentId=agOp.parent_id||agOp.id;
+        _creerOccurrence(agOp, nextDate, parentId);
+      }
+    }
+  }
   saveData();closeModal();
   toast(`✅ ${m.nom} — ${F(mt)} enregistré`);
+  if(agendaOpId) rAgenda();
 }
 
 // ════════════════════════════════════════════════════
@@ -11165,7 +11180,7 @@ function rAgenda(){
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;margin-left:10px">
               <button class="btn btn-sm btn-success" onclick="marquerFait(${op.id})" title="Marquer fait">✓</button>
-              ${op.modeleId?`<button class="btn btn-sm btn-primary" onclick="appliquerModele(${op.modeleId})" title="Appliquer modèle">▶</button>`:''}
+              ${op.modeleId?`<button class="btn btn-sm btn-primary" onclick="appliquerModele(${op.modeleId},${op.id})" title="Appliquer modèle">▶</button>`:''}
               <button class="btn-icon btn-sm" onclick="editAgenda(${op.id})" title="Modifier" style="color:var(--navy);font-size:12px">✏️</button>
               ${op.recurrence?`<button class="btn-icon btn-sm" onclick="delAgendaDefinitif(${op.id})" title="Supprimer définitivement (toutes occurrences)" style="color:var(--red);font-weight:700;font-size:13px">🗑️</button>`:`<button class="btn-icon btn-sm" onclick="delAgenda(${op.id})" style="color:var(--red)">✕</button>`}
             </div>
