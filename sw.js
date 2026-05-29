@@ -1,6 +1,5 @@
 const CACHE_NAME = 'christ-media-v1';
 const BASE = '/christ-media-app/';
-
 const URLS_TO_CACHE = [
   BASE,
   BASE + 'index.html',
@@ -56,14 +55,25 @@ self.addEventListener('message', event => {
 // Fetch : réseau en priorité, cache en fallback
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
-  // Ne pas intercepter les requêtes Firebase
+
+  // FIX : ne jamais intercepter les schémas non-HTTP (chrome-extension://, data:, blob:, etc.)
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+
+  // Ne pas intercepter les requêtes Firebase / Google APIs
   if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (response && response.status === 200) {
+        // FIX : ne mettre en cache que les réponses HTTP(S) valides et non-opaques
+        if (
+          response &&
+          response.status === 200 &&
+          response.type !== 'opaque' &&
+          (url.protocol === 'https:' || url.protocol === 'http:')
+        ) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
         }
