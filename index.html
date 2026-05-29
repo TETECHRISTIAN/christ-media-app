@@ -20487,9 +20487,12 @@ function afficherDiag(){
   <!-- BARRE DE RACCOURCIS FLOTTANTE -->
 
 
-<!-- ERUDA : console DevTools mobile (admin uniquement) -->
+<!-- ERUDA : console DevTools mobile — activée si erreur détectée -->
 <script>
 (function(){
+  var _erreurs = 0;
+  var _erudaActif = false;
+
   function chargerEruda(){
     if(window._erudaCharge) return;
     window._erudaCharge = true;
@@ -20497,24 +20500,33 @@ function afficherDiag(){
     s.src = 'https://cdn.jsdelivr.net/npm/eruda';
     s.onload = function(){
       eruda.init();
-      console.log('[ERUDA] Console mobile activée — Admin uniquement');
+      eruda.show(); // ouvrir automatiquement
+      console.warn('[ERUDA] Erreur détectée — Console activée');
     };
     document.head.appendChild(s);
   }
 
-  // Vérifier toutes les secondes si la session admin est active
-  var _check = setInterval(function(){
-    try {
-      var role = window.S && window.S.session && window.S.session.role;
-      if(role === 'admin'){
-        clearInterval(_check);
-        chargerEruda();
-      }
-    } catch(e){}
-  }, 1000);
+  // Intercepter window.onerror (erreurs JS)
+  var _origOnError = window.onerror;
+  window.onerror = function(msg, src, line, col, err){
+    _erreurs++;
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+    if(_origOnError) return _origOnError(msg, src, line, col, err);
+  };
 
-  // Sécurité : arrêter après 30s si pas de session
-  setTimeout(function(){ clearInterval(_check); }, 30000);
+  // Intercepter les promesses rejetées non gérées
+  window.addEventListener('unhandledrejection', function(e){
+    _erreurs++;
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+  });
+
+  // Intercepter console.error
+  var _origError = console.error;
+  console.error = function(){
+    _erreurs++;
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+    _origError.apply(console, arguments);
+  };
 })();
 </script>
 </body>
