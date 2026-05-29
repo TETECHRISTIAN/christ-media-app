@@ -1899,6 +1899,16 @@ async function saveToFirebase(data){
     }
 
     // ─── ADMIN : écriture complète (comportement original) ───
+    // Nettoyer les undefined avant envoi Firebase (Firebase rejette les undefined)
+    function _cleanUndef(obj){
+      if(Array.isArray(obj)) return obj.map(_cleanUndef);
+      if(obj && typeof obj==='object'){
+        const out={};
+        Object.keys(obj).forEach(k=>{ const v=obj[k]; out[k]=v===undefined?null:_cleanUndef(v); });
+        return out;
+      }
+      return obj;
+    }
     const update={};
     update['version'] = data.version || Date.now();
     update['nid']     = data.nid || 200;
@@ -1906,9 +1916,9 @@ async function saveToFirebase(data){
     update['utilisateurs']    = data.utilisateurs || [];
     update['boutique_active'] = data.boutique_active || null;
     FB_COLLECTIONS.forEach(col=>{
-      if(data[col] !== undefined) update[col] = data[col];
+      if(data[col] !== undefined) update[col] = _cleanUndef(data[col]);
     });
-    db.ref('christmedia/data').update(update)
+    db.ref('christmedia/data').update(_cleanUndef(update))
       .then(()=>{
         setSyncStatus('online','Synchronisé ✓');
         resolve(true);
@@ -11301,9 +11311,11 @@ function saveAgenda(){
     id:genId(),titre,date,
     type:document.getElementById('ag-type').value,
     montant:+document.getElementById('ag-mt').value||0,
+    cat:document.getElementById('ag-cat')?document.getElementById('ag-cat').value||'':'',
     cid:document.getElementById('ag-cid').value||null,
     recurrence:document.getElementById('ag-rec').value||null,
-    modeleId,notes:document.getElementById('ag-notes').value,fait:false
+    modeleId,notes:document.getElementById('ag-notes').value,fait:false,
+    ts:Date.now()
   });
   saveData();closeModal();toast('✅ Opération planifiée');rAgenda();
 }
@@ -11441,7 +11453,7 @@ function _creerOccurrence(op, dateStr, parentId){
   if(existe) return null;
   const nouv={
     id:genId(), titre:op.titre, type:op.type, montant:op.montant,
-    cat:op.cat, cid:op.cid, notes:op.notes, recurrence:op.recurrence,
+    cat:op.cat||'', cid:op.cid||null, notes:op.notes||'', recurrence:op.recurrence||null,
     modeleId:op.modeleId||null, date:dateStr, fait:false, dateFait:null,
     parent_id:parentId, ts:Date.now()
   };
