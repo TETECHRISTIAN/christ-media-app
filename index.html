@@ -2317,7 +2317,7 @@ const IS_LOW_RAM = false;
 const DISABLE_HEAVY_REALTIME = true; // Toujours utiliser le listener léger par collection
 
 // Collections synchronisées sur mobile (listener léger)
-const MOBILE_SYNC_COLLECTIONS = ['ventes','achats','stock','clients','fournisseurs','depenses','dettes'];
+const MOBILE_SYNC_COLLECTIONS = ['ventes','achats','stock','clients','fournisseurs','depenses','dettes','agenda','planning','plannings'];
 
 // Fusion d'une collection Firebase avec la collection locale
 // Règle : pour chaque item, on garde la version avec le ts le plus récent
@@ -2374,7 +2374,10 @@ function activerListenerVentesOnly(){
     clients:['clients','vente'],
     fournisseurs:['fournisseurs','achats'],
     achats:['achats','stock','dashboard'],
-    depenses:['depenses','finance','dashboard']
+    depenses:['depenses','finance','dashboard'],
+    agenda:['agenda'],
+    planning:['agenda'],
+    plannings:['agenda']
   };
   MOBILE_SYNC_COLLECTIONS.forEach(col=>{
     try{
@@ -2502,7 +2505,7 @@ async function startFirebaseSync(){
       if(!DISABLE_HEAVY_REALTIME){
         activerListenerTempsReel();
       } else {
-        console.warn('[SYNC] Temps réel global désactivé (mobile/low-ram). Mode ventes-only activé.');
+        console.log('[SYNC] Mode listener léger actif (multi-collection).');
         // Android/low-RAM : activer un listener léger uniquement sur les ventes
         // (permet une vraie synchronisation en temps réel sans crash mémoire)
         activerListenerVentesOnly();
@@ -11771,7 +11774,7 @@ function swEnvoyerVersion(){
   });
 }
 
-if('serviceWorker' in navigator){
+if('serviceWorker' in navigator && location.protocol !== 'null:' && location.protocol !== 'file:'){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
       .then(reg => {
