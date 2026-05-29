@@ -1832,6 +1832,8 @@ const FB_COLLECTIONS=[
 
 async function saveToFirebase(data){
   if(!fbReady||!db)return false;
+  // SUPERVISEUR : lecture seule — jamais d'écriture Firebase
+  if(S.session?.role === 'superviseur') return false;
   return new Promise(resolve=>{
     setSyncStatus('syncing','Synchronisation...');
 
@@ -2468,7 +2470,7 @@ async function startFirebaseSync(){
         // Un vendeur/caissier reçoit les données mais n'écrit JAMAIS au démarrage —
         // c'est lui qui causait l'écrasement des ventes du PC quand il se connectait.
         const _roleSession = S.session?.role || null;
-        const _peutEcrireAuDemarrage = (_roleSession === 'admin');
+        const _peutEcrireAuDemarrage = (_roleSession === 'admin') && (_roleSession !== 'superviseur');
         if(_peutEcrireAuDemarrage && localLatestTs > remoteLatestTs){
           // Admin avec données plus récentes (travail hors ligne) → pousser
           await saveToFirebase(S);
@@ -2577,7 +2579,7 @@ window.addEventListener('online', async()=>{
     // FIX TELEPHONE : à la reconnexion, vendeur/caissier ne republie pas tout Firebase
     // (seul l'admin republie, ou si des ops hors-ligne sont en attente)
     const _roleReconnect = S.session?.role || null;
-    const _peutRepublier = (_roleReconnect === 'admin') || (nbOps > 0);
+    const _peutRepublier = (_roleReconnect === 'admin') && (_roleReconnect !== 'superviseur') || (nbOps > 0 && _roleReconnect !== 'superviseur');
     if(!_peutRepublier){
       console.log('[SYNC] Reconnexion vendeur — lecture seule, pas de republication globale');
       setSyncStatus('online','Synchronisé ✓');
@@ -3457,7 +3459,7 @@ function rDash(){
   if(!S||!S.ventes)return;
   // Tableau de bord adapté au rôle
   const role = S.session?.role || 'vendeur';
-  if(role !== 'admin') { rDashVendeur(); return; }
+  if(role !== 'admin' && role !== 'superviseur') { rDashVendeur(); return; }
   // ─── Données filtrées par boutique active ───
   const bid = getBid();
   const bActive = getBoutiqueActive();
@@ -9049,9 +9051,9 @@ function majBadgeUtilisateur(){
   document.getElementById('cu-emoji').textContent=s.emoji||'👤';
   const b = getBoutiqueActive();
   document.getElementById('cu-nom').textContent=s.nom||'';
-  document.getElementById('cu-role-badge').textContent=s.role==='admin'?'Admin':s.role==='caissier'?'Caissier':'Vendeur';
+  document.getElementById('cu-role-badge').textContent=s.role==='admin'?'Admin':s.role==='caissier'?'Caissier':s.role==='superviseur'?'Superviseur':'Vendeur';
   // Remplir le pill topbar
-  const roleLabel=s.role==='admin'?('👑 Admin · '+b.emoji+' '+b.nom):s.role==='caissier'?('💰 Caissier · '+b.emoji+' '+b.nom):('🛒 Vendeur · '+b.emoji+' '+b.nom);
+  const roleLabel=s.role==='admin'?('👑 Admin · '+b.emoji+' '+b.nom):s.role==='caissier'?('💰 Caissier · '+b.emoji+' '+b.nom):s.role==='superviseur'?('👁️ Superviseur · '+b.emoji+' '+b.nom):('🛒 Vendeur · '+b.emoji+' '+b.nom);
   const av=document.getElementById('up-avatar');const pn=document.getElementById('up-name');
   const pr=document.getElementById('up-role');const dn=document.getElementById('udd-name');
   const de=document.getElementById('udd-email');const dr=document.getElementById('udd-role');
@@ -9082,6 +9084,14 @@ const PERMISSIONS = {
     pages: ['dashboard','vente','services','clients','calculatrice','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','live'],
     label: '🛒 Vendeur',
     couleur: '#c5d0e8'
+  },
+  superviseur: {
+    pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
+            'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
+            'comptes','devis','planning','calculatrice','parametres',
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande'],
+    label: '👁️ Superviseur',
+    couleur: '#7ec8e3'
   },
   coach:()=>'<select id="coach-cat" onchange="rCoach()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="analyse">📊 Mon analyse</option><option value="lecons">📚 Leçons</option><option value="ia">🤖 Coach IA</option></select>'
 };
@@ -9342,7 +9352,8 @@ function addUserWS(){
     <div class="fr">
       <div class="fg"><label class="fl">Prénom / Nom</label><input class="fi" id="wu-nom" placeholder="Ex: Marie Kodjovi"></div>
       <div class="fg"><label class="fl">Rôle</label>
-        <select class="fs" id="wu-role"><option value="vendeur">🛒 Vendeur</option><option value="caissier">💰 Caissier</option><option value="admin">👑 Administrateur</option></select>
+        <select class="fs" id="wu-role"><option value="vendeur">🛒 Vendeur</option>
+                  <option value="superviseur">👁️ Superviseur</option><option value="caissier">💰 Caissier</option><option value="admin">👑 Administrateur</option></select>
       </div>
     </div>
     <div class="fg"><label class="fl">🏪 Boutique assignée</label>
@@ -20487,21 +20498,20 @@ function afficherDiag(){
   <!-- BARRE DE RACCOURCIS FLOTTANTE -->
 
 
-<!-- ERUDA : console DevTools mobile — activée si erreur détectée -->
+<!-- ERUDA : console DevTools mobile — erreur OU rôle superviseur -->
 <script>
 (function(){
-  var _erreurs = 0;
   var _erudaActif = false;
 
-  function chargerEruda(){
+  function chargerEruda(autoOpen){
     if(window._erudaCharge) return;
     window._erudaCharge = true;
     var s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/eruda';
     s.onload = function(){
       eruda.init();
-      eruda.show(); // ouvrir automatiquement
-      console.warn('[ERUDA] Erreur détectée — Console activée');
+      if(autoOpen) eruda.show();
+      console.log('[ERUDA] Console mobile activée');
     };
     document.head.appendChild(s);
   }
@@ -20509,24 +20519,32 @@ function afficherDiag(){
   // Intercepter window.onerror (erreurs JS)
   var _origOnError = window.onerror;
   window.onerror = function(msg, src, line, col, err){
-    _erreurs++;
-    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(true); }
     if(_origOnError) return _origOnError(msg, src, line, col, err);
   };
 
   // Intercepter les promesses rejetées non gérées
-  window.addEventListener('unhandledrejection', function(e){
-    _erreurs++;
-    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+  window.addEventListener('unhandledrejection', function(){
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(true); }
   });
 
   // Intercepter console.error
   var _origError = console.error;
   console.error = function(){
-    _erreurs++;
-    if(!_erudaActif){ _erudaActif = true; chargerEruda(); }
+    if(!_erudaActif){ _erudaActif = true; chargerEruda(true); }
     _origError.apply(console, arguments);
   };
+
+  // Superviseur : charger Eruda discrètement (sans auto-ouvrir)
+  var _checkSuperviseur = setInterval(function(){
+    try {
+      if(window.S && window.S.session && window.S.session.role === 'superviseur'){
+        clearInterval(_checkSuperviseur);
+        if(!_erudaActif){ _erudaActif = true; chargerEruda(false); }
+      }
+    } catch(e){}
+  }, 1000);
+  setTimeout(function(){ clearInterval(_checkSuperviseur); }, 30000);
 })();
 </script>
 </body>
