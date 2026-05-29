@@ -11600,9 +11600,9 @@ Les données Firebase seront écrasées. Continuer ?`))return;
 }
 
 // Vérifier les opérations en retard au démarrage
-let _dedupAgendaRunning=false;
+let _dedupAgendaDone=false;
 function dedupAgenda(){
-  if(_dedupAgendaRunning) return;
+  if(_dedupAgendaDone) return;
   if(!S.agenda||S.agenda.length===0) return;
   // FIX : exclure d'abord les items soft-deleted de l'affichage (ils restent dans S.agenda
   // pour la sync Firebase mais ne doivent pas s'afficher ni être dédupliqués comme actifs)
@@ -11629,12 +11629,12 @@ function dedupAgenda(){
   if(total.length!==S.agenda.length){
     const nb=S.agenda.length-total.length;
     S.agenda=total;
-    _dedupAgendaRunning=true;
+    _dedupAgendaDone=true;
     saveData();
-    _dedupAgendaRunning=false;
     console.log(`[Agenda] ${nb} doublon(s) supprimé(s)`);
   } else {
     S.agenda=total;
+    _dedupAgendaDone=true;
   }
 }
 
