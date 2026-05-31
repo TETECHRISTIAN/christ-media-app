@@ -1762,6 +1762,8 @@ function initPresence(){
 }
 
 function renderPresenceBar(users){
+  // Surveiller si un autre admin est connecté en même temps
+  surveillerDoubleAdmin(users);
   const bar=document.getElementById('presence-bar');
   if(!bar)return;
   if(users.length===0){bar.innerHTML='';return;}
@@ -18574,12 +18576,96 @@ function aperçuTicket(){ /* appelé en temps réel — pas d\'action pour l\'in
 
 
 // Initialiser les améliorations au démarrage
+
+// ══════════════════════════════════════════════════════════════════
+// ─── RAPPEL MASTER SAVE DU SOIR ───
+// Vérifie toutes les heures si un Master Save a été fait aujourd'hui
+// Si 20h passé et pas de Master Save → toast d'alerte pour l'admin
+// ══════════════════════════════════════════════════════════════════
+let _rappelMasterSaveTimer = null;
+let _dernierMasterSaveJour = null; // date YYYY-MM-DD du dernier Master Save connu
+
+function initRappelMasterSave(){
+  if(S.session?.role !== 'admin') return; // seulement pour l'admin
+  if(_rappelMasterSaveTimer) clearInterval(_rappelMasterSaveTimer);
+
+  // Vérifier immédiatement puis toutes les 30 minutes
+  _verifierRappelMasterSave();
+  _rappelMasterSaveTimer = setInterval(_verifierRappelMasterSave, 30 * 60 * 1000);
+}
+
+async function _verifierRappelMasterSave(){
+  if(S.session?.role !== 'admin') return;
+  const now = new Date();
+  const heure = now.getHours();
+  const today = now.toISOString().slice(0,10);
+
+  // Seulement entre 20h et 23h
+  if(heure < 20 || heure >= 23) return;
+
+  // Vérifier la date du dernier Master Save dans Firebase
+  try {
+    if(!fbReady || !db) return;
+    const snap = await db.ref('christmedia/master_save').once('value');
+    const signal = snap.val();
+    if(signal && signal.at){
+      const dateSignal = signal.at.slice(0,10);
+      if(dateSignal === today){
+        // Master Save déjà fait aujourd'hui → pas de rappel
+        _dernierMasterSaveJour = today;
+        return;
+      }
+    }
+    // Pas de Master Save aujourd'hui → alerter
+    if(_dernierMasterSaveJour !== today){
+      _dernierMasterSaveJour = today; // éviter de spammer
+      toast('⏰ Rappel : pensez à faire le Master Save avant de fermer !', 8000);
+      // Badge visuel sur le bouton
+      const btn = document.getElementById('master-save-btn');
+      if(btn && !btn.querySelector('.rappel-soir')){
+        const badge = document.createElement('div');
+        badge.className = 'rappel-soir';
+        badge.style.cssText = 'font-size:9px;color:#fff;opacity:.8;margin-top:2px;text-align:center';
+        badge.textContent = '⏰ À faire ce soir';
+        btn.appendChild(badge);
+        setTimeout(()=>badge.remove(), 60000);
+      }
+    }
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── DÉTECTION DOUBLE ADMIN CONNECTÉ ───
+// Utilise le système de présence existant
+// Si un autre admin est détecté en ligne → avertissement
+// ══════════════════════════════════════════════════════════════════
+let _doubleAdminAlerteEnvoyee = false;
+
+function surveillerDoubleAdmin(users){
+  if(S.session?.role !== 'admin') return;
+  const autresAdmins = users.filter(u =>
+    u.role === 'admin' &&
+    u.nom !== S.session?.nom &&
+    (Date.now() - u.ts) < 60000 // actif dans la dernière minute
+  );
+  if(autresAdmins.length > 0 && !_doubleAdminAlerteEnvoyee){
+    _doubleAdminAlerteEnvoyee = true;
+    const noms = autresAdmins.map(u => u.emoji + ' ' + u.nom).join(', ');
+    toast(`⚠️ Autre compte admin détecté en ligne : ${noms}. Évitez de faire Master Save simultanément.`, 10000);
+    setTimeout(()=>{ _doubleAdminAlerteEnvoyee = false; }, 5 * 60 * 1000); // reset après 5 min
+  } else if(autresAdmins.length === 0){
+    _doubleAdminAlerteEnvoyee = false;
+  }
+}
+
+
 function initAméliorations(){
   initAutoBackup();
   checkAlertesStock();
   dedupAgenda();
   checkAgendaRetard();
   initAutocomplete();
+  initRappelMasterSave();
 }
 
 
@@ -20542,6 +20628,8 @@ async function masterSave(){
   await db.ref('christmedia/master_save').set(signal);
 
   toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
+  // Réinitialiser le rappel du soir (Master Save vient d'être fait)
+  _dernierMasterSaveJour = new Date().toISOString().slice(0,10);
   // Notifier le SW local pour renouveler le cache
   swEnvoyerVersion();
   if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
