@@ -1831,84 +1831,25 @@ const FB_COLLECTIONS=[
 ];
 
 async function saveToFirebase(data){
-  if(!fbReady||!db)return false;
-  // SUPERVISEUR : lecture seule — jamais d'écriture Firebase
-  if(S.session?.role === 'superviseur') return false;
+  if(!fbReady||!db) return false;
+  // ── PRINCIPE FONDAMENTAL ──
+  // Seul l'admin (Christian) écrit sur Firebase.
+  // Les vendeurs/caissiers travaillent uniquement en localStorage local.
+  // Ils reçoivent la synchro via le listener masterSave (lecture seule).
+  if(S.session?.role !== 'admin') return false;
+
+  // ─── ADMIN : écriture complète ───
+  function _cleanUndef(obj){
+    if(Array.isArray(obj)) return obj.map(_cleanUndef);
+    if(obj && typeof obj==='object'){
+      const out={};
+      Object.keys(obj).forEach(k=>{ const v=obj[k]; out[k]=v===undefined?null:_cleanUndef(v); });
+      return out;
+    }
+    return obj;
+  }
   return new Promise(resolve=>{
     setSyncStatus('syncing','Synchronisation...');
-
-    const _role = S.session?.role || null;
-    const _bid  = S.session?.boutique_id || null;
-    const _estAdmin = (_role === 'admin');
-
-    // ─── VERROU PAR BOUTIQUE ───
-    // Un vendeur/caissier ne peut écrire que les collections filtrées par son bid.
-    // Il ne touche JAMAIS : version globale, parametres, utilisateurs, boutique_active,
-    // ni les données des autres boutiques.
-    // Seul l'admin (Chromebook de Christian) écrit tout.
-
-    if(!_estAdmin && _bid){
-      // Collections filtrables par bid
-      const COLS_FILTREES = ['ventes','achats','depenses','stock','dettes','dettesAchats',
-        'clients','fournisseurs','devis','commandes','promos','depots','audit','live',
-        'ventes_services','services'];
-      const update = {};
-      COLS_FILTREES.forEach(col=>{
-        if(!Array.isArray(data[col])) return;
-        // N'envoyer que les items de SA boutique (bid correspondant)
-        const filtered = data[col].filter(x => {
-          if(!x) return false;
-          // Si l'item a un bid → vérifier qu'il correspond
-          if(x.bid != null) return String(x.bid) === String(_bid);
-          // Si pas de bid → laisser passer (item sans boutique = partagé)
-          return true;
-        });
-        // Fusionner avec ce qui est déjà dans Firebase pour ne pas effacer
-        // les données des autres boutiques — on utilise update par chemin
-        update[col + '_partial_' + _bid] = null; // marqueur interne (ignoré)
-        // On écrit uniquement via saveCollectionBoutiqueFirebase
-      });
-      // Écriture sécurisée : collection par collection, filtrée par bid
-      const promises = COLS_FILTREES.map(col=>{
-        if(!Array.isArray(data[col])) return Promise.resolve();
-        const filtered = data[col].filter(x=>{
-          if(!x) return false;
-          if(x.bid != null) return String(x.bid) === String(_bid);
-          return true;
-        });
-        if(filtered.length === 0) return Promise.resolve();
-        // Lire d'abord Firebase pour ne pas écraser les autres boutiques
-        return db.ref('christmedia/data/'+col).once('value').then(snap=>{
-          const fbVal = snap.val();
-          const fbArr = fbVal ? (Array.isArray(fbVal) ? fbVal : Object.values(fbVal)) : [];
-          // Garder les items des autres boutiques intacts
-          const autresBoutiques = fbArr.filter(x=>{
-            if(!x) return false;
-            if(x.bid != null) return String(x.bid) !== String(_bid);
-            return false; // sans bid → sera géré par l'admin
-          });
-          // Fusionner : autres boutiques + données de ce vendeur
-          const fusion = [...autresBoutiques, ...filtered];
-          return db.ref('christmedia/data/'+col).set(fusion);
-        });
-      });
-      Promise.all(promises)
-        .then(()=>{ setSyncStatus('online','Synchronisé ✓'); resolve(true); })
-        .catch(e=>{ console.warn('Firebase vendeur write error:',e); setSyncStatus('offline','Hors ligne'); resolve(false); });
-      return;
-    }
-
-    // ─── ADMIN : écriture complète (comportement original) ───
-    // Nettoyer les undefined avant envoi Firebase (Firebase rejette les undefined)
-    function _cleanUndef(obj){
-      if(Array.isArray(obj)) return obj.map(_cleanUndef);
-      if(obj && typeof obj==='object'){
-        const out={};
-        Object.keys(obj).forEach(k=>{ const v=obj[k]; out[k]=v===undefined?null:_cleanUndef(v); });
-        return out;
-      }
-      return obj;
-    }
     const update={};
     update['version'] = data.version || Date.now();
     update['nid']     = data.nid || 200;
@@ -1919,15 +1860,8 @@ async function saveToFirebase(data){
       if(data[col] !== undefined) update[col] = _cleanUndef(data[col]);
     });
     db.ref('christmedia/data').update(_cleanUndef(update))
-      .then(()=>{
-        setSyncStatus('online','Synchronisé ✓');
-        resolve(true);
-      })
-      .catch(e=>{
-        console.warn('Firebase write error:',e);
-        setSyncStatus('offline','Hors ligne');
-        resolve(false);
-      });
+      .then(()=>{ setSyncStatus('online','Synchronisé ✓'); resolve(true); })
+      .catch(e=>{ console.warn('Firebase write error:',e); setSyncStatus('offline','Hors ligne'); resolve(false); });
   });
 }
 
@@ -1936,6 +1870,8 @@ async function saveToFirebase(data){
 // pour éviter les conflits entre appareils qui sauvent simultanément
 async function saveCollectionFirebase(col, data){
   if(!fbReady||!db)return false;
+  // Seul l'admin écrit sur Firebase
+  if(S.session?.role !== 'admin') return false;
   return new Promise(resolve=>{
     const update={};
     update[col] = data;
@@ -1948,6 +1884,167 @@ async function saveCollectionFirebase(col, data){
       .catch(e=>{console.warn('Firebase col error:',e);resolve(false);});
   });
 }
+
+
+// ══════════════════════════════════════════════════════════════════
+// ─── ZONE D'ATTENTE VENDEURS (Option A) ───
+// Les vendeurs écrivent dans christmedia/pending/bid_X/
+// L'admin lit, fusionne, puis publie via Master Save
+// ══════════════════════════════════════════════════════════════════
+
+// Collections pertinentes pour les ventes vendeurs
+const PENDING_COLLECTIONS = [
+  'ventes','ventes_services','achats','depenses','clients','fournisseurs',
+  'dettes','dettesAchats','devis','audit'
+];
+
+// Vendeur → envoie ses données locales dans la zone pending
+async function envoyerPendingFirebase(){
+  if(!fbReady||!db) return false;
+  const role = S.session?.role;
+  if(role === 'admin' || role === 'superviseur') return false; // admin n'utilise pas pending
+  const bid = S.session?.boutique_id;
+  if(!bid) return false;
+
+  const path = 'christmedia/pending/bid_' + bid;
+  const payload = { ts: Date.now(), bid: bid, nom: S.session?.nom || 'Vendeur' };
+  PENDING_COLLECTIONS.forEach(col => {
+    if(Array.isArray(S[col])){
+      // N'envoyer que les items de SA boutique (ou sans bid)
+      payload[col] = S[col].filter(x => {
+        if(!x) return false;
+        if(x.bid != null) return String(x.bid) === String(bid);
+        return true;
+      });
+    }
+  });
+
+  try {
+    await db.ref(path).set(payload);
+    console.log('[PENDING] Données envoyées dans la zone d\'attente (bid=' + bid + ')');
+    // Afficher badge de confirmation discrète
+    setSyncStatus('online', '📤 En attente admin');
+    setTimeout(() => setSyncStatus('online', 'Synchronisé ✓'), 4000);
+    return true;
+  } catch(e) {
+    console.warn('[PENDING] Erreur envoi:', e);
+    return false;
+  }
+}
+
+// Admin → lit toutes les zones pending, fusionne dans S, retourne true si données trouvées
+async function absorberPendingFirebase(){
+  if(!fbReady||!db) return false;
+  if(S.session?.role !== 'admin') return false;
+
+  let totalAbsorbes = 0;
+  try {
+    const snap = await db.ref('christmedia/pending').once('value');
+    const pending = snap.val();
+    if(!pending) { console.log('[PENDING] Aucune donnée en attente'); return false; }
+
+    const bids = Object.keys(pending);
+    for(const bidKey of bids){
+      const zone = pending[bidKey];
+      if(!zone || !zone.ts) continue;
+
+      // Fusionner chaque collection de la zone dans S
+      PENDING_COLLECTIONS.forEach(col => {
+        if(!Array.isArray(zone[col]) || zone[col].length === 0) return;
+        if(!Array.isArray(S[col])) S[col] = [];
+
+        const existingIds = new Set(S[col].map(x => String(x.id)));
+        let nb = 0;
+        zone[col].forEach(item => {
+          if(!item || item.id == null) return;
+          const key = String(item.id);
+          if(!existingIds.has(key)){
+            S[col].push(item);
+            existingIds.add(key);
+            nb++;
+          } else {
+            // Mettre à jour si l'item pending est plus récent
+            const idx = S[col].findIndex(x => String(x.id) === key);
+            if(idx !== -1){
+              const existingTs = S[col][idx].ts || 0;
+              const pendingTs  = item.ts || 0;
+              if(pendingTs > existingTs) S[col][idx] = item;
+            }
+          }
+        });
+        if(nb > 0) totalAbsorbes += nb;
+      });
+
+      console.log('[PENDING] Zone absorbée:', bidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
+    }
+
+    if(totalAbsorbes > 0){
+      saveLocal(S);
+      toast('📥 ' + totalAbsorbes + ' enregistrement(s) récupérés depuis les vendeurs', 4000);
+    }
+
+    // Nettoyer la zone pending après absorption
+    await db.ref('christmedia/pending').remove();
+    console.log('[PENDING] Zone d\'attente nettoyée après absorption');
+    return totalAbsorbes > 0;
+
+  } catch(e) {
+    console.warn('[PENDING] Erreur absorption:', e);
+    return false;
+  }
+}
+
+// Badge admin : nombre de zones pending en attente
+async function verifierPendingDisponible(){
+  if(!fbReady||!db||S.session?.role !== 'admin') return;
+  try {
+    const snap = await db.ref('christmedia/pending').once('value');
+    const pending = snap.val();
+    if(!pending) { _masquerBadgePending(); return; }
+    const nb = Object.keys(pending).length;
+    if(nb > 0){
+      _afficherBadgePending(nb);
+    } else {
+      _masquerBadgePending();
+    }
+  } catch(e) {}
+}
+
+function _afficherBadgePending(nb){
+  const btn = document.getElementById('master-save-btn');
+  if(!btn) return;
+  let badge = document.getElementById('pending-zone-badge');
+  if(!badge){
+    badge = document.createElement('span');
+    badge.id = 'pending-zone-badge';
+    badge.style.cssText = 'display:inline-block;background:#e53e3e;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;animation:pulse 1.5s infinite';
+    btn.appendChild(badge);
+  }
+  badge.textContent = nb + ' vendeur' + (nb > 1 ? 's' : '') + ' en attente';
+}
+
+function _masquerBadgePending(){
+  const badge = document.getElementById('pending-zone-badge');
+  if(badge) badge.remove();
+}
+
+// Listener temps réel : admin voit apparaître le badge dès qu'un vendeur envoie
+let _pendingListener = null;
+function activerListenerPending(){
+  if(!fbReady||!db||S.session?.role !== 'admin') return;
+  if(_pendingListener) return;
+  _pendingListener = db.ref('christmedia/pending').on('value', snap => {
+    const pending = snap.val();
+    if(!pending){ _masquerBadgePending(); return; }
+    const nb = Object.keys(pending).length;
+    if(nb > 0){
+      _afficherBadgePending(nb);
+    } else {
+      _masquerBadgePending();
+    }
+  });
+}
+
 
 // ─── LISTENER TEMPS RÉEL ───
 let _realtimeListener=null;
@@ -2150,9 +2247,15 @@ async function saveData(){
   saveLocal(S);
   if(typeof majNotifBadge==='function') majNotifBadge();
   // FIX TELEPHONE : vendeur et caissier écrivent toujours vers Firebase pour leurs ventes
-  // (ils doivent pouvoir enregistrer des ventes) — mais on bloque uniquement la republication
-  // globale au DEMARRAGE (voir startFirebaseSync). Ici on laisse passer.
-  if(fbReady&&navigator.onLine){
+  // PRINCIPE : seul l'admin écrit sur Firebase (via Master Save).
+  // Les vendeurs/caissiers envoient leurs données dans la zone d'attente pending.
+  const _roleSD = S.session?.role;
+  if(fbReady && navigator.onLine && _roleSD !== 'admin' && _roleSD !== 'superviseur'){
+    // Vendeur/caissier → zone d'attente (debounce 3s pour éviter flood Firebase)
+    clearTimeout(window._pendingDebounce);
+    window._pendingDebounce = setTimeout(() => envoyerPendingFirebase(), 3000);
+  }
+  if(fbReady&&navigator.onLine&&S.session?.role==='admin'){
     // FIX : délai porté à 10s pour couvrir les connexions lentes (Togo)
     // Évite que le listener reçoive notre propre mise à jour et rafraîchisse inutilement
     // Reset immédiat après succès pour ne pas bloquer les mises à jour légitimes
@@ -2283,7 +2386,16 @@ function rafraichirPageCourante(){
 async function manualSync(){
   if(!navigator.onLine){toast('📵 Pas de connexion internet');setSyncStatus('offline','Hors ligne');return;}
   if(!fbReady){toast('⚠️ Firebase non initialisé');return;}
-  setSyncStatus('syncing','Synchronisation...');
+  // PRINCIPE : seul l'admin pousse vers Firebase
+  if(S.session?.role !== 'admin'){
+    // Vendeur/caissier : juste lire et fusionner (pas d'écriture)
+    setSyncStatus('syncing','Réception...');
+    const remote = await loadFromFirebase();
+    if(remote){ appliquerEtatFusionne(fusionnerDonnees(remote, S)); saveLocal(S); }
+    setSyncStatus('online','Synchronisé ✓');
+    rafraichirPageCourante();
+    return;
+  }
   toast('🔄 Synchronisation en cours...');
   const remote = await loadFromFirebase();
   if(remote){
@@ -2586,10 +2698,9 @@ window.addEventListener('online', async()=>{
       const merged = fusionnerDonnees(S, remote);
       appliquerEtatFusionne(merged);
     }
-    // FIX TELEPHONE : à la reconnexion, vendeur/caissier ne republie pas tout Firebase
-    // (seul l'admin republie, ou si des ops hors-ligne sont en attente)
+    // PRINCIPE : seul l'admin republie vers Firebase à la reconnexion
     const _roleReconnect = S.session?.role || null;
-    const _peutRepublier = (_roleReconnect === 'admin') && (_roleReconnect !== 'superviseur') || (nbOps > 0 && _roleReconnect !== 'superviseur');
+    const _peutRepublier = (_roleReconnect === 'admin');
     if(!_peutRepublier){
       console.log('[SYNC] Reconnexion vendeur — lecture seule, pas de republication globale');
       setSyncStatus('online','Synchronisé ✓');
@@ -11584,7 +11695,7 @@ Les données Firebase seront écrasées. Continuer ?`))return;
   S.agenda = [];
 
   // 2. Écraser directement Firebase avec [] — empêche tout re-import lors du prochain sync
-  if(fbReady && db){
+  if(fbReady && db && S.session?.role === 'admin'){
     try{
       await db.ref('christmedia/data/agenda').set([]);
       toast('🔥 Firebase agenda écrasé');
@@ -18236,7 +18347,7 @@ function initAutoBackup(){
   const freq=p.autoBackupFreq||0; // 0=désactivé, sinon minutes
   if(!freq)return;
   _autoBackupTimer=setInterval(async()=>{
-    if(fbReady&&navigator.onLine){
+    if(fbReady&&navigator.onLine&&S.session?.role==='admin'){
       await saveToFirebase(S);
       const now=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       setSyncStatus('online',`Sauvegardé à ${now}`);
@@ -20383,6 +20494,14 @@ async function masterSave(){
   const origHtml = btn ? btn.innerHTML : '';
   if(btn){ btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/></svg> Envoi...'; btn.style.opacity='0.7'; }
 
+  // Étape 0 : absorber les données en attente des vendeurs avant de publier
+  if(navigator.onLine){
+    const btnLabel = btn ? btn.innerHTML : '';
+    if(btn) btn.innerHTML = '📥 Récupération vendeurs...';
+    await absorberPendingFirebase();
+    if(btn) btn.innerHTML = btnLabel;
+  }
+
   // Générer une version maître (timestamp)
   genVersion();
   S.version = Date.now();
@@ -20431,6 +20550,9 @@ let _justDidMasterSaveTimer = null;
 function activerListenerMasterSave(){
   if(!fbReady || !db) return;
   if(_masterSaveListener) return; // déjà actif
+
+  // Activer le listener pending pour badge admin
+  activerListenerPending();
 
   _masterSaveListener = db.ref('christmedia/master_save').on('value', async (snap) => {
     const signal = snap.val();
