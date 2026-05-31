@@ -13948,19 +13948,25 @@ function rClotureCaisse(){
 
   // ── Données du jour par boutique ──
   const ventesJour = (S.ventes||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.statut==='Payé');
-  // Avances reçues sur services (crédit partiel) — encaissées aujourd'hui
+  // Services du jour : payés intégralement OU avec avance encaissée
+  const svcsPayesJour = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.statut==='Payé' && !(v.avance>0));
   const svcsAvanceJour = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && (!bid || d.bid==bid));
 
   // ── Totaux par compte ──
   const comptes = (S.comptes||[]).filter(c => !bid || c.bid==bid || !c.bid);
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0)
+    + svcsPayesJour.reduce((s,v)=>s+v.mt,0)
     + svcsAvanceJour.reduce((s,v)=>s+(v.avance||0),0);
   const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
 
   // ── Ventes par mode de paiement → compte ──
   const ventesParCompte = {};
   ventesJour.forEach(v => {
+    const key = v.cid || v.mode || 'Espèces';
+    ventesParCompte[key] = (ventesParCompte[key]||0) + v.mt;
+  });
+  svcsPayesJour.forEach(v => {
     const key = v.cid || v.mode || 'Espèces';
     ventesParCompte[key] = (ventesParCompte[key]||0) + v.mt;
   });
@@ -13993,12 +13999,13 @@ function rClotureCaisse(){
   let totalTheorique = 0;
   const detailBoutiques = boutiques.map(b => {
     const bVentes = (S.ventes||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.statut==='Payé');
+    const bSvcsPayes = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.statut==='Payé' && !(v.avance>0));
     const bSvcsAvance = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && v.bid==b.id && v.avance>0);
     const bDeps   = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && d.bid==b.id);
     const bRevs   = (S.revenus||[]).filter(r => r.date && r.date.startsWith(today) && r.bid==b.id);
     const bHistorique = (S.clotures_caisse||[]).filter(c => c.bid==b.id).sort((a,b2)=>b2.ts-a.ts);
     const bOuverture = bHistorique[0] ? bHistorique[0].solde_fermeture : 0;
-    const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
+    const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsPayes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
     const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
     const bRevsTotal   = bRevs.reduce((s,r)=>s+r.mt,0);
     const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal;
@@ -14029,7 +14036,7 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid var(--green)">
         <div class="ct">Ventes encaissées</div>
         <div class="mv" style="color:var(--green)">${F(totalVentes)}</div>
-        <div style="font-size:11px;color:var(--text3)">${ventesJour.length+svcsAvanceJour.length} transaction${(ventesJour.length+svcsAvanceJour.length)>1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text3)">${ventesJour.length+svcsPayesJour.length+svcsAvanceJour.length} transaction${(ventesJour.length+svcsPayesJour.length+svcsAvanceJour.length)>1?'s':''}</div>
       </div>
       <div class="card" style="border-left:3px solid var(--red)">
         <div class="ct">Dépenses</div>
@@ -14246,9 +14253,11 @@ function rClotureCaisse(){
       const d30 = today30.toISOString().slice(0,10);
       const bid2 = getBid();
       const ventesRecentes = (S.ventes||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé');
+      const svcsRecentsPayes = (S.ventes_services||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé'&&!(v.avance>0));
       const svcsRecents = (S.ventes_services||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.avance>0);
       const revsRecents = (S.revenus||[]).filter(r=>r.date>=d30&&(!bid2||r.bid==bid2));
       const totalEntrees30 = ventesRecentes.reduce((s,v)=>s+v.mt,0)
+        + svcsRecentsPayes.reduce((s,v)=>s+v.mt,0)
         + svcsRecents.reduce((s,v)=>s+(v.avance||0),0)
         + revsRecents.reduce((s,v)=>s+v.mt,0);
       const depsRecentes = (S.depenses||[]).filter(d=>d.date>=d30&&(!bid2||d.bid==bid2));
@@ -14570,9 +14579,10 @@ function ouvrirModalCloture(){
   const dev = (S.parametres||{}).devise || 'FCFA';
 
   const ventesJour = (S.ventes||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const svcsPayesJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé'&&!(v.avance>0));
   const svcsAvanceJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d=>d.date&&d.date.startsWith(today)&&(!bid||d.bid==bid));
-  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
+  const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsPayesJour2.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
   const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
 
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
