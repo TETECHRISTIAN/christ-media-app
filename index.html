@@ -7972,6 +7972,8 @@ document.addEventListener('keydown', e => {
   // ── Ctrl/Cmd combos (toujours actifs) ──
   if((e.ctrlKey||e.metaKey) && e.key==='k'){ e.preventDefault(); ouvrirRecherche(); return; }
   if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); manualSync(); toast('🔄 Synchronisation...'); return; }
+  if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key==='M'){ e.preventDefault(); masterSave(); return; }
+  if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key==='P'){ e.preventDefault(); toggleModePresentation(); return; }
 
   // ── Escape ──
   if(e.key==='Escape'){
@@ -9099,8 +9101,10 @@ function _ouvrirSession(u){
   try{majBoutiqueUI();}catch(e){}
   try{toast(`✅ Bienvenue ${u.nom} !`);}catch(e){}
   try{addAudit('LOGIN','Connexion','Connexion de '+u.nom+' ('+u.role+')',null,null);}catch(e){}
+  try{logConnexionDetaille(u);}catch(e){}
   setTimeout(()=>{try{initPresence();}catch(e){}},1000);
   if(u.role==='admin') setTimeout(()=>{try{checkGdriveAutoBackup();}catch(e){}},3000);
+  if(u.role==='admin'||u.role==='superviseur') setTimeout(()=>{try{afficherResumeQuotidien();}catch(e){}},3500);
   if(!S.ventes)S.ventes=[];
   if(!S.stock)S.stock=[];
   if(!S.achats)S.achats=[];
@@ -14714,6 +14718,24 @@ function ouvrirModalCloture(){
   // Vérifier si clôture déjà faite aujourd'hui
   const dejaFaite = historique.find(c=>c.date===today);
 
+  // BLOCAGE : une seule clôture par jour
+  if(dejaFaite){
+    const heureFaite = dejaFaite.heure || dejaFaite.date;
+    modal(`
+      <div style="font-weight:700;font-size:16px;margin-bottom:16px">🔒 Clôture déjà effectuée</div>
+      <div style="background:var(--amber-bg);color:var(--amber);padding:14px;border-radius:var(--rs);margin-bottom:16px;font-size:13px;border:1px solid var(--amber-light)">
+        <div style="font-weight:700;margin-bottom:6px">⚠️ Une clôture a déjà été enregistrée aujourd'hui</div>
+        <div>Date : <strong>${today}</strong> — Heure : <strong>${heureFaite}</strong></div>
+        <div style="margin-top:6px;font-size:12px;opacity:.8">Pour corriger une erreur, utilisez l'Historique des clôtures.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeModal()" style="flex:1">Fermer</button>
+        <button class="btn" onclick="closeModal();nav(document.querySelector('[data-page=hist_clotures]'),'hist_clotures')" style="flex:1;border-color:var(--navy);color:var(--navy)">📒 Voir historique</button>
+      </div>
+    `);
+    return;
+  }
+
   modal(`
     <div style="font-weight:700;font-size:16px;margin-bottom:16px">✅ Clôture de caisse — ${today}</div>
 
@@ -15867,6 +15889,28 @@ function checkGdriveAutoBackup(){
       sauvegarderGoogleDrive();
     }
   }, 5000);
+}
+
+// Sauvegarde Drive quotidienne automatique — vérification à intervalles réguliers
+let _driveQuotidienTimer = null;
+function initDriveQuotidien(){
+  if(S.session?.role !== 'admin') return;
+  if(_driveQuotidienTimer) clearInterval(_driveQuotidienTimer);
+  // Vérifier toutes les heures si la sauvegarde du jour a été faite
+  _driveQuotidienTimer = setInterval(async ()=>{
+    const p = S.parametres || {};
+    if(!p.gdriveAutoBackup) return;
+    const today = D();
+    if(p.gdriveLastBackup && p.gdriveLastBackup.startsWith(today)) return;
+    // Pas encore fait aujourd'hui → lancer si en ligne et token dispo
+    if(navigator.onLine && _gdriveToken){
+      toast('☁️ Sauvegarde Drive quotidienne en cours...', 2000);
+      await sauvegarderGoogleDrive();
+    } else if(navigator.onLine){
+      // Pas de token → juste télécharger le fichier en rappel
+      toast('💾 Rappel : pensez à faire votre sauvegarde Drive aujourd\'hui !', 6000);
+    }
+  }, 60 * 60 * 1000); // toutes les heures
 }
 
 
@@ -18391,6 +18435,25 @@ function voirHistoPrix(aid){
 function checkAlertesStock(){
   const al=S.stock.filter(a=>sa(a)<=a.seuil&&sa(a)>=0);
   const ruptures=S.stock.filter(a=>sa(a)===0);
+  // Badge rouge dans la sidebar sur le lien Stock
+  const stockNav = document.querySelector('.ni[data-page="stock"]');
+  if(stockNav){
+    let badge = stockNav.querySelector('.stock-alert-badge');
+    if(al.length > 0){
+      if(!badge){
+        badge = document.createElement('span');
+        badge.className = 'stock-alert-badge';
+        badge.style.cssText = 'background:#e53e3e;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:auto;flex-shrink:0';
+        stockNav.style.display = 'flex';
+        stockNav.style.alignItems = 'center';
+        stockNav.appendChild(badge);
+      }
+      badge.textContent = al.length;
+      badge.title = ruptures.length > 0 ? ruptures.length+' rupture(s)' : al.length+' article(s) bas';
+    } else if(badge){
+      badge.remove();
+    }
+  }
   if(al.length===0)return;
   const msg=ruptures.length>0
     ?`⚠️ ${ruptures.length} rupture(s) · ${al.length-ruptures.length} article(s) bas`
@@ -18659,6 +18722,199 @@ function surveillerDoubleAdmin(users){
 }
 
 
+
+
+// ══════════════════════════════════════════════════════════════════
+// ─── RÉSUMÉ QUOTIDIEN À L'OUVERTURE ───
+// Affiché une seule fois par jour au login admin/superviseur
+// ══════════════════════════════════════════════════════════════════
+function afficherResumeQuotidien(){
+  const today = D();
+  const cle = 'resume_quotidien_' + today;
+  if(localStorage.getItem(cle)) return; // déjà affiché aujourd'hui
+  localStorage.setItem(cle, '1');
+
+  const bid = getBid();
+  const hier = new Date(); hier.setDate(hier.getDate()-1);
+  const hierStr = hier.toISOString().slice(0,10);
+
+  const ventesHier = (S.ventes||[]).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const svcsHier = (S.ventes_services||[]).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const depHier = (S.depenses||[]).filter(d=>d.date===hierStr&&(!bid||d.bid==bid));
+  const caHier = ventesHier.reduce((s,v)=>s+v.mt,0) + svcsHier.reduce((s,v)=>s+v.mt,0);
+  const depHierTotal = depHier.reduce((s,d)=>s+d.mt,0);
+  const soldeHier = caHier - depHierTotal;
+  const dev = (S.parametres||{}).devise||'FCFA';
+
+  // Stock critique
+  const stockCritique = (S.stock||[]).filter(a=>sa(a)<=a.seuil&&sa(a)>=0&&(!bid||a.bid==bid));
+  const ruptures = stockCritique.filter(a=>sa(a)===0);
+
+  // Clôture faite hier ?
+  const clotures = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid);
+  const clotureHier = clotures.find(c=>c.date===hierStr);
+
+  const F2 = n => n.toLocaleString('fr-FR')+' '+dev;
+  const couleurSolde = soldeHier >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Ne pas afficher si aucune donnée hier (premier démarrage)
+  if(caHier === 0 && depHierTotal === 0 && stockCritique.length === 0) return;
+
+  setTimeout(()=>{
+    modal(`
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px">☀️ Bonjour ${S.session?.nom||''} !</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Résumé du ${new Date(hierStr+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Ventes encaissées</div>
+          <div style="font-size:16px;font-weight:700;color:var(--green)">${F2(caHier)}</div>
+          <div style="font-size:10px;color:var(--text3)">${ventesHier.length+svcsHier.length} transaction(s)</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Dépenses</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red)">${F2(depHierTotal)}</div>
+          <div style="font-size:10px;color:var(--text3)">${depHier.length} dépense(s)</div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600">Solde net hier</span>
+        <span style="font-size:16px;font-weight:700;color:${couleurSolde}">${soldeHier>=0?'+':''}${F2(soldeHier)}</span>
+      </div>
+
+      ${stockCritique.length>0?`
+      <div style="background:var(--amber-bg);border:1px solid var(--amber-light);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px;font-size:12px">
+        <div style="font-weight:700;color:var(--amber);margin-bottom:4px">⚠️ Stock à surveiller (${stockCritique.length} article(s))</div>
+        ${ruptures.length>0?`<div style="color:var(--red);font-weight:600">🔴 ${ruptures.length} rupture(s) : ${ruptures.slice(0,3).map(a=>a.nom).join(', ')}</div>`:''}
+        ${stockCritique.filter(a=>sa(a)>0).slice(0,3).map(a=>`<div style="color:var(--amber)">• ${a.nom} : ${sa(a)} restant(s)</div>`).join('')}
+      </div>`:''  }
+
+      ${!clotureHier?`<div style="background:var(--red-bg,#fff0f0);border:1px solid var(--red);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--red)">
+        ⚠️ Aucune clôture de caisse enregistrée hier
+      </div>`:''}
+
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeModal()" style="flex:1">Fermer</button>
+        <button class="btn btn-primary" onclick="closeModal();nav(document.querySelector('[data-page=dashboard]'),'dashboard')" style="flex:1">📊 Tableau de bord</button>
+      </div>
+    `);
+  }, 2000); // délai pour laisser l'interface se charger
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ─── MODE PRÉSENTATION ───
+// Masque tous les montants en FCFA pour les réunions
+// Ctrl+Shift+P ou bouton dédié
+// ══════════════════════════════════════════════════════════════════
+let _modePresentation = false;
+
+function toggleModePresentation(){
+  _modePresentation = !_modePresentation;
+  let styleEl = document.getElementById('mode-presentation-style');
+  if(_modePresentation){
+    if(!styleEl){
+      styleEl = document.createElement('style');
+      styleEl.id = 'mode-presentation-style';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+      .mv, .card .mv, [class*="montant"], [class*="amount"] {
+        filter: blur(6px) !important;
+        user-select: none !important;
+        transition: filter .2s;
+      }
+      .mv:hover, .card .mv:hover {
+        filter: blur(0px) !important;
+      }
+    `;
+    toast('🙈 Mode présentation activé — montants masqués (survolez pour voir)', 4000);
+    // Bouton visuel dans le header
+    let btn = document.getElementById('btn-mode-pres');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.id = 'btn-mode-pres';
+      btn.title = 'Désactiver le mode présentation (Ctrl+Shift+P)';
+      btn.style.cssText = 'position:fixed;top:12px;right:60px;z-index:600;background:var(--amber);color:#fff;border:none;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit';
+      btn.textContent = '🙈 Mode réunion';
+      btn.onclick = toggleModePresentation;
+      document.body.appendChild(btn);
+    }
+  } else {
+    if(styleEl) styleEl.remove();
+    const btn = document.getElementById('btn-mode-pres');
+    if(btn) btn.remove();
+    toast('👁️ Mode présentation désactivé', 2000);
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ─── LOG DE CONNEXION ENRICHI ───
+// Enregistre appareil, heure, IP approximative à chaque login
+// ══════════════════════════════════════════════════════════════════
+async function logConnexionDetaille(user){
+  if(!fbReady || !db) return;
+  try {
+    const ua = navigator.userAgent;
+    const appareil = /Mobile|Android|iPhone|iPad/.test(ua) ? '📱 Mobile' :
+                     /Chrome/.test(ua) ? '💻 Chrome' :
+                     /Firefox/.test(ua) ? '🦊 Firefox' : '🖥️ Navigateur';
+    const log = {
+      ts: Date.now(),
+      date: D(),
+      heure: new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
+      nom: user.nom,
+      role: user.role,
+      appareil: appareil,
+      online: navigator.onLine
+    };
+    // Lire et ajouter au log (garder 100 dernières entrées)
+    const snap = await db.ref('christmedia/log_connexions').once('value');
+    const logs = snap.val() || [];
+    const logsArr = Array.isArray(logs) ? logs : Object.values(logs);
+    logsArr.unshift(log);
+    await db.ref('christmedia/log_connexions').set(logsArr.slice(0, 100));
+  } catch(e) { console.warn('Log connexion:', e); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── DÉCONNEXION AUTOMATIQUE PAR INACTIVITÉ ───
+// Vendeur/Caissier : 4h sans interaction → déconnexion auto
+// Superviseur : 8h → déconnexion auto
+// Admin : pas de déconnexion auto
+// ══════════════════════════════════════════════════════════════════
+let _inactiviteTimer = null;
+let _inactiviteWarningTimer = null;
+
+function initDeconnexionAuto(){
+  const role = S.session?.role;
+  if(role === 'admin') return; // admin jamais déconnecté auto
+  const delai = role === 'superviseur' ? 8 * 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
+  const warning = delai - 5 * 60 * 1000; // avertissement 5 min avant
+
+  function resetTimer(){
+    clearTimeout(_inactiviteTimer);
+    clearTimeout(_inactiviteWarningTimer);
+    // Avertissement 5 min avant expiration
+    _inactiviteWarningTimer = setTimeout(()=>{
+      toast('⚠️ Session expirée dans 5 minutes — touchez l\'écran pour rester connecté', 8000);
+    }, warning);
+    // Déconnexion effective
+    _inactiviteTimer = setTimeout(()=>{
+      toast('🔒 Session expirée — déconnexion automatique par sécurité', 4000);
+      setTimeout(()=>{ try{ deconnexion(); }catch(e){} }, 2000);
+    }, delai);
+  }
+
+  // Réinitialiser à chaque interaction utilisateur
+  ['click','keydown','touchstart','mousemove'].forEach(ev=>{
+    document.addEventListener(ev, resetTimer, { passive: true });
+  });
+  resetTimer(); // démarrer le timer
+}
+
 function initAméliorations(){
   initAutoBackup();
   checkAlertesStock();
@@ -18666,6 +18922,8 @@ function initAméliorations(){
   checkAgendaRetard();
   initAutocomplete();
   initRappelMasterSave();
+  initDeconnexionAuto();
+  initDriveQuotidien();
 }
 
 
@@ -20626,6 +20884,15 @@ async function masterSave(){
   _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 30000);
 
   await db.ref('christmedia/master_save').set(signal);
+
+  // Enregistrer dans l'historique des Master Save (30 derniers)
+  try {
+    const histSnap = await db.ref('christmedia/master_save_history').once('value');
+    const hist = histSnap.val() || [];
+    const histArr = Array.isArray(hist) ? hist : Object.values(hist);
+    histArr.unshift({ ...signal, date: signal.at.slice(0,10), heure: new Date(signal.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) });
+    await db.ref('christmedia/master_save_history').set(histArr.slice(0,30));
+  } catch(e) { console.warn('Historique MS:', e); }
 
   toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
   // Réinitialiser le rappel du soir (Master Save vient d'être fait)
