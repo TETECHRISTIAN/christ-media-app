@@ -2441,13 +2441,27 @@ function _fusionnerCollection(col, fbArr){
   // Charger le local d'abord
   local.forEach(item => { if(item&&item.id!=null) map.set(String(item.id), item); });
   // Fusionner avec Firebase : ne prendre un item Firebase que s'il est plus récent
+  // FIX resetToutAgenda : respecter les soft-delete locaux contre les items Firebase non-supprimés
   fbArr.forEach(fbItem => {
-    if(!fbItem || fbItem.id==null || fbItem._deleted) return;
+    if(!fbItem || fbItem.id==null) return;
     const k = String(fbItem.id);
+    // Cas 1 : item Firebase soft-deleted → propager seulement s'il est plus récent
+    if(fbItem._deleted){
+      if(!map.has(k)){
+        map.set(k, fbItem);
+      } else {
+        const localItem = map.get(k);
+        if(tsOf(fbItem) > tsOf(localItem)) map.set(k, fbItem);
+      }
+      return;
+    }
+    // Cas 2 : item Firebase non-supprimé
     if(!map.has(k)){
       map.set(k, fbItem);
     } else {
       const localItem = map.get(k);
+      // Si le local est soft-deleted et plus récent → la suppression locale prime (ex: resetToutAgenda)
+      if(localItem._deleted && tsOf(localItem) >= tsOf(fbItem)) return;
       const fbTs = tsOf(fbItem);
       const localTs = tsOf(localItem);
       if(fbTs > localTs){
@@ -2525,6 +2539,8 @@ function activerListenerVentesOnly(){
         if(latestFbTs > 0 && latestFbTs < localVer - 30000) return; // remote > 30s de retard
 
         S[col] = _fusionnerCollection(col, fbArr);
+        // Permettre une nouvelle déduplication après chaque sync agenda
+        if(col === 'agenda') _dedupAgendaDone = false;
         saveLocal(S);
         if((pagesParCol[col]||[]).includes(currentPage)){
           try{ rafraichirPageCourante(); }catch(e){}
@@ -11277,8 +11293,8 @@ function rAgenda(){
   const finSemaine=new Date();finSemaine.setDate(finSemaine.getDate()+7);
   const finSemaineStr=finSemaine.toISOString().split('T')[0];
 
-  // Appliquer filtres
-  let ops=S.agenda.filter(a=>!a.fait);
+  // Appliquer filtres — exclure les items soft-deleted (_deleted:true)
+  let ops=S.agenda.filter(a=>!a.fait&&!a._deleted);
   if(agendaFiltreType!=='tout') ops=ops.filter(a=>a.type===agendaFiltreType);
   if(agendaFiltreCompte!=='tout') ops=ops.filter(a=>a.cid==agendaFiltreCompte);
   if(agendaFiltrePeriode==='aujourd\'hui') ops=ops.filter(a=>a.date===today);
@@ -11290,7 +11306,7 @@ function rAgenda(){
   const aujd=ops.filter(a=>a.date===today);
   const demainOps=ops.filter(a=>a.date===demainStr);
   const suite=ops.filter(a=>a.date>demainStr);
-  const faits=S.agenda.filter(a=>a.fait).slice(-5).reverse();
+  const faits=S.agenda.filter(a=>a.fait&&!a._deleted).slice(-5).reverse();
 
   const couleurType={depense:'var(--red)',revenu:'var(--green)',achat:'var(--purple)',rappel:'var(--navy)',transfert:'var(--teal)'};
 
@@ -11326,9 +11342,9 @@ function rAgenda(){
 
   document.getElementById('content').innerHTML=`
     <div class="g3" style="margin-bottom:16px">
-      <div class="card" style="border-left:3px solid var(--red)"><div class="ct">En retard</div><div class="mv" style="color:var(--red)">${S.agenda.filter(a=>!a.fait&&a.date<today).length}</div></div>
-      <div class="card" style="border-left:3px solid var(--amber)"><div class="ct">Aujourd'hui</div><div class="mv" style="color:var(--amber)">${S.agenda.filter(a=>!a.fait&&a.date===today).length}</div></div>
-      <div class="card" style="border-left:3px solid var(--navy)"><div class="ct">À venir (7j)</div><div class="mv">${S.agenda.filter(a=>!a.fait&&a.date>today&&a.date<=finSemaineStr).length}</div></div>
+      <div class="card" style="border-left:3px solid var(--red)"><div class="ct">En retard</div><div class="mv" style="color:var(--red)">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date<today).length}</div></div>
+      <div class="card" style="border-left:3px solid var(--amber)"><div class="ct">Aujourd'hui</div><div class="mv" style="color:var(--amber)">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date===today).length}</div></div>
+      <div class="card" style="border-left:3px solid var(--navy)"><div class="ct">À venir (7j)</div><div class="mv">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date>today&&a.date<=finSemaineStr).length}</div></div>
     </div>
 
     <!-- Filtres -->
@@ -11704,20 +11720,27 @@ Cela va supprimer DÉFINITIVEMENT toutes les ${total} opération(s) sur TOUS les
 
 Les données Firebase seront écrasées. Continuer ?`))return;
 
-  // 1. Vider complètement en mémoire (pas de soft-delete — tableau vide = rien à fusionner)
-  S.agenda = [];
+  // 1. Soft-delete TOUS les items (y compris ceux déjà supprimés) avec ts récent
+  // Raison : un tableau vide [] serait ignoré par _fusionnerCollection des autres appareils
+  // qui réinjecteraient leurs items locaux. Le soft-delete garantit que la suppression
+  // gagne sur TOUS les appareils lors de la fusion (la version avec _deleted:true + ts récent prime)
+  const now = Date.now();
+  if(!S.agenda) S.agenda = [];
+  S.agenda = S.agenda.map(a => ({...a, _deleted:true, ts:now, fait:false}));
 
-  // 2. Écraser directement Firebase avec [] — empêche tout re-import lors du prochain sync
+  // 2. Pousser les items soft-deleted vers Firebase — chaque appareil les recevra
+  // et comprendra que ces items sont supprimés (la fusion respecte _deleted:true)
   if(fbReady && db && S.session?.role === 'admin'){
     try{
-      await db.ref('christmedia/data/agenda').set([]);
-      toast('🔥 Firebase agenda écrasé');
+      await db.ref('christmedia/data/agenda').set(S.agenda);
+      toast('🔥 Suppressions envoyées à Firebase');
     } catch(e){
       console.warn('Firebase agenda reset error:', e);
     }
   }
 
-  // 3. Sauvegarder l'état local et Firebase complet
+  // 3. Sauvegarder et rafraîchir (les items _deleted sont filtrés à l'affichage)
+  _dedupAgendaDone = false; // Permettre une nouvelle passe de déduplication
   saveData();
   rAgenda();
   toast('✅ Agenda réinitialisé sur tous les appareils');
