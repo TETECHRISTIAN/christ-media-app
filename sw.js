@@ -1,4 +1,4 @@
-const CACHE_NAME = 'christ-media-v2';
+const CACHE_NAME ='christ-media-v3';
 const BASE = '/christ-media-app/';
 const URLS_TO_CACHE = [
   BASE,
