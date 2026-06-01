@@ -5888,11 +5888,11 @@ function rTresorerie(){
   const foursB=(S.fournisseurs||[]).filter(f=>!f.bid||f.bid==bid);
   const clientsB=getClientsBoutique(bid);
   const detteFour=foursB.reduce((s,f)=>s+f.dette,0);
-  // Emprunts perso non soldés (argent qu'on doit rembourser) — filtrés par boutique active
-  const empruntsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
+  // Emprunts perso non soldés (argent qu'on doit rembourser) — vue globale toutes boutiques
+  const empruntsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
   const totalEmpruntsPerso=empruntsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  // Prêts perso non soldés (argent qu'on doit récupérer) — filtrés par boutique active
-  const pretsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
+  // Prêts perso non soldés (argent qu'on doit récupérer) — vue globale toutes boutiques
+  const pretsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
   const totalPretsPerso=pretsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   // Total dettes = fournisseurs + emprunts perso
   const totalDettes=detteFour+totalEmpruntsPerso;
@@ -10001,8 +10001,8 @@ function rDettes(){
   const dettesC=[...dettesC_ventes, ...dettesC_svcs.map(v=>({...v, _type:'service', mt:v.reste||v.mt}))];
   const resteC=dettesC_ventes.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0)
     + dettesC_svcs.reduce((s,v)=>s+(v.reste!=null?v.reste:v.mt),0);
-  const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
-  const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
+  const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
+  const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(!f.bid||f.bid==bid));
@@ -10016,9 +10016,10 @@ function rDettes(){
       const reste=d.montant-(d.rembourse||0);
       const pct=Math.round((d.rembourse||0)/d.montant*100);
       const compte=S.comptes&&S.comptes.find(c=>c.id==d.cid);
+      const boutD=(S.boutiques||[]).find(b=>b.id==d.bid)||(S.boutiques||[])[0]||{nom:'—',emoji:'🏪'};
       return`<tr>
         <td style="font-size:11px;font-family:'DM Mono',monospace">${d.date}</td>
-        <td class="tdm">${d.personne}</td>
+        <td class="tdm">${d.personne}<div style="font-size:10px;color:var(--text3);margin-top:2px">${boutD.emoji||'🏪'} ${boutD.nom}</div></td>
         <td><span class="badge" style="background:${d.typeDette==='emprunter'?'var(--red-bg)':'var(--green-bg)'};color:${d.typeDette==='emprunter'?'var(--red)':'var(--green)'}">${d.typeDette==='emprunter'?'📥 Emprunt':'📤 Prêt'}</span></td>
         <td style="font-weight:600">${F(d.montant)}</td>
         <td style="color:var(--green)">${F(d.rembourse||0)}</td>
