@@ -10432,6 +10432,7 @@ function genEcheancier(capital, tauxSaisi, tauxPeriodeType, duree, freq, amortTy
 function rembourserDette(id){
   const d=S.dettesPerso.find(x=>x.id==id);if(!d)return;
   const reste=d.montant-(d.rembourse||0);
+  const hasAmort=d.echeancier&&d.echeancier.length>0;
   modal(`<div class="mft">${d.typeDette==='emprunter'?'💳 Rembourser':'💰 Récupérer'} — ${d.personne}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Total</span><strong>${F(d.montant)}</strong></div>
@@ -10442,9 +10443,48 @@ function rembourserDette(id){
       <div class="fg"><label class="fl">Montant</label><input class="fi" type="number" id="rb-mt" value="${reste}" max="${reste}"></div>
       <div class="fg"><label class="fl">Compte</label>${selectComptes('rb-cid', d.cid||premierCompteId())}</div>
     </div>
+    ${!hasAmort?`<div style="border:1px dashed var(--navy);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">📊 Générer un tableau d'amortissement</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Nb versements</label><input class="fi" type="number" id="rb-duree" placeholder="ex: 24" min="1"></div>
+        <div class="fg"><label class="fl">Fréquence</label><select class="fi" id="rb-freq"><option value="hebdo">Hebdomadaire</option><option value="mensuel" selected>Mensuel</option><option value="trimestriel">Trimestriel</option></select></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Montant / versement (FCFA)</label><input class="fi" type="number" id="rb-verse" placeholder="ex: 10000" min="1"></div>
+        <div class="fg"><label class="fl">Date 1er versement</label><input class="fi" type="date" id="rb-date" value="${D()}"></div>
+      </div>
+      <button class="btn btn-sm" style="background:var(--navy);color:#fff;width:100%;margin-top:4px" onclick="genAmortDette(${id})">📊 Générer le tableau</button>
+    </div>`:''}
+    ${hasAmort?`<button class="btn btn-sm" style="color:var(--navy);border-color:var(--navy);width:100%;margin-bottom:8px" onclick="closeModal();voirTableauAmort(${id})">📊 Voir tableau d'amortissement</button>`:''}
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-success" onclick="saveRembours(${id})">${d.typeDette==='emprunter'?'✅ Rembourser':'✅ Récupérer'}</button>
     </div>`);
+}
+
+function genAmortDette(id){
+  const d=S.dettesPerso.find(x=>x.id==id);if(!d)return;
+  const duree=+document.getElementById('rb-duree').value||0;
+  const freq=document.getElementById('rb-freq').value;
+  const verse=+document.getElementById('rb-verse').value||0;
+  const dateDebut=document.getElementById('rb-date').value||D();
+  if(!duree||!verse)return toast('❌ Renseigne le nombre de versements et le montant');
+  const echeancier=genEcheancier(d.montant-(d.rembourse||0),0,'mensuel',duree,freq,'lineaire',dateDebut);
+  // Ajuster chaque mensualité au montant saisi (sans intérêts)
+  echeancier.forEach((e,i)=>{
+    e.mensualite=verse;
+    e.capital=verse;
+    e.interet=0;
+    e.solde=Math.max(0,(d.montant-(d.rembourse||0))-(verse*(i+1)));
+  });
+  d.echeancier=echeancier;
+  d.freq=freq;
+  d.duree=duree;
+  const derniereEch=echeancier[echeancier.length-1].date;
+  d.echeance=derniereEch;
+  saveData();
+  closeModal();
+  toast('✅ Tableau généré — '+duree+' versements de '+F(verse));
+  voirTableauAmort(id);
 }
 function saveRembours(id){
   const d=S.dettesPerso.find(x=>x.id==id);if(!d)return;
