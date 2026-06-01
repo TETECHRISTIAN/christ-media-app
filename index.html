@@ -5888,11 +5888,11 @@ function rTresorerie(){
   const foursB=(S.fournisseurs||[]).filter(f=>!f.bid||f.bid==bid);
   const clientsB=getClientsBoutique(bid);
   const detteFour=foursB.reduce((s,f)=>s+f.dette,0);
-  // Emprunts perso non soldés (argent qu'on doit rembourser)
-  const empruntsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
+  // Emprunts perso non soldés (argent qu'on doit rembourser) — filtrés par boutique active
+  const empruntsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
   const totalEmpruntsPerso=empruntsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  // Prêts perso non soldés (argent qu'on doit récupérer)
-  const pretsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
+  // Prêts perso non soldés (argent qu'on doit récupérer) — filtrés par boutique active
+  const pretsPerso=(S.dettesPerso||[]).filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
   const totalPretsPerso=pretsPerso.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   // Total dettes = fournisseurs + emprunts perso
   const totalDettes=detteFour+totalEmpruntsPerso;
@@ -10001,8 +10001,8 @@ function rDettes(){
   const dettesC=[...dettesC_ventes, ...dettesC_svcs.map(v=>({...v, _type:'service', mt:v.reste||v.mt}))];
   const resteC=dettesC_ventes.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0)
     + dettesC_svcs.reduce((s,v)=>s+(v.reste!=null?v.reste:v.mt),0);
-  const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé');
-  const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé');
+  const emprunts=S.dettesPerso.filter(d=>d.typeDette==='emprunter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
+  const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(!f.bid||f.bid==bid));
