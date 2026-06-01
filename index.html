@@ -2374,6 +2374,17 @@ function appliquerEtatFusionne(merged){
   }
   // Nettoyer les doublons d'agenda après chaque fusion Firebase
   if(S.agenda && S.agenda.length > 0) dedupAgenda();
+  // Migration bid : corriger les enregistrements sans bid à chaque fusion Firebase
+  (function(){
+    const defaultBid = (S.boutiques||[])[0]?.id || 1;
+    let modifie = false;
+    ['fournisseurs','dettesPerso','ventes','achats','depenses','clients','services','ventes_services','comptes','revenus','charges','commandes'].forEach(col=>{
+      (S[col]||[]).forEach(x=>{ if(!x.bid && !x._deleted){ x.bid=defaultBid; modifie=true; } });
+    });
+    if(modifie && S.session?.role==='admin' && typeof saveToFirebase==='function'){
+      saveToFirebase(S).then(()=>console.log('[MIGRATION] bid corrigés après fusion Firebase'));
+    }
+  })();
   saveLocal(S);
 }
 
@@ -12067,7 +12078,13 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.clients||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   // Migration dettesPerso : anciens emprunts/prêts sans bid → boutique par défaut
   (S.dettesPerso||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
-  if(modifie) saveLocal(S);
+  if(modifie){
+    saveLocal(S);
+    // Pousser vers Firebase si admin connecté — sinon la migration est écrasée au prochain chargement
+    if(S.session?.role==='admin' && typeof saveToFirebase==='function'){
+      saveToFirebase(S).then(()=>console.log('[MIGRATION] bid corrigés → Firebase mis à jour'));
+    }
+  }
 })();
 // ─── VENTE RAPIDE DEPUIS STOCK ───
 function venteRapideArticle(aid){
