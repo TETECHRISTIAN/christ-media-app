@@ -5894,8 +5894,11 @@ function rTresorerie(){
   const depensesB = getDepensesBoutique(bid);
   const achatsB = getAchatsBoutique(bid);
   const stockB = getStockBoutique(bid);
-  const vp=ventesB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
-  const vi=ventesB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
+  const svcsB=(S.ventes_services||[]).filter(v=>v.bid==bid);
+  const vp=ventesB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0)
+           +svcsB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+(v.avance||v.mt),0);
+  const vi=ventesB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0)
+           +svcsB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
   const dep=depensesB.reduce((s,d)=>s+d.mt,0);
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const defaultBid=(S.boutiques||[])[0]?.id||1;
@@ -6003,8 +6006,9 @@ function rTresorerie(){
 
     <p class="st">Solde par mode de paiement</p>
     <div class="g4">${['Espèces','Flooz','Mixx','Virement'].map(m=>{
-      const enc=S.ventes.filter(v=>v.mode===m&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
-      const dep2=S.depenses.filter(d=>d.mode===m).reduce((s,d)=>s+d.mt,0);
+      const enc=ventesB.filter(v=>v.mode===m&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0)
+              +svcsB.filter(v=>v.mode===m&&v.statut==='Payé').reduce((s,v)=>s+(v.avance||v.mt),0);
+      const dep2=depensesB.filter(d=>d.mode===m).reduce((s,d)=>s+d.mt,0);
       return`<div class="card"><div class="ct">${m}</div>
         <div class="fin-amount" style="color:${enc-dep2>=0?'var(--green)':'var(--red)'}">${F(enc-dep2)}</div>
         <div class="ms" style="color:var(--green)">+${F(enc)}</div>
@@ -16134,21 +16138,27 @@ function renderLiveFeed(){
   const dateFiltre = selectedDate || todayStr;
   const boutiques = S.boutiques || [];
 
-  // Ventes de la date sélectionnée, triées par heure (plus récente en premier)
-  const ventesAuj = (S.ventes||[])
+  // Ventes + Services de la date sélectionnée, triées par heure (plus récente en premier)
+  const svcsAujRaw = (S.ventes_services||[])
     .filter(v => v.date && v.date === dateFiltre)
-    .slice().sort((a,b) => {
-      // Trier par heure si disponible, sinon par id
+    .map(v => ({...v, _type:'service', aid: v.id, nom_article: v.nom_service||v.nom||'Service'}));
+  const ventesAuj = [
+    ...(S.ventes||[]).filter(v => v.date && v.date === dateFiltre),
+    ...svcsAujRaw
+  ].slice().sort((a,b) => {
       const ha = a.heure || '99:99';
       const hb = b.heure || '99:99';
       if(ha !== hb) return hb.localeCompare(ha);
       return (b.id||0) - (a.id||0);
     });
 
-  // Compteurs par boutique
+  // Compteurs par boutique (ventes + services)
   const statsBoutiques = boutiques.map(b => {
     const vB = ventesAuj.filter(v => v.bid == b.id || (!v.bid && b.id == 1));
-    const ca = vB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
+    const ca = vB.filter(v=>v.statut==='Payé').reduce((s,v)=>{
+      if(v._type==='service') return s+(v.avance||v.mt);
+      return s+v.mt;
+    },0);
     const nbPaye = vB.filter(v=>v.statut==='Payé').length;
     const nbCredit = vB.filter(v=>v.statut==='Non payé').length;
     return {...b, ca, nbPaye, nbCredit, total: vB.length};
@@ -16157,7 +16167,7 @@ function renderLiveFeed(){
   const caTotal = statsBoutiques.reduce((s,b)=>s+b.ca, 0);
   const nbTotal = ventesAuj.filter(v=>v.statut==='Payé').length;
 
-  // Compteurs par vendeur (aujourd'hui)
+  // Compteurs par vendeur (aujourd'hui, ventes + services)
   const vendeursMap = {};
   ventesAuj.filter(v=>v.statut==='Payé').forEach(v => {
     const nom = v.caissier_nom || '—';
@@ -16165,7 +16175,7 @@ function renderLiveFeed(){
     const bid = v.bid || 1;
     const boutique = boutiques.find(b=>b.id==bid);
     if(!vendeursMap[nom]) vendeursMap[nom] = {nom, emoji, boutique, mt:0, nb:0};
-    vendeursMap[nom].mt += v.mt;
+    vendeursMap[nom].mt += (v._type==='service') ? (v.avance||v.mt) : v.mt;
     vendeursMap[nom].nb++;
   });
   const vendeurs = Object.values(vendeursMap).sort((a,b)=>b.mt-a.mt);
@@ -16241,11 +16251,13 @@ function renderLiveFeed(){
               const bCouleur = boutique?.couleur || '#0f1f3d';
               const bEmoji = boutique?.emoji || '🏪';
               const bNom = boutique?.nom || 'Boutique';
-              const lignes = v.lignes || [{aid:v.aid, qte:v.qte||1, pu:v.pu||v.mt, nom:'Article'}];
-              const articlesNoms = lignes.map(l => {
-                const a = S.stock.find(x=>x.id==l.aid);
-                return (a?a.nom:(l.nom||'Article')) + (l.qte>1?' ×'+l.qte:'');
-              }).join(', ');
+              const lignes = v._type==='service' ? [{nom: v.nom_service||v.nom_article||'Service', qte:1}] : (v.lignes || [{aid:v.aid, qte:v.qte||1, pu:v.pu||v.mt, nom:'Article'}]);
+              const articlesNoms = v._type==='service'
+                ? ('⭐ '+(v.nom_service||v.nom_article||'Service'))
+                : lignes.map(l => {
+                    const a = S.stock.find(x=>x.id==l.aid);
+                    return (a?a.nom:(l.nom||'Article')) + (l.qte>1?' ×'+l.qte:'');
+                  }).join(', ');
               const heure = v.heure || (v.date&&v.date.length>10 ? v.date.slice(11,16) : '—');
               const estPaye = v.statut === 'Payé';
               const isRecent = v.id === ventesAuj[0]?.id;
@@ -16381,7 +16393,7 @@ function renderGrapheHoraire(ventesAuj){
   ventesAuj.filter(v=>v.statut==='Payé').forEach(v=>{
     const h = v.heure ? parseInt(v.heure.split(':')[0]) : null;
     if(h !== null && h >= 0 && h <= 23){
-      heures[h] = (heures[h]||0) + v.mt;
+      heures[h] = (heures[h]||0) + ((v._type==='service')?(v.avance||v.mt):v.mt);
     }
   });
   const vals = Object.entries(heures);
