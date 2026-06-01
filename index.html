@@ -12057,7 +12057,8 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.achats||[]).forEach(a=>{ if(!a.bid){ a.bid=defaultBid; modifie=true; } });
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
   (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
-  // Fournisseurs sans bid = visibles dans toutes les boutiques (réassignation manuelle)
+  // Migration fournisseurs : anciens fournisseurs sans bid → boutique par défaut (CHRIST DECO)
+  (S.fournisseurs||[]).forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
   (S.revenus||[]).forEach(r=>{ if(!r.bid){ r.bid=defaultBid; modifie=true; } });
   (S.charges||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   (S.services||[]).forEach(s=>{ if(!s.bid){ s.bid=defaultBid; modifie=true; } });
