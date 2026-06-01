@@ -3691,8 +3691,8 @@ function rDash(){
     <p class="st">Finances résumé</p>
     <div class="g3">
       <div class="card"><div class="ct">Total dépenses</div><div class="mv" style="color:var(--red)">${F(dep)}</div><span class="badge br">${depensesB.length} opérations</span></div>
-      <div class="card"><div class="ct">Dettes fournisseurs</div><div class="mv" style="color:var(--amber)">${F(S.fournisseurs.reduce((s,f)=>s+f.dette,0))}</div><span class="badge ba">À régler</span></div>
-      <div class="card"><div class="ct">Clients débiteurs</div><div class="mv">${N(S.clients.filter(c=>c.solde>0).length)}</div><span class="badge ba">${F(S.clients.reduce((s,c)=>s+c.solde,0))}</span></div>
+      <div class="card"><div class="ct">Dettes fournisseurs</div><div class="mv" style="color:var(--amber)">${F((S.fournisseurs||[]).filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))).reduce((s,f)=>s+f.dette,0))}</div><span class="badge ba">À régler</span></div>
+      <div class="card"><div class="ct">Clients débiteurs</div><div class="mv">${N((S.clients||[]).filter(c=>c.solde>0&&(c.bid==bid||(!c.bid&&bid==((S.boutiques||[])[0]?.id||1)))).length)}</div><span class="badge ba">${F((S.clients||[]).filter(c=>c.bid==bid||(!c.bid&&bid==((S.boutiques||[])[0]?.id||1))).reduce((s,c)=>s+c.solde,0))}</span></div>
     </div>
     ${getDailyCoachQuote()}
     <p class="st" style="color:var(--text3);font-size:11px;font-weight:400;margin-top:24px">
