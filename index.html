@@ -16051,8 +16051,10 @@ let _statsPeriode = 'mois'; // 'semaine' | 'mois' | 'annee'
 // ─── PAGE LIVE — VENTES EN TEMPS RÉEL ───────────────
 // ═══════════════════════════════════════════════════
 
-let _liveListener = null;       // Listener Firebase dédié
+let _liveListener = null;       // Listener Firebase dédié (ventes)
+let _liveListenerSvcs = null;   // Listener Firebase dédié (services)
 let _liveLastCount = 0;         // Nombre de ventes au dernier check
+let _liveLastCountSvcs = 0;     // Nombre de services au dernier check
 let _liveSonActive = true;      // Son de notification activé
 let _liveVentesCache = [];      // Cache local des ventes Live
 
@@ -16061,6 +16063,7 @@ function demarrerListenerLive(){
   if(!fbReady || !db) return;
   if(_liveListener) return; // déjà actif
 
+  // Listener ventes classiques
   _liveListener = db.ref('christmedia/data/ventes').on('value', snap => {
     const ventesFirebase = snap.val();
     if(!ventesFirebase) return;
@@ -16073,7 +16076,6 @@ function demarrerListenerLive(){
 
     if(countApres > countAvant && countAvant > 0){
       const nb = countApres - countAvant;
-      // Notification visuelle + sonore
       afficherNotifLive(nb);
     }
 
@@ -16092,7 +16094,36 @@ function demarrerListenerLive(){
       setTimeout(() => { if(badge) badge.style.display='none'; }, 5000);
     }
   }, err => {
-    console.warn('Live listener error:', err);
+    console.warn('Live listener ventes error:', err);
+  });
+
+  // Listener ventes_services — pour mise à jour temps réel des prestations
+  _liveListenerSvcs = db.ref('christmedia/data/ventes_services').on('value', snap => {
+    const svcsFirebase = snap.val();
+    if(!svcsFirebase) return;
+    const svcs = Array.isArray(svcsFirebase) ? svcsFirebase : Object.values(svcsFirebase);
+
+    // Détecter les nouvelles prestations
+    const countAvant = _liveLastCountSvcs || 0;
+    const countApres = svcs.length;
+    _liveLastCountSvcs = countApres;
+
+    if(countApres > countAvant && countAvant > 0){
+      const nb = countApres - countAvant;
+      afficherNotifLive(nb, '⭐');
+    }
+
+    S.ventes_services = svcs;
+
+    if(currentPage === 'live') renderLiveFeed();
+
+    const badge = document.getElementById('live-nav-badge');
+    if(badge && currentPage !== 'live') {
+      badge.style.display = 'inline';
+      setTimeout(() => { if(badge) badge.style.display='none'; }, 5000);
+    }
+  }, err => {
+    console.warn('Live listener services error:', err);
   });
 }
 
@@ -16101,9 +16132,14 @@ function arreterListenerLive(){
     db.ref('christmedia/data/ventes').off('value', _liveListener);
     _liveListener = null;
   }
+  if(_liveListenerSvcs && db){
+    db.ref('christmedia/data/ventes_services').off('value', _liveListenerSvcs);
+    _liveListenerSvcs = null;
+  }
 }
 
-function afficherNotifLive(nb){
+function afficherNotifLive(nb, emoji){
+  emoji = emoji || '🔔';
   // Son discret (bip)
   if(_liveSonActive){
     try{
@@ -16119,7 +16155,8 @@ function afficherNotifLive(nb){
       osc.stop(ctx.currentTime + 0.3);
     }catch(e){}
   }
-  toast(`🔔 ${nb} nouvelle${nb>1?'s':''} vente${nb>1?'s':''} enregistrée${nb>1?'s':''}`, 3000);
+  const label = emoji==='⭐' ? 'prestation' : 'vente';
+  toast(`${emoji} ${nb} nouvelle${nb>1?'s':''} ${label}${nb>1?'s':''} enregistrée${nb>1?'s':''}`, 3000);
 }
 
 function rLive(){
