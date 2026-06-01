@@ -5885,7 +5885,7 @@ function rTresorerie(){
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
-  const foursB=(S.fournisseurs||[]).filter(f=>!f.bid||f.bid==bid);
+  const foursB=(S.fournisseurs||[]).filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1)));
   const clientsB=getClientsBoutique(bid);
   const detteFour=foursB.reduce((s,f)=>s+f.dette,0);
   // Emprunts perso non soldés (argent qu'on doit rembourser) — filtrés par boutique active
@@ -10005,7 +10005,7 @@ function rDettes(){
   const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(!f.bid||f.bid==bid));
+  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))));
   const totalFoursDirects=foursDirects.reduce((s,f)=>s+f.dette,0);
 
   const tabs=[{id:'tout',label:'Tout'},{id:'fournisseurs',label:'📦 Fournisseurs (achats)'},{id:'foursDirects',label:'🏭 Fournisseurs (solde)'},{id:'clients',label:'👤 Clients'},{id:'emprunts',label:'📥 Emprunts'},{id:'prets',label:'📤 Prêts'}];
