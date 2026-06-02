@@ -2778,8 +2778,8 @@ const sb=s=>{const m={'Payé':'bg','Non payé':'br','Débiteur':'br','Régulier'
 function getBid(){
   const s = S.session || {};
   // Vendeur/caissier → toujours sa boutique assignée
-  if(s.role !== 'admin' && s.boutique_id) return s.boutique_id;
-  // Admin → boutique sélectionnée (stockée dans la session)
+  if(s.role !== 'admin' && s.role !== 'superviseur' && s.boutique_id) return s.boutique_id;
+  // Admin / Superviseur → boutique sélectionnée (stockée dans la session)
   if(s.boutique_active) return s.boutique_active;
   // Fallback : boutique_active globale ou 1
   return S.boutique_active || 1;
@@ -2807,7 +2807,7 @@ function getObjBoutique(){
 
 // Switcher de boutique (admin uniquement)
 function switcherBoutique(bid){
-  if(S.session?.role !== 'admin'){toast('⛔ Réservé à l\'admin');return;}
+  if(S.session?.role !== 'admin' && S.session?.role !== 'superviseur'){toast('⛔ Réservé à l\'admin/superviseur');return;}
   if(!S.session) S.session = {};
   S.session.boutique_active = bid;
   S.boutique_active = bid; // sync global
@@ -2843,7 +2843,7 @@ function majBoutiqueUI(){
   const switcher = document.getElementById('boutique-switcher');
   if(!switcher) return;
   const role = S.session?.role;
-  if(role !== 'admin'){
+  if(role !== 'admin' && role !== 'superviseur'){
     switcher.style.display = 'none';
     return;
   }
