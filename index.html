@@ -7854,6 +7854,8 @@ function imprimerThermiqueService(id){
   </body></html>`);
   w.document.close();
 }
+
+function imprimerRecuService(id){
   const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
   // Modal de préparation — même flux que printFacture
   modal(`<div class="mft">🧾 Préparer le reçu de service</div>
