@@ -7840,7 +7840,8 @@ function _renderRecuService(id){
   const b=getBoutiqueActive();
   const p=S.parametres||{};
   const logo=p.logo||'';
-  const nomB=b.nom||'Christ Media';
+  const nomEntreprise=p.nom||'Christ Media';
+  const nomB=b.nom||nomEntreprise;
   const emojiB=b.emoji||p.ticketEmoji||'🏪';
   const couleurB=b.couleur||p.ticketColor||'#0f1f3d';
   const now=new Date();
@@ -7896,8 +7897,9 @@ function _renderRecuService(id){
   <div class="card">
     <div class="hd">
       ${logo?`<img src="${logo}" class="hd-logo" onerror="this.outerHTML='<div class=hd-emoji>${emojiB}</div>'">`:`<div class="hd-emoji">${emojiB}</div>`}
-      <div class="hd-nom">${nomB}</div>
-      <div class="hd-ville">${p.ville||'Lomé — Togo'}</div>
+      <div class="hd-nom">${nomEntreprise}</div>
+      <div style="font-size:13px;opacity:.85;margin-top:2px;font-weight:600">${nomB}</div>
+      <div class="hd-ville">${p.ville||'Lomé — Togo'}${p.tel?' · '+p.tel:''}</div>
     </div>
     <div class="rband">
       <span class="rband-label">🧾 Reçu de service</span>
@@ -7925,7 +7927,8 @@ function _renderRecuService(id){
     </div>
     <div class="foot">
       <div class="foot-msg">${p.ticketMsg||'Merci pour votre confiance'}</div>
-      <div class="foot-date">${nomB} — ${now.toLocaleDateString('fr-FR')}</div>
+      <div class="foot-date">${nomEntreprise} &middot; ${nomB} &mdash; ${now.toLocaleDateString('fr-FR')}</div>
+      ${p.tel?`<div class="foot-date">${p.tel}</div>`:''}${p.email?`<div class="foot-date">${p.email}</div>`:''}
     </div>
   </div>
   </body></html>`);
