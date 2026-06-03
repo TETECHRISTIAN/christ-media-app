@@ -7558,9 +7558,11 @@ function rServices(){
           <td>${v.client||'—'}</td><td style="font-weight:600">${F(v.mt)}${v.avance>0&&v.statut!=='Payé'?`<br><small style='color:var(--orange)'>Avance: ${F(v.avance)} | Reste: ${F(v.reste||v.mt-v.avance)}</small>`:''}</td>
           <td><span class="badge bb">${v.cid?nomCompte(v.cid):(v.mode||'—')}</span></td><td>${sb(v.statut)}</td>
           <td><div class="td-actions">
-            ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerService(${v.id})">✓</button>`:''}
-            <button class="btn-icon btn-sm" onclick="imprimerRecuService(${v.id})" title="Imprimer le reçu">🖨️</button>
-            <button class="btn-icon btn-sm" onclick="delVenteService(${v.id})" style="color:var(--red)">✕</button>
+            ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerService(${v.id})" title="Encaisser">✓</button>`:''}
+            <button class="btn-icon btn-sm" onclick="imprimerRecuService(${v.id})" title="Reçu A4">🖨️</button>
+            <button class="btn-icon btn-sm" onclick="imprimerThermiqueService(${v.id})" title="Reçu thermique 58mm" style="color:var(--teal)">🧾</button>
+            <button class="btn-icon btn-sm" onclick="partagerWhatsAppService(${v.id})" title="WhatsApp">📱</button>
+            <button class="btn-icon btn-sm" onclick="delVenteService(${v.id})" title="Supprimer" style="color:var(--red)">✕</button>
           </div></td>
         </tr>`).join('')}
       </tbody></table></div>
@@ -7792,7 +7794,66 @@ function delVenteService(id){
   saveData();toast('🗑️ Prestation supprimée — compte mis à jour');rServices();
 }
 
-function imprimerRecuService(id){
+function partagerWhatsAppService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  const nomShop=S.parametres?.nom||'Christ Media';
+  const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${v.date}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':'⏳ Non payé'}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`,'_blank');
+}
+
+function imprimerThermiqueService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  const p=S.parametres||{};
+  const b=getBoutiqueActive();
+  const nomShop=p.nom||'Christ Media';
+  const nomB=b.nom||nomShop;
+  const couleur=b.couleur||p.ticketColor||'#0f1f3d';
+  const numRecu='SVC-'+String(v.id).slice(-5).padStart(5,'0');
+  const now=new Date();
+  const w=window.open('','_therm_svc','width=320,height=520');
+  if(!w){toast('❌ Popup bloquée — autorisez les popups');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${numRecu}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Courier New',monospace;font-size:12px;width:58mm;padding:4mm 3mm;color:#000;background:#fff}
+    .no-print{display:flex;gap:6px;justify-content:center;margin-bottom:8px}
+    @media print{.no-print{display:none!important}@page{margin:0;size:58mm auto}}
+    button{padding:5px 12px;border-radius:4px;border:1px solid #ccc;cursor:pointer;font-size:12px}
+    .btn-p{background:#0f1f3d;color:#fff;border-color:#0f1f3d}
+    .center{text-align:center}.bold{font-weight:700}.line{border-top:1px dashed #000;margin:5px 0}
+    .row{display:flex;justify-content:space-between}
+    .shop{font-size:14px;font-weight:700;text-align:center;margin-bottom:2px}
+    .sub{font-size:10px;text-align:center;margin-bottom:4px;color:#555}
+  </style></head><body>
+  <div class="no-print">
+    <button class="btn-p" onclick="window.print()">🖨️</button>
+    <button onclick="window.close()">✕</button>
+  </div>
+  <div class="shop">${nomShop}</div>
+  <div class="sub">${nomB}</div>
+  <div class="sub">${p.ville||'Lomé, Togo'}${p.tel?' | '+p.tel:''}</div>
+  <div class="line"></div>
+  <div class="center bold" style="font-size:11px;margin:3px 0">REÇU DE SERVICE</div>
+  <div class="center" style="font-size:10px;color:#555">${numRecu}</div>
+  <div class="line"></div>
+  <div class="row"><span>Date</span><span>${v.date} ${v.heure||''}</span></div>
+  <div class="row"><span>Client</span><span>${v.client||'—'}</span></div>
+  <div class="line"></div>
+  <div class="bold" style="margin:3px 0">${v.nom_service}${v.qte>1?' x'+v.qte:''}</div>
+  ${v.qte>1?`<div class="row"><span>PU</span><span>${F(v.pu)}</span></div>`:''}
+  <div class="line"></div>
+  ${v.avance>0?`<div class="row"><span>Avance</span><span>+${F(v.avance)}</span></div>`:''}
+  ${v.avance>0&&v.statut!=='Payé'?`<div class="row"><span>Reste dû</span><span>${F(v.reste!=null?v.reste:v.mt)}</span></div>`:''}
+  <div class="row bold" style="font-size:14px;margin-top:4px"><span>TOTAL</span><span>${F(v.mt)}</span></div>
+  <div class="line"></div>
+  <div class="row"><span>Mode</span><span>${v.mode||'—'}</span></div>
+  <div class="row"><span>Statut</span><span>${v.statut==='Payé'?'PAYÉ ✓':'NON PAYÉ'}</span></div>
+  <div class="line"></div>
+  <div class="center" style="font-size:10px;margin-top:4px">${p.ticketMsg||'Merci pour votre confiance'}</div>
+  <div class="center" style="font-size:9px;color:#aaa;margin-top:2px">${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
+  </body></html>`);
+  w.document.close();
+}
   const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
   // Modal de préparation — même flux que printFacture
   modal(`<div class="mft">🧾 Préparer le reçu de service</div>
