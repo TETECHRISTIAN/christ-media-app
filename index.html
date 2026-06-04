@@ -6183,7 +6183,7 @@ function printFacture(vid){
     <div class="f-totaux">
       ${lignes.length>1||remise>0?`<div class="f-tot-row"><span style="color:#888">Sous-total</span><span>${F(sousTotal)}</span></div>`:''}
       ${remise>0?`<div class="f-tot-row f-tot-remise"><span>🎯 Remise${v.remiseType==='%'?' ('+v.remiseVal+'%)':''}</span><span>−${F(remise)}</span></div>`:''}
-      <div class="f-tot-row"><span style="color:#888">Mode de paiement</span><span style="font-weight:600">${v.mode==='Espèces'||!v.cid?'Espèces':nomCompte(v.cid)}</span></div>
+      <div class="f-tot-row"><span style="color:#888">Mode de paiement</span><span style="font-weight:600">${(()=>{const c=(S.comptes||[]).find(x=>x.id==v.cid);return c?c.type||c.nom:v.mode||'Espèces';})()}</span></div>
       <div class="f-tot-row f-tot-final"><span>TOTAL</span><span>${F(v.mt)}</span></div>
       ${montantRecu?`<div class="f-tot-row f-tot-recu"><span>Montant remis</span><span>${F(montantRecu)}</span></div>`:''}
       ${monnaieRendue>0?`<div class="f-tot-row f-tot-monnaie"><span>💵 Monnaie rendue</span><span>${F(monnaieRendue)}</span></div>`:''}
@@ -7986,7 +7986,7 @@ function _genererFactureService(id){
     </div>
     <div class="f-totaux-wrap">
       <div class="f-totaux">
-        <div class="f-tot-row"><span style="color:#6b7280">Mode de paiement</span><span style="font-weight:600">${v.mode==='Espèces'||!v.cid?'Espèces':nomCompte(v.cid)}</span></div>
+        <div class="f-tot-row"><span style="color:#6b7280">Mode de paiement</span><span style="font-weight:600">${(()=>{const c=(S.comptes||[]).find(x=>x.id==v.cid);return c?c.type||c.nom:v.mode||'Espèces';})()}</span></div>
         ${v.avance>0?`<div class="f-tot-row"><span style="color:#6b7280">Avance reçue</span><span style="color:#0f766e;font-weight:600">+${F(v.avance)}</span></div>`:''}
         ${v.avance>0&&v.statut!=='Payé'?`<div class="f-tot-row"><span style="color:#6b7280">Reste dû</span><span style="color:#dc2626;font-weight:700">${F(v.reste!=null?v.reste:v.mt-v.avance)}</span></div>`:''}
         <div class="f-tot-row f-tot-final"><span>TOTAL</span><span>${F(v.mt)}</span></div>
