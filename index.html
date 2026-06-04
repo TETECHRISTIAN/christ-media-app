@@ -3958,7 +3958,7 @@ function ajouterProduitRapide(aid){
     window.panier[existant].qte++;
     window.panier[existant].mt=window.panier[existant].qte*window.panier[existant].pu;
   }else{
-    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,dispo,typePrix:type});
+    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,pa:a.pa||0,dispo,typePrix:type});
   }
   toast(`✅ ${a.nom} ajouté`);
   rVente();
@@ -4085,7 +4085,7 @@ function ajouterAuPanier(){
     window.panier[existant].qte++;
     window.panier[existant].mt=window.panier[existant].qte*window.panier[existant].pu;
   }else{
-    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,dispo,typePrix:type});
+    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,pa:a.pa||0,dispo,typePrix:type});
   }
   rVente();
 }
@@ -4153,7 +4153,7 @@ function validerPanier(){
     S.ventes.push({
       id:vid,date:D(),ts:Date.now(),
       bid:_bidFinal,
-      lignes:window.panier.map(l=>({aid:l.aid,nom:l.nom,qte:l.qte,pu:l.pu,mt:l.mt,typePrix:l.typePrix})),
+      lignes:window.panier.map(l=>({aid:l.aid,nom:l.nom,qte:l.qte,pu:l.pu,mt:l.mt,pa:l.pa||0,typePrix:l.typePrix})),
       aid:window.panier[0].aid,qte:window.panier[0].qte,pu:window.panier[0].pu,
       mt,sousTotal,remise:remiseMt,typePrix:window.typePrix||'detail',
       statut,client,mode,cid,
@@ -7278,7 +7278,7 @@ function ajouterParCodeDirect(aid){
     window.panier[existant].qte++;
     window.panier[existant].mt=window.panier[existant].qte*window.panier[existant].pu;
   }else{
-    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,dispo,typePrix:type});
+    window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,pa:a.pa||0,dispo,typePrix:type});
   }
   toast(`✅ ${a.nom} ajouté au panier`);
   rVente();
@@ -14391,8 +14391,9 @@ function rComparaison(){
       items.forEach(function(it){
         var qte = it.qte||1;
         var pu  = it.pu || (qte>0?(it.mt||it.total||0)/qte:0);
-        var artStock = (S.stock||[]).find(function(s){ return s.id==it.aid||(it.nom&&s.nom===it.nom); });
-        var pa  = artStock ? (artStock.pa||0) : 0;
+        // PA : priorité à la valeur enregistrée dans la ligne, sinon stock actuel
+        var pa = (it.pa != null && it.pa > 0) ? it.pa
+               : (function(){ var artStock=(S.stock||[]).find(function(s){return s.id==it.aid||(it.nom&&s.nom===it.nom);}); return artStock?(artStock.pa||0):0; })();
         beneficeVentes += (pu - pa) * qte;
       });
     });
