@@ -14375,7 +14375,8 @@ function rComparaison(){
     var svcsAv    = (S.ventes_services||[]).filter(function(v){ return v.bid==bid && inRange(v.date) && v.avance>0; });
     var deps      = (S.depenses||[]).filter(function(d){ return d.bid==bid && inRange(d.date); });
     var revs      = (S.revenus||[]).filter(function(r){ return r.bid==bid && inRange(r.date); });
-    var achats    = (S.achats||[]).filter(function(a){ return a.bid==bid && inRange(a.date); });
+    var b0id=(S.boutiques[0]?S.boutiques[0].id:1);
+    var achats    = (S.achats||[]).filter(function(a){ return (a.bid==bid||(!a.bid&&bid==b0id)) && inRange(a.date); });
 
     var ca      = ventes.reduce(function(s,v){return s+v.mt;},0)
                 + svcsPaids.reduce(function(s,v){return s+v.mt;},0)
