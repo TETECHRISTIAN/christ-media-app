@@ -13251,7 +13251,7 @@ function rRapportMensuel(){
     var achat=achats.reduce(function(s,a){return s+(a.total||a.mt||0);},0);
     var nbTx=ventes.length+svcPaids.length+svcAv.length;
     var panier=nbTx>0?Math.round(ca/nbTx):0;
-    var benefice=ca+rev-dep;
+    var benefice=ca+rev-dep-achat;
     var marge=ca>0?Math.round(benefice/ca*100):0;
 
     // Top articles
@@ -14383,7 +14383,7 @@ function rComparaison(){
     var dep     = deps.reduce(function(s,d){return s+d.mt;},0);
     var rev     = revs.reduce(function(s,r){return s+r.mt;},0);
     var achat   = achats.reduce(function(s,a){return s+(a.total||a.mt||0);},0);
-    var benefice= ca + rev - dep;
+    var benefice= ca + rev - dep - achat;
     var marge   = ca>0 ? Math.round(benefice/ca*100) : 0;
     var nbTx    = ventes.length + svcsPaids.length + svcsAv.length;
     var panier  = nbTx>0 ? Math.round(ca/nbTx) : 0;
