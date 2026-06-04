@@ -8172,12 +8172,13 @@ function _renderRecuService(id){
     </div>
     <div class="body">
       <table class="det">
-        <tr><td>Date</td><td>${v.date} ${v.heure||heure}</td></tr>
+        <tr><td>Date</td><td>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('/'):d;})()}</td></tr>
+        <tr><td>Heure</td><td>${v.heure||heure}</td></tr>
         <tr><td>Client</td><td>${v.client}</td></tr>
         ${v.client_adresse?`<tr><td>Adresse</td><td>${v.client_adresse}</td></tr>`:''}
         <tr><td>Prestation</td><td>${v.nom_service}</td></tr>
         ${v.qte>1?`<tr><td>Qté × PU</td><td>${v.qte} × ${F(v.pu)}</td></tr>`:''}
-        <tr><td>Mode</td><td><span class="badge-mode">${v.mode||nomCompte(v.cid)||'—'}</span></td></tr>
+        <tr><td>Mode</td><td><span class="badge-mode">${(()=>{const c=(S.comptes||[]).find(x=>x.id==v.cid);return c?c.type||c.nom:v.mode||'—';})()}</span></td></tr>
         ${v.avance>0?`<tr><td>Avance reçue</td><td style="color:#0f766e">+${F(v.avance)}</td></tr>`:''}
         ${v.avance>0&&v.statut!=='Payé'?`<tr><td>Reste dû</td><td style="color:#dc2626;font-weight:700">${F(v.reste!=null?v.reste:v.mt)}</td></tr>`:''}
       </table>
@@ -10101,8 +10102,8 @@ function genRecuA4HTML(vid){
       <div class="recu-zigzag"></div>
       <div class="recu-body">
         <div class="recu-meta">
-          <div class="recu-meta-cell"><div class="recu-meta-label">Date</div><div class="recu-meta-val">${v.date}</div></div>
-          <div class="recu-meta-cell"><div class="recu-meta-label">Heure</div><div class="recu-meta-val">${heure}</div></div>
+          <div class="recu-meta-cell"><div class="recu-meta-label">Date</div><div class="recu-meta-val">${v.date?v.date.split('-').reverse().join('/'):''}</div></div>
+          <div class="recu-meta-cell"><div class="recu-meta-label">Heure</div><div class="recu-meta-val">${v.heure||heure}</div></div>
           <div class="recu-meta-cell" style="grid-column:span 2"><div class="recu-meta-label">Client</div><div class="recu-meta-val">${v.client||'Client anonyme'}</div></div>
         </div>
         <div class="recu-caissier">
@@ -10115,14 +10116,14 @@ function genRecuA4HTML(vid){
         </div>
         <div class="recu-articles-titre"><span>Articles</span><span>${lignes.length} art.</span></div>
         <div style="margin-bottom:4px">
-          ${lignes.map(l=>{const a=ga(l.aid);const nom=l.nom||(a?a.nom:'Article supprimé');const puUnit=l.pu||0;return`
+          ${lignes.map(l=>{const a=ga(l.aid);const nom=l.nom||(a?a.nom:'Article supprimé');const puUnit=l.pu||0;const mtLigne=(puUnit&&l.qte&&puUnit*l.qte!==l.mt&&l.mt===puUnit)?puUnit*l.qte:l.mt;return`
             <div class="recu-item-row">
               <div style="flex:1;min-width:0">
                 <span class="recu-item-nom">${nom}</span>
-                ${lignes.length>1?`<div style="font-size:10px;color:#aaa;margin-top:1px">${F(puUnit)} × ${l.qte}</div>`:''}
+                ${l.qte>1?`<div style="font-size:10px;color:#aaa;margin-top:1px">${F(puUnit)} × ${l.qte}</div>`:''}
               </div>
               <span class="recu-item-qte">×${l.qte}</span>
-              <span class="recu-item-mt">${F(l.mt)}</span>
+              <span class="recu-item-mt">${F(mtLigne)}</span>
             </div>`}).join('')}
         </div>
         <div class="recu-totaux">
@@ -10176,6 +10177,54 @@ function printRecu(vid){
       body{background:#f0f0f0;display:flex;justify-content:center;padding:20px;font-family:'DM Sans',sans-serif}
       @media print{body{background:#fff;padding:0}@page{margin:4mm}}
       .recu-modern{font-family:'DM Sans',sans-serif;max-width:380px;width:100%;margin:0 auto;background:#fff;overflow:hidden;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+      .recu-header{background:linear-gradient(135deg,#0f1f3d 0%,#1a3260 100%);color:#fff;padding:22px 20px 18px;position:relative;overflow:hidden}
+      .recu-header::before{content:'';position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.06)}
+      .recu-header::after{content:'';position:absolute;bottom:-20px;left:-10px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.04)}
+      .recu-logo-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+      .recu-logo-icon{width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;border:1px solid rgba(255,255,255,.2)}
+      .recu-company{font-size:17px;font-weight:800;color:#fff;letter-spacing:-.3px}
+      .recu-details{font-size:10px;color:rgba(255,255,255,.55);margin-top:1px}
+      .recu-badge-row{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
+      .recu-type{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.45)}
+      .recu-num{font-size:12px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;background:rgba(255,255,255,.12);padding:3px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.15)}
+      .recu-zigzag{height:12px;background:radial-gradient(circle at 6px 0,#f5f4f0 6px,transparent 6px),radial-gradient(circle at 18px 0,#f5f4f0 6px,transparent 6px);background-size:24px 12px;background-color:#0f1f3d}
+      .recu-body{padding:16px 20px 4px}
+      .recu-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
+      .recu-meta-cell{background:#f7f6f3;border-radius:7px;padding:7px 10px;border:1px solid #eeecea}
+      .recu-meta-label{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#aaa;margin-bottom:2px}
+      .recu-meta-val{font-size:12px;font-weight:600;color:#1a1a2e}
+      .recu-caissier{background:linear-gradient(135deg,#e8edf5,#eef2fa);border:1px solid #c5d0e8;border-radius:9px;padding:9px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+      .recu-caissier-icon{font-size:22px;flex-shrink:0}
+      .recu-caissier-label{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8090b0}
+      .recu-caissier-name{font-size:13px;font-weight:700;color:#0f1f3d;margin-top:1px}
+      .recu-caissier-role{font-size:10px;color:#8090b0;margin-top:1px}
+      .recu-articles-titre{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #efefef;display:flex;justify-content:space-between}
+      .recu-item-row{display:flex;align-items:center;padding:7px 0;border-bottom:1px dashed #f0eeec}
+      .recu-item-row:last-child{border-bottom:none}
+      .recu-item-nom{font-size:12px;color:#333;font-weight:500;flex:1}
+      .recu-item-qte{font-size:11px;color:#aaa;margin:0 8px;white-space:nowrap;background:#f0eeec;padding:1px 7px;border-radius:10px}
+      .recu-item-mt{font-size:12px;font-weight:700;color:#1a1a2e;white-space:nowrap}
+      .recu-totaux{background:#f7f6f3;border-radius:8px;padding:10px 12px;margin:12px 0;border:1px solid #eeecea}
+      .recu-tot-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:#888}
+      .recu-tot-remise{color:#8a5200;font-weight:600}
+      .recu-tot-final{display:flex;justify-content:space-between;align-items:center;padding:8px 0 0;margin-top:6px;border-top:2px solid #0f1f3d}
+      .recu-tot-final-lbl{font-size:12px;font-weight:700;color:#0f1f3d;letter-spacing:.5px;text-transform:uppercase}
+      .recu-tot-final-val{font-size:22px;font-weight:900;color:#0f1f3d;letter-spacing:-1px}
+      .recu-paiement{border:1px solid #c8e6d0;background:linear-gradient(135deg,#f0faf4,#e8f5ed);border-radius:9px;padding:10px 12px;margin-bottom:12px}
+      .recu-paiement-titre{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1d6b3c;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+      .recu-paiement-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}
+      .recu-paiement-item label{display:block;color:#7aa887;font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:2px}
+      .recu-paiement-item strong{color:#1a1a2e;font-size:12px}
+      .recu-statut-paye{display:inline-flex;align-items:center;gap:3px;background:#1d6b3c;color:#fff;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700}
+      .recu-statut-attente{display:inline-flex;align-items:center;gap:3px;background:#8a5200;color:#fff;border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700}
+      .recu-versements{margin-top:7px;padding-top:7px;border-top:1px dashed #c8e6d0;font-size:10px;color:#5a8a6a}
+      .recu-signature{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px;padding:14px 0 10px;border-top:1px dashed #ddd}
+      .recu-sign-bloc{text-align:center}
+      .recu-sign-label{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#ccc;margin-bottom:18px}
+      .recu-sign-line{border-top:1px solid #ddd;padding-top:5px;font-size:9px;color:#bbb}
+      .recu-footer-strip{background:#0f1f3d;padding:10px 20px;text-align:center;margin:4px 0 0}
+      .recu-footer-strip p{font-size:10px;color:rgba(255,255,255,.45);letter-spacing:.3px;margin:0}
+      .recu-footer-strip strong{color:rgba(255,255,255,.75);font-size:11px}
       .no-print{text-align:center;margin-bottom:16px;display:flex;gap:8px;justify-content:center}
       @media print{.no-print{display:none!important}}
       button{padding:8px 20px;border-radius:6px;border:1px solid #ccc;cursor:pointer;font-size:14px;font-family:inherit}
