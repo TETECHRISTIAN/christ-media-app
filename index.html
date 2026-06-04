@@ -14384,7 +14384,22 @@ function rComparaison(){
     var dep     = deps.reduce(function(s,d){return s+d.mt;},0);
     var rev     = revs.reduce(function(s,r){return s+r.mt;},0);
     var achat   = achats.reduce(function(s,a){return s+(a.total||a.mt||0);},0);
-    var benefice= ca + rev - dep - achat;
+    // Bénéfice brut = (PV - PA) × qte par article vendu
+    var beneficeVentes = 0;
+    ventes.forEach(function(v){
+      var items = v.items || v.lignes || (v.article||v.aid ? [{aid:v.aid||null,nom:v.article||null,qte:v.qte||1,pu:v.pu||(v.qte&&v.qte>0?v.mt/v.qte:v.mt)||0,mt:v.mt}] : []);
+      items.forEach(function(it){
+        var qte = it.qte||1;
+        var pu  = it.pu || (qte>0?(it.mt||it.total||0)/qte:0);
+        var artStock = (S.stock||[]).find(function(s){ return s.id==it.aid||(it.nom&&s.nom===it.nom); });
+        var pa  = artStock ? (artStock.pa||0) : 0;
+        beneficeVentes += (pu - pa) * qte;
+      });
+    });
+    // Services : pas de PA, tout le CA est bénéfice
+    var beneficeSvcs = svcsPaids.reduce(function(s,v){return s+v.mt;},0)
+                     + svcsAv.reduce(function(s,v){return s+(v.avance||0);},0);
+    var benefice= beneficeVentes + beneficeSvcs + rev - dep;
     var marge   = ca>0 ? Math.round(benefice/ca*100) : 0;
     var nbTx    = ventes.length + svcsPaids.length + svcsAv.length;
     var panier  = nbTx>0 ? Math.round(ca/nbTx) : 0;
