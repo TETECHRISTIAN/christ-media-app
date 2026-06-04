@@ -8038,7 +8038,8 @@ function imprimerThermiqueService(id){
   <div class="center bold" style="font-size:11px;margin:3px 0">REÇU DE SERVICE</div>
   <div class="center" style="font-size:10px;color:#555">${numRecu}</div>
   <div class="line"></div>
-  <div class="row"><span>Date</span><span>${v.date} ${v.heure||''}</span></div>
+  <div class="row"><span>Date</span><span>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('/'):d;})()}</span></div>
+  <div class="row"><span>Heure</span><span>${v.heure||''}</span></div>
   <div class="row"><span>Client</span><span>${v.client||'—'}</span></div>
   <div class="line"></div>
   <div class="bold" style="margin:3px 0">${v.nom_service}${v.qte>1?' x'+v.qte:''}</div>
@@ -8048,7 +8049,7 @@ function imprimerThermiqueService(id){
   ${v.avance>0&&v.statut!=='Payé'?`<div class="row"><span>Reste dû</span><span>${F(v.reste!=null?v.reste:v.mt)}</span></div>`:''}
   <div class="row bold" style="font-size:14px;margin-top:4px"><span>TOTAL</span><span>${F(v.mt)}</span></div>
   <div class="line"></div>
-  <div class="row"><span>Mode</span><span>${v.mode||'—'}</span></div>
+  <div class="row"><span>Mode</span><span>${(()=>{const c=(S.comptes||[]).find(x=>x.id==v.cid);return c?c.type||c.nom:v.mode||'—';})()}</span></div>
   <div class="row"><span>Statut</span><span>${v.statut==='Payé'?'PAYÉ ✓':'NON PAYÉ'}</span></div>
   <div class="line"></div>
   <div class="center" style="font-size:10px;margin-top:4px">${p.ticketMsg||'Merci pour votre confiance'}</div>
