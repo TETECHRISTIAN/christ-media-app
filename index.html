@@ -14159,6 +14159,7 @@ var _revArtPeriode = 'mois';
 var _revArtSort = 'ca'; // ca | qte | marge | nom
 var _revArtSortDir = -1; // -1 desc, 1 asc
 var _revArtSearch = '';
+var _revArtVue = 'articles'; // 'articles' | 'categories'
 
 function revArtSetSort(col){
   if(_revArtSort===col){ _revArtSortDir*=-1; } else { _revArtSort=col; _revArtSortDir=-1; }
@@ -14233,26 +14234,108 @@ function rRevArticle(){
   var periodeLabel = {semaine:'Cette semaine',mois:'Ce mois',annee:'Cette année',tout:'Tout'};
   var sortIcon = function(col){ return _revArtSort===col?(_revArtSortDir===-1?' ↓':' ↑'):''; };
 
+  // ── Agrégation par catégorie ──
+  var catMap = {};
+  rows.forEach(function(r){
+    var c = r.cat||'—';
+    if(!catMap[c]) catMap[c]={cat:c,qte:0,ca:0,marge:0,nbArticles:0};
+    catMap[c].qte += r.qte;
+    catMap[c].ca  += r.ca;
+    catMap[c].marge += r.marge;
+    catMap[c].nbArticles++;
+  });
+  var catRows = Object.values(catMap).sort(function(a,b){return b.ca-a.ca;});
+
   var html = '<div class="page">';
 
-  // KPIs
+  // KPIs globaux
   html += '<div class="g4" style="margin-bottom:16px">';
   html += '<div class="card" style="border-left:4px solid var(--green)"><div class="ct">Chiffre d\'affaires</div><div class="mv" style="color:var(--green)">'+F(totalCA)+'</div><div style="font-size:11px;color:var(--text3)">'+periodeLabel[periode]+'</div></div>';
   html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">Quantité vendue</div><div class="mv">'+totalQte+'</div><div style="font-size:11px;color:var(--text3)">unités</div></div>';
   html += '<div class="card" style="border-left:4px solid '+(totalMarge>=0?'var(--teal)':'var(--red)')+'"><div class="ct">Marge brute</div><div class="mv" style="color:'+(totalMarge>=0?'var(--teal)':'var(--red)')+'">'+F(totalMarge)+'</div><div style="font-size:11px;color:var(--text3)">Taux : '+tauxMarge+'%</div></div>';
-  html += '<div class="card" style="border-left:4px solid var(--amber)"><div class="ct">Articles vendus</div><div class="mv">'+rows.length+'</div><div style="font-size:11px;color:var(--text3)">références</div></div>';
+  html += '<div class="card" style="border-left:4px solid var(--amber)"><div class="ct">Catégories actives</div><div class="mv">'+catRows.length+'</div><div style="font-size:11px;color:var(--text3)">'+rows.length+' références</div></div>';
   html += '</div>';
 
-  // Barre de recherche
-  html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
-  html += '<input class="fi" type="text" placeholder="🔍 Rechercher un article..." value="'+(_revArtSearch||'')+'" oninput="_revArtSearch=this.value;rRevArticle()" style="flex:1;min-width:180px;max-width:300px">';
-  html += '<span style="font-size:12px;color:var(--text3)">'+rows.length+' article(s)</span>';
+  // Onglets Articles / Catégories
+  var vue = window._revArtVue || _revArtVue || 'articles';
+  html += '<div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0">';
+  html += '<button onclick="window._revArtVue=\'articles\';rRevArticle()" style="padding:8px 18px;border:none;border-radius:6px 6px 0 0;font-size:13px;font-weight:700;cursor:pointer;background:'+(vue==='articles'?'var(--primary)':'var(--surface2)')+';color:'+(vue==='articles'?'#fff':'var(--text2)')+'">📦 Par article</button>';
+  html += '<button onclick="window._revArtVue=\'categories\';rRevArticle()" style="padding:8px 18px;border:none;border-radius:6px 6px 0 0;font-size:13px;font-weight:700;cursor:pointer;background:'+(vue==='categories'?'var(--primary)':'var(--surface2)')+';color:'+(vue==='categories'?'#fff':'var(--text2)')+'">🗂️ Par catégorie</button>';
   html += '</div>';
 
   if(rows.length===0){
     html += '<div class="card" style="text-align:center;padding:40px;color:var(--text3)">Aucune vente enregistrée pour cette période.</div>';
+  } else if(vue==='categories'){
+    // ── VUE CATÉGORIES ──
+    var maxCatCA = catRows[0]?catRows[0].ca:1;
+    html += '<div class="card" style="margin-bottom:16px">';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:14px">🏆 CA par catégorie</div>';
+    var catColors = ['var(--primary)','var(--teal)','var(--amber)','var(--navy)','#8b5cf6','#ec4899','#10b981','#f97316'];
+    catRows.forEach(function(c,i){
+      var pct = Math.round(c.ca/maxCatCA*100);
+      var pctTotal = totalCA>0?Math.round(c.ca/totalCA*100):0;
+      var col = catColors[i%catColors.length];
+      var margePct = c.ca>0?Math.round(c.marge/c.ca*100):0;
+      html += '<div style="margin-bottom:14px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:5px;align-items:center">';
+      html += '<span style="font-size:13px;font-weight:700">'+c.cat+'</span>';
+      html += '<span style="font-size:12px;display:flex;gap:12px;align-items:center">';
+      html += '<span style="color:var(--green);font-weight:700">'+F(c.ca)+'</span>';
+      html += '<span style="color:'+(c.marge>=0?'var(--teal)':'var(--red)')+';font-size:11px">Marge: '+F(c.marge)+' ('+margePct+'%)</span>';
+      html += '<span style="color:var(--text3);font-size:11px">'+pctTotal+'% du CA</span>';
+      html += '</span></div>';
+      html += '<div style="background:var(--surface2);border-radius:5px;height:12px"><div style="width:'+pct+'%;background:'+col+';height:100%;border-radius:5px;transition:width .4s"></div></div>';
+      html += '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+c.nbArticles+' article(s) · '+c.qte+' unités vendues</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Tableau catégories
+    html += '<div class="tbl-wrap"><table><thead><tr>';
+    html += '<th>Catégorie</th>';
+    html += '<th style="text-align:center">Articles</th>';
+    html += '<th style="text-align:right">Qté</th>';
+    html += '<th style="text-align:right">CA</th>';
+    html += '<th style="text-align:right">Marge</th>';
+    html += '<th style="text-align:right">Taux marge</th>';
+    html += '<th style="text-align:right">% CA</th>';
+    html += '</tr></thead><tbody>';
+    catRows.forEach(function(c){
+      var margePct = c.ca>0?Math.round(c.marge/c.ca*100):0;
+      var pctCA = totalCA>0?Math.round(c.ca/totalCA*100):0;
+      html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="window._revArtVue=\'articles\';_revArtSearch=\''+c.cat+'\';rRevArticle()" title="Cliquer pour voir les articles de cette catégorie">';
+      html += '<td style="padding:9px 12px;font-weight:700">'+c.cat+'</td>';
+      html += '<td style="text-align:center;padding:9px 12px"><span style="background:var(--surface2);border-radius:12px;padding:2px 9px;font-size:12px;font-weight:700">'+c.nbArticles+'</span></td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700">'+c.qte+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--green)">'+F(c.ca)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:600;color:'+(c.marge>=0?'var(--teal)':'var(--red)')+'">'+F(c.marge)+'</td>';
+      html += '<td style="text-align:right;padding:9px 12px"><span style="background:'+(margePct>=30?'var(--green)':margePct>=15?'var(--amber)':'var(--red)')+';color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700">'+margePct+'%</span></td>';
+      html += '<td style="text-align:right;padding:9px 12px">';
+      html += '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">';
+      html += '<div style="width:50px;background:var(--surface2);border-radius:3px;height:6px"><div style="width:'+pctCA+'%;background:var(--navy);height:100%;border-radius:3px"></div></div>';
+      html += '<span style="font-size:11px;font-weight:700;min-width:28px;text-align:right">'+pctCA+'%</span>';
+      html += '</div></td>';
+      html += '</tr>';
+    });
+    html += '<tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--border2)">';
+    html += '<td style="padding:10px 12px">TOTAL</td><td style="text-align:center;padding:10px 12px">'+rows.length+'</td>';
+    html += '<td style="text-align:right;padding:10px 12px">'+totalQte+'</td>';
+    html += '<td style="text-align:right;padding:10px 12px;color:var(--green)">'+F(totalCA)+'</td>';
+    html += '<td style="text-align:right;padding:10px 12px;color:'+(totalMarge>=0?'var(--teal)':'var(--red)')+'">'+F(totalMarge)+'</td>';
+    html += '<td style="text-align:right;padding:10px 12px"><span style="background:'+(tauxMarge>=30?'var(--green)':tauxMarge>=15?'var(--amber)':'var(--red)')+';color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700">'+tauxMarge+'%</span></td>';
+    html += '<td style="text-align:right;padding:10px 12px">100%</td>';
+    html += '</tr>';
+    html += '</tbody></table></div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Clique sur une ligne pour filtrer les articles de cette catégorie.</div>';
+
   } else {
-    // Top 5 visuel
+    // ── VUE ARTICLES ──
+    html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
+    html += '<input class="fi" type="text" placeholder="🔍 Rechercher article ou catégorie..." value="'+(_revArtSearch||'')+'" oninput="_revArtSearch=this.value;rRevArticle()" style="flex:1;min-width:180px;max-width:300px">';
+    if(_revArtSearch) html += '<button class="btn btn-sm" onclick="_revArtSearch=\'\';rRevArticle()">✕ Effacer</button>';
+    html += '<span style="font-size:12px;color:var(--text3)">'+rows.length+' article(s)</span>';
+    html += '</div>';
+
     var top5 = rows.slice().sort(function(a,b){return b.ca-a.ca;}).slice(0,5);
     var maxCA = top5[0]?top5[0].ca:1;
     html += '<div class="card" style="margin-bottom:16px">';
@@ -14271,7 +14354,6 @@ function rRevArticle(){
     });
     html += '</div>';
 
-    // Tableau complet
     html += '<div class="tbl-wrap"><table><thead><tr>';
     html += '<th onclick="revArtSetSort(\'nom\')" style="cursor:pointer">Article'+sortIcon('nom')+'</th>';
     html += '<th style="text-align:center">Catégorie</th>';
@@ -14288,7 +14370,7 @@ function rRevArticle(){
       var margePct = r.ca>0?Math.round(r.marge/r.ca*100):0;
       html += '<tr style="border-bottom:1px solid var(--border)">';
       html += '<td style="padding:9px 12px;font-weight:600">'+r.nom+'</td>';
-      html += '<td style="text-align:center;padding:9px 12px"><span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px">'+r.cat+'</span></td>';
+      html += '<td style="text-align:center;padding:9px 12px"><span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer" onclick="window._revArtVue=\'categories\';_revArtSearch=\'\';rRevArticle()">'+r.cat+'</span></td>';
       html += '<td style="text-align:right;padding:9px 12px;font-weight:700">'+r.qte+'</td>';
       html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--green)">'+F(r.ca)+'</td>';
       html += '<td style="text-align:right;padding:9px 12px;color:var(--text2)">'+F(Math.round(puMoyen))+'</td>';
@@ -14301,7 +14383,6 @@ function rRevArticle(){
       html += '</tr>';
     });
 
-    // Ligne total
     html += '<tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--border2)">';
     html += '<td style="padding:10px 12px">TOTAL</td><td></td>';
     html += '<td style="text-align:right;padding:10px 12px">'+totalQte+'</td>';
@@ -14311,12 +14392,11 @@ function rRevArticle(){
     html += '<td style="text-align:right;padding:10px 12px">100%</td>';
     html += '</tr>';
     html += '</tbody></table></div>';
-    html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Clique sur les en-têtes de colonnes pour trier. La marge est calculée si le prix d\'achat est renseigné dans le stock.</div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding:0 4px">💡 Clique sur les en-têtes pour trier · Clique sur une catégorie pour voir le résumé par catégorie · Marge calculée si prix d\'achat renseigné dans le stock.</div>';
   }
 
   html += '</div>';
   document.getElementById('content').innerHTML = html;
-  // Sync le select période dans le header
   var sel = document.getElementById('rev-art-period');
   if(sel) sel.value = periode;
 }
