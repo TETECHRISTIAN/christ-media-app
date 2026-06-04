@@ -7561,6 +7561,8 @@ function rServices(){
             ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerService(${v.id})" title="Encaisser">✓</button>`:''}
             <button class="btn-icon btn-sm" onclick="imprimerRecuService(${v.id})" title="Reçu A4">🖨️</button>
             <button class="btn-icon btn-sm" onclick="imprimerThermiqueService(${v.id})" title="Reçu thermique 58mm" style="color:var(--teal)">🧾</button>
+            <button class="btn-icon btn-sm" onclick="configurerTranchesService(${v.id})" title="Tranches">💳</button>
+            <button class="btn-icon btn-sm" onclick="printFactureService(${v.id})" title="Facture">📄</button>
             <button class="btn-icon btn-sm" onclick="partagerWhatsAppService(${v.id})" title="WhatsApp">📱</button>
             <button class="btn-icon btn-sm" onclick="delVenteService(${v.id})" title="Supprimer" style="color:var(--red)">✕</button>
           </div></td>
@@ -7799,6 +7801,206 @@ function partagerWhatsAppService(id){
   const nomShop=S.parametres?.nom||'Christ Media';
   const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${v.date}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':'⏳ Non payé'}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
   window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`,'_blank');
+}
+
+function configurerTranchesService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  if(!v.tranches)v.tranches=[];
+  const totalPaye=v.tranches.reduce((s,t)=>s+t.mt,0);
+  const restant=v.mt-totalPaye;
+  modal(`<div class="mft">💳 Tranches — ${v.client||v.nom_service}</div>
+    <div class="total-preview" style="margin-bottom:12px">
+      <div class="total-preview-row"><span>Montant total</span><span>${F(v.mt)}</span></div>
+      <div class="total-preview-row" style="color:var(--green)"><span>Déjà payé</span><span>${F(totalPaye)}</span></div>
+      <div class="total-preview-final"><span>Restant dû</span><span style="color:${restant>0?'var(--red)':'var(--green)'}">${F(restant)}</span></div>
+    </div>
+    <div class="tranche-progress"><div class="tranche-fill" style="width:${v.mt>0?Math.min(100,Math.round(totalPaye/v.mt*100)):0}%;background:var(--green)"></div></div>
+    <div style="font-size:11px;color:var(--text3);text-align:right;margin-bottom:12px">${v.mt>0?Math.round(totalPaye/v.mt*100):0}% payé</div>
+    ${v.tranches.map(t=>`<div class="tranche-row"><span style="font-size:12px;flex:1">${t.date} · ${t.mode}</span><span style="font-weight:600;color:var(--green)">${F(t.mt)}</span></div>`).join('')}
+    ${restant>0?`
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Nouveau versement</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">Montant</label><input class="fi" type="number" id="trs-mt" placeholder="${restant}" max="${restant}"></div>
+        <div class="fg"><label class="fl">Compte encaissement</label>${selectComptes('trs-mode', premierCompteId())}</div>
+      </div>
+    </div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-success" onclick="saveTrancheService(${id})">Enregistrer versement</button></div>
+    `:`<div style="text-align:center;color:var(--green);font-weight:600;padding:12px">✅ Entièrement payé</div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Fermer</button></div>`}
+  `);
+}
+
+function saveTrancheService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  const mt=+document.getElementById('trs-mt').value||0;
+  const cid=document.getElementById('trs-mode').value;
+  const mode=nomCompte(cid);
+  if(mt<=0)return toast('❌ Montant invalide');
+  if(!v.tranches)v.tranches=[];
+  v.tranches.push({date:D(),mt,mode,cid});
+  crediterCompte(cid,mt);
+  const totalPaye=v.tranches.reduce((s,t)=>s+t.mt,0);
+  if(totalPaye>=v.mt){v.statut='Payé';toast(`✅ Prestation soldée ! Total payé: ${F(totalPaye)}`);}
+  else toast(`✅ Versement: ${F(mt)} · Reste: ${F(v.mt-totalPaye)}`);
+  saveData();closeModal();rServices();
+}
+
+function printFactureService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  // Même modal de saisie client que printFacture
+  modal(`<div class="mft">📄 Facture — ${v.nom_service}</div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;display:flex;justify-content:space-between">
+      <span style="color:var(--text2)">${v.nom_service} — ${v.date}</span>
+      <span style="font-weight:700;color:var(--navy)">${F(v.mt)}</span>
+    </div>
+    <div class="fg">
+      <label class="fl">Nom du client <span style="color:var(--red)">*</span></label>
+      <input class="fi" id="fsvc-client" placeholder="Ex : Cafetaria, Geraldo, M. Kokou…" value="${v.client||''}" autocomplete="off">
+    </div>
+    <div class="fg">
+      <label class="fl">Adresse / Localité (optionnel)</label>
+      <input class="fi" id="fsvc-adresse" placeholder="Ex : Tsévié, Lomé Bè…" value="${v.client_adresse||''}">
+    </div>
+    <div class="fg">
+      <label class="fl">Notes (optionnel)</label>
+      <input class="fi" id="fsvc-notes" placeholder="Ex : Shooting studio, tournage événement…" value="${v.notes_facture||''}">
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="_genererFactureService(${id})">📄 Générer la facture</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('fsvc-client')?.focus(),100);
+}
+
+function _genererFactureService(id){
+  const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
+  const nomClient=document.getElementById('fsvc-client').value.trim();
+  if(!nomClient){const el=document.getElementById('fsvc-client');el.focus();el.style.borderColor='var(--red)';return;}
+  v.client=nomClient;
+  v.client_adresse=document.getElementById('fsvc-adresse').value.trim();
+  v.notes_facture=document.getElementById('fsvc-notes').value.trim();
+  saveData();closeModal();
+  // Générer la facture A4
+  const p=S.parametres||{};
+  const b=getBoutiqueActive();
+  const nomEntreprise=p.nom||'Christ Media';
+  const nomB=b.nom||nomEntreprise;
+  const couleur=b.couleur||p.ticketColor||'#0f1f3d';
+  const logo=p.logo||'';
+  const emojiB=b.emoji||p.ticketEmoji||'🏪';
+  const caissier=(v.caissier_emoji||'')+' '+(v.caissier_nom||'');
+  const numFac='SVC-FAC-'+String(v.id).slice(-5).padStart(5,'0');
+  const w=window.open('','_fac_svc','width=860,height=900');
+  if(!w){toast('❌ Popup bloquée — autorisez les popups');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Facture ${numFac}</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#e8eaf0;font-family:'DM Sans',sans-serif;padding:24px}
+    .no-print{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+    @media print{body{background:#fff;padding:0}.no-print{display:none!important}@page{margin:12mm}}
+    button{padding:9px 22px;border-radius:8px;border:1px solid #ccc;cursor:pointer;font-size:14px;font-family:inherit;font-weight:600}
+    .btn-p{background:#0f1f3d;color:#fff;border-color:#0f1f3d}
+    .f-page{max-width:800px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.12)}
+    .f-header{display:flex;justify-content:space-between;align-items:flex-start;padding:32px 40px 24px;border-bottom:3px solid ${couleur}}
+    .f-logo-zone{display:flex;align-items:center;gap:14px}
+    .f-logo-img{width:56px;height:56px;border-radius:12px;object-fit:cover;border:2px solid ${couleur}}
+    .f-logo-emoji{width:56px;height:56px;background:${couleur};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;flex-shrink:0}
+    .f-logo-text{font-size:24px;font-weight:800;color:${couleur};letter-spacing:-.5px;line-height:1}
+    .f-logo-sub{font-size:12px;color:#888;margin-top:3px}
+    .f-num-zone{text-align:right}
+    .f-num-title{font-size:28px;font-weight:900;color:${couleur};letter-spacing:2px}
+    .f-num-ref{font-size:13px;color:#555;margin-top:6px;line-height:1.8}
+    .f-statut{display:inline-block;margin-top:8px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;
+      background:${v.statut==='Payé'?'#e6f9ef':'#fff8e6'};color:${v.statut==='Payé'?'#166534':'#92400e'};
+      border:1px solid ${v.statut==='Payé'?'#86efac':'#fcd34d'}}
+    .f-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:24px 40px}
+    .f-party{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px 20px}
+    .f-party-title{font-size:9px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px}
+    .f-party-name{font-size:16px;font-weight:700;color:#111}
+    .f-party-info{font-size:12px;color:#6b7280;margin-top:5px;line-height:1.8}
+    .f-table-wrap{padding:0 40px 20px}
+    table.ft{width:100%;border-collapse:collapse}
+    table.ft thead tr{background:${couleur}}
+    table.ft thead th{color:#fff;padding:10px 12px;font-size:11px;font-weight:700;text-align:left;letter-spacing:.5px;text-transform:uppercase}
+    table.ft thead th:last-child{text-align:right}
+    table.ft tbody tr:nth-child(even){background:#f8fafc}
+    table.ft tbody td{font-size:13px;border-bottom:1px solid #f3f4f6;padding:9px 12px}
+    table.ft tbody td:last-child{text-align:right;font-weight:700}
+    .f-totaux-wrap{padding:0 40px 24px;display:flex;justify-content:flex-end}
+    .f-totaux{width:300px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}
+    .f-tot-row{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;font-size:13px;border-bottom:1px solid #f3f4f6}
+    .f-tot-final{background:${couleur};color:#fff;font-size:17px;font-weight:800;padding:13px 16px;border-bottom:none}
+    .f-notes{margin:0 40px 16px;padding:12px 16px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;color:#78350f}
+    .f-footer{text-align:center;padding:16px 40px;font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;line-height:2}
+    .f-url{font-size:10px;color:#d1d5db;margin-top:2px}
+  </style></head><body>
+  <div class="no-print">
+    <button class="btn-p" onclick="window.print()">🖨️ Imprimer</button>
+    <button onclick="window.close()">✕ Fermer</button>
+  </div>
+  <div class="f-page">
+    <div class="f-header">
+      <div class="f-logo-zone">
+        ${logo?`<img src="${logo}" class="f-logo-img" onerror="this.outerHTML='<div class=f-logo-emoji>${emojiB}</div>'">`:`<div class="f-logo-emoji">${emojiB}</div>`}
+        <div>
+          <div class="f-logo-text">${nomEntreprise}</div>
+          <div class="f-logo-sub">${nomB}${p.ticketSlogan?' &middot; '+p.ticketSlogan:''}</div>
+        </div>
+      </div>
+      <div class="f-num-zone">
+        <div class="f-num-title">FACTURE</div>
+        <div class="f-num-ref"><strong>N°</strong> ${numFac}</div>
+        <div class="f-num-ref"><strong>Date :</strong> ${v.date}${v.heure?' à '+v.heure:''}</div>
+        <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
+      </div>
+    </div>
+    <div class="f-parties">
+      <div class="f-party">
+        <div class="f-party-title">Émetteur</div>
+        <div class="f-party-name">${nomEntreprise}</div>
+        <div class="f-party-info">${p.ville||'Lomé, Togo'}${p.tel?'<br>'+p.tel:''}${p.email?'<br>'+p.email:''}<br>${nomB}</div>
+      </div>
+      <div class="f-party">
+        <div class="f-party-title">Facturé à</div>
+        <div class="f-party-name">${v.client}</div>
+        <div class="f-party-info">${v.client_adresse?v.client_adresse+'<br>':''}${caissier.trim()?'Servi par : '+caissier.trim():''}
+        </div>
+      </div>
+    </div>
+    <div class="f-table-wrap">
+      <table class="ft">
+        <thead><tr><th>#</th><th>Désignation</th><th style="text-align:center">Qté</th><th style="text-align:right">Prix unit.</th><th style="text-align:right">Montant</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="color:#bbb;font-size:11px">1</td>
+            <td style="font-weight:600">${v.nom_service}</td>
+            <td style="text-align:center;color:#555">${v.qte||1}</td>
+            <td style="color:#555;text-align:right">${F(v.pu||v.mt)}</td>
+            <td>${F(v.mt)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="f-totaux-wrap">
+      <div class="f-totaux">
+        <div class="f-tot-row"><span style="color:#6b7280">Mode de paiement</span><span style="font-weight:600">${v.mode||nomCompte(v.cid)||'—'}</span></div>
+        ${v.avance>0?`<div class="f-tot-row"><span style="color:#6b7280">Avance reçue</span><span style="color:#0f766e;font-weight:600">+${F(v.avance)}</span></div>`:''}
+        ${v.avance>0&&v.statut!=='Payé'?`<div class="f-tot-row"><span style="color:#6b7280">Reste dû</span><span style="color:#dc2626;font-weight:700">${F(v.reste!=null?v.reste:v.mt-v.avance)}</span></div>`:''}
+        <div class="f-tot-row f-tot-final"><span>TOTAL</span><span>${F(v.mt)}</span></div>
+      </div>
+    </div>
+    ${v.notes_facture?`<div class="f-notes">📝 ${v.notes_facture}</div>`:''}
+    <div class="f-footer">
+      <strong>${p.ticketMsg||'Merci pour votre confiance'}</strong> &middot; ${nomEntreprise} &middot; ${p.ville||'Lomé, Togo'}
+      <br>Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
+      <div class="f-url">tetechristian.github.io/christ-media-app/</div>
+    </div>
+  </div>
+  </body></html>`);
+  w.document.close();
 }
 
 function imprimerThermiqueService(id){
