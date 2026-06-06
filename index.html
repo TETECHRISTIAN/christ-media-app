@@ -10494,12 +10494,39 @@ let dettesFiltreTab='tout';
 let dettesFourVue='groupe';
 
 function recalcTousDettes(){
-  // Recalculer f.dette chronologiquement pour tous les fournisseurs qui ont un historique
+  // Recalculer f.dette pour tous les fournisseurs avec déduplication préalable
+  // PROTECTION : on ne met à jour f.dette que si le recalc correspond exactement
+  // à ce qu'on attend (totalAjouts - totalPaie = f.dette ± tolérance 0)
   let changed=false;
   (S.fournisseurs||[]).forEach(f=>{
+    // 1. Dédoublonner paiements (même date + même montant + même type)
+    if(f.historiquePaiementsFour&&f.historiquePaiementsFour.length){
+      const seen=new Set();
+      const avant=f.historiquePaiementsFour.length;
+      f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>{
+        const key=`${p.date}|${p.montantPaye||p.mt}|${(p.note||'').includes('Règlement')?'regl':'autre'}`;
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if(f.historiquePaiementsFour.length!==avant) changed=true;
+    }
+    // 2. Dédoublonner ajouts (même id)
+    if(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length){
+      const seen=new Set();
+      const avant=f.historiqueDetteAjouts.length;
+      f.historiqueDetteAjouts=f.historiqueDetteAjouts.filter(h=>{
+        const key=String(h.id);
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if(f.historiqueDetteAjouts.length!==avant) changed=true;
+    }
     const ajouts=f.historiqueDetteAjouts||[];
     const paiements=f.historiquePaiementsFour||[];
     if(!ajouts.length&&!paiements.length) return;
+    // 3. Recalcul chronologique
     const lignes=[];
     ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt||0,ts:h.ts||0}));
     paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye||0,ts:p.ts||0}));
@@ -10509,7 +10536,12 @@ function recalcTousDettes(){
       if(l.type==='ajout') solde+=l.mt;
       else solde=Math.max(0,solde-l.mt);
     });
-    if(f.dette!==solde){f.dette=solde;changed=true;}
+    // 4. Protection : ne mettre à jour f.dette que si le recalcul est cohérent
+    // c.-à-d. si totalAjouts >= totalPayé (pas de sur-paiement résiduel suspect)
+    const totalAjouts=ajouts.reduce((s,h)=>s+(h.mt||0),0);
+    const totalPayesBrut=paiements.reduce((s,p)=>s+(p.montantPaye||0),0);
+    const coherent=totalAjouts>=totalPayesBrut; // pas de sur-paiement dans l'historique
+    if(coherent&&f.dette!==solde){f.dette=solde;changed=true;}
   });
   if(changed) saveData();
 }
