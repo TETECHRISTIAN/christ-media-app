@@ -5459,8 +5459,9 @@ function fusionnerDoublonsFournisseurs(){
     </div>`;
   }).join('');
   modal(`<div class="mft">🔀 Fusionner les doublons</div>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${doublons.length} groupe(s) de doublons détecté(s). Les dettes et historiques seront cumulés sur la première entrée :</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${doublons.length} groupe(s). Les dettes et historiques seront cumulés :</p>
     ${lignes}
+    <p style="font-size:11px;color:var(--amber);margin-top:8px">⚠️ Après fusion, ouvrez le Relevé de chaque fournisseur et cliquez <strong>🗑️ Doublons</strong> si des paiements apparaissent en double.</p>
     <div class="mff">
       <button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" onclick="_executerFusionFournisseurs()">✅ Fusionner</button>
@@ -5472,8 +5473,7 @@ function _executerFusionFournisseurs(){
   let nbFusions=0;
   doublons.forEach(groupe=>{
     const principal=groupe.reduce((best,f)=>(f.historiqueDetteAjouts||[]).length>(best.historiqueDetteAjouts||[]).length?f:best, groupe[0]);
-    const doublonsASupprimer=groupe.filter(f=>f.id!==principal.id);
-    doublonsASupprimer.forEach(doublon=>{
+    groupe.filter(f=>f.id!==principal.id).forEach(doublon=>{
       principal.dette=(principal.dette||0)+(doublon.dette||0);
       if(doublon.historiqueDetteAjouts&&doublon.historiqueDetteAjouts.length){
         if(!principal.historiqueDetteAjouts) principal.historiqueDetteAjouts=[];
@@ -5492,83 +5492,10 @@ function _executerFusionFournisseurs(){
     principal.ts=Date.now();
   });
   saveData();closeModal();
-  toast(`✅ ${nbFusions} doublon(s) fusionné(s) — utilisez 🗑️ Nettoyer dans le relevé si des excédents apparaissent`);
+  toast(`✅ ${nbFusions} doublon(s) fusionné(s) — vérifiez les relevés avec 🗑️ Doublons`);
   rDettes();
 }
 
-// ─── FUSION DOUBLONS FOURNISSEURS ───
-function detecterDoublonsFournisseurs(){
-  // Regroupe par (nom normalisé + tel normalisé)
-  const groupes={};
-  (S.fournisseurs||[]).forEach(f=>{
-    const key=(f.nom||'').trim().toLowerCase()+'|'+(f.tel||'').replace(/\s/g,'');
-    if(!groupes[key]) groupes[key]=[];
-    groupes[key].push(f);
-  });
-  return Object.values(groupes).filter(g=>g.length>1);
-}
-
-function fusionnerDoublonsFournisseurs(){
-  const doublons=detecterDoublonsFournisseurs();
-  if(doublons.length===0){toast('✅ Aucun doublon détecté');return;}
-
-  // Afficher un modal de confirmation avec détail des fusions
-  const lignes=doublons.map(g=>{
-    const totalDette=g.reduce((s,f)=>s+(f.dette||0),0);
-    return `<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
-      <strong>${g[0].nom}</strong> — ${g.length} entrées
-      <div style="font-size:12px;color:var(--text3);margin-top:4px">
-        ${g.map(f=>`ID ${f.id} : ${F(f.dette||0)}`).join(' + ')}
-        → Dette fusionnée : <span style="color:var(--red);font-weight:700">${F(totalDette)}</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  modal(`<div class="mft">🔀 Fusionner les doublons</div>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${doublons.length} groupe(s) de doublons détecté(s). Les dettes et historiques seront cumulés sur la première entrée :</p>
-    ${lignes}
-    <div class="mff">
-      <button class="btn" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-primary" onclick="_executerFusionFournisseurs()">✅ Fusionner</button>
-    </div>`);
-}
-
-function _executerFusionFournisseurs(){
-  const doublons=detecterDoublonsFournisseurs();
-  let nbFusions=0;
-  doublons.forEach(groupe=>{
-    // Garder le premier (le plus ancien ou le plus gros historique)
-    const principal=groupe.reduce((best,f)=>(f.historiqueDetteAjouts||[]).length>(best.historiqueDetteAjouts||[]).length?f:best, groupe[0]);
-    const doublonsASupprimer=groupe.filter(f=>f.id!==principal.id);
-
-    doublonsASupprimer.forEach(doublon=>{
-      // Fusionner la dette
-      principal.dette=(principal.dette||0)+(doublon.dette||0);
-      // Fusionner historiqueDetteAjouts
-      if(doublon.historiqueDetteAjouts&&doublon.historiqueDetteAjouts.length){
-        if(!principal.historiqueDetteAjouts) principal.historiqueDetteAjouts=[];
-        principal.historiqueDetteAjouts=[...principal.historiqueDetteAjouts,...doublon.historiqueDetteAjouts];
-        principal.historiqueDetteAjouts.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-      }
-      // Fusionner historiquePaiementsFour
-      if(doublon.historiquePaiementsFour&&doublon.historiquePaiementsFour.length){
-        if(!principal.historiquePaiementsFour) principal.historiquePaiementsFour=[];
-        principal.historiquePaiementsFour=[...principal.historiquePaiementsFour,...doublon.historiquePaiementsFour];
-        principal.historiquePaiementsFour.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-      }
-      // Réassigner les achats liés au doublon vers le principal
-      (S.achats||[]).forEach(a=>{if(a.fid==doublon.id) a.fid=principal.id;});
-      // Supprimer le doublon
-      S.fournisseurs=S.fournisseurs.filter(f=>f.id!==doublon.id);
-      nbFusions++;
-    });
-    principal.ts=Date.now();
-  });
-
-  saveData();closeModal();
-  toast(`✅ ${nbFusions} doublon(s) fusionné(s) avec succès`);
-  rDettes();
-}
 
 // ─── DÉPENSES ───
 function rDep(){
@@ -11556,7 +11483,7 @@ function reconcilierHistoDette(fid){
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
 
-  // 0. Dédoublonner historiquePaiementsFour (même id OU même date+montant)
+  // 0. Dédoublonner historiquePaiementsFour par ID, puis par date+montant identiques consécutifs
   const paiementsSeenId=new Set();
   const paiementsSeenDateMt=new Set();
   f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>{
@@ -11600,7 +11527,6 @@ function reconcilierHistoDette(fid){
   const depensesF=(S.depenses||[]).filter(d=>d.cat==='Règlement dette'&&d.four===f.nom&&!d._deleted);
   depensesF.forEach(dep=>{
     const dejaParId=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
-    // Clé élargie : même date + même montant (sans exiger note="Règlement", car la note peut être personnalisée)
     const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt);
     if(!dejaParId&&!dejaParDateMt){
       f.historiquePaiementsFour.push({
@@ -11679,6 +11605,14 @@ function voirHistoDette(fid){
   const totalPayeEffectif=lignes.filter(l=>l.type==='paiement').reduce((s,l)=>s+(l.effectif||0),0);
   const totalPaye=totalPayeEffectif;
   const nbFantomes=lignes.filter(l=>l.fantome).length;
+  // Calculer les vrais doublons : paiements avec exactement même date + même montant
+  const _paiemSeenDM=new Set();
+  let nbDoublonsPaiements=0;
+  paiements.forEach(p=>{
+    const k=`${p.date}|${p.montantPaye||p.mt||0}`;
+    if(_paiemSeenDM.has(k)) nbDoublonsPaiements++;
+    else _paiemSeenDM.add(k);
+  });
   // f.dette n'est pas recalculé automatiquement ici — Réconcilier le fait explicitement
   modal(`<div class="mft">📜 Relevé de compte — ${f.nom}</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;position:sticky;top:0;z-index:10;background:var(--surface);padding:8px 0;border-bottom:1px solid var(--border2)">
@@ -11727,61 +11661,59 @@ function voirHistoDette(fid){
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="reconcilierHistoDette(${fid})" style="font-size:11px;color:var(--teal);border-color:var(--teal)" title="Ajouter les achats manquants au relevé">🔄 Réconcilier</button>
         <button class="btn" onclick="corrigerSoldeManuellement(${fid})" style="font-size:11px;color:var(--amber);border-color:var(--amber)" title="Corriger manuellement le solde de la dette">✏️ Corriger solde</button>
-        ${nbFantomes>0?`<button class="btn" onclick="nettoyerPaiementsFantomes(${fid})" style="font-size:11px;color:var(--red);border-color:var(--red);font-weight:700" title="Supprimer les paiements excédentaires — ils n'ont eu aucun effet sur la dette">🗑️ Nettoyer (${nbFantomes})</button>`:''}
+        ${nbDoublonsPaiements>0?`<button class="btn" onclick="nettoyerDoublonsPaiements(${fid})" style="font-size:11px;color:var(--red);border-color:var(--red);font-weight:700" title="Supprimer les ${nbDoublonsPaiements} paiement(s) en double exact (même date + même montant)">🗑️ Doublons (${nbDoublonsPaiements})</button>`:''}
         <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
     </div>`);
 }
 
-// ─── NETTOYER PAIEMENTS FANTÔMES ───
-function nettoyerPaiementsFantomes(fid){
+// ─── NETTOYER DOUBLONS PAIEMENTS FOURNISSEUR ───
+function nettoyerDoublonsPaiements(fid){
   const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
-  if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
 
-  // Reconstruire la timeline pour identifier les fantômes
-  const lignes=[];
-  f.historiqueDetteAjouts.forEach(h=>lignes.push({ref:h,type:'ajout'}));
-  f.historiquePaiementsFour.forEach(p=>lignes.push({ref:p,type:'paiement'}));
-  lignes.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
-
-  let solde=0;
-  const fantomesIds=new Set();
-  lignes.forEach(l=>{
-    if(l.type==='ajout'){
-      solde+=l.ref.mt||0;
+  // Identifier les doublons stricts : même date + même montant
+  // On garde le PREMIER de chaque groupe (le plus ancien ts), on supprime les suivants
+  const seen=new Map(); // clé → premier paiement gardé
+  const aSupprimer=new Set();
+  f.historiquePaiementsFour.forEach(p=>{
+    const k=`${p.date}|${p.montantPaye||p.mt||0}`;
+    if(!seen.has(k)){
+      seen.set(k,p);
     } else {
-      const mt=l.ref.montantPaye||l.ref.mt||0;
-      if(solde<=0&&mt>0){
-        fantomesIds.add(String(l.ref.id));
+      // Doublon : garder celui avec le ts le plus ancien
+      const existant=seen.get(k);
+      if((p.ts||0)<(existant.ts||0)){
+        // p est plus ancien → supprimer l'existant, garder p
+        aSupprimer.add(String(existant.id));
+        seen.set(k,p);
       } else {
-        solde=Math.max(0,solde-mt);
+        aSupprimer.add(String(p.id));
       }
     }
   });
 
-  if(fantomesIds.size===0){toast('✅ Aucun paiement excédentaire trouvé');voirHistoDette(fid);return;}
+  if(aSupprimer.size===0){toast('✅ Aucun doublon exact trouvé');voirHistoDette(fid);return;}
 
-  const nb=fantomesIds.size;
-  if(!confirm(`Supprimer ${nb} paiement(s) excédentaire(s) du relevé de ${f.nom} ?
+  const nb=aSupprimer.size;
+  if(!confirm(`Supprimer ${nb} paiement(s) en double exact (même date + même montant) du relevé de ${f.nom} ?
 
-Ces paiements ont été enregistrés alors que la dette était déjà à 0 — ils n'ont eu aucun effet réel sur le solde.
-
-La dépense correspondante dans le journal sera également supprimée.`))return;
+Seul le premier exemplaire de chaque doublon est conservé.
+La dépense correspondante sera aussi supprimée.`))return;
 
   // Supprimer de historiquePaiementsFour
-  f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>!fantomesIds.has(String(p.id)));
+  f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>!aSupprimer.has(String(p.id)));
 
-  // Supprimer les dépenses "Règlement dette" correspondantes
+  // Supprimer les dépenses correspondantes
   S.depenses=(S.depenses||[]).filter(d=>{
     if(d.cat!=='Règlement dette'||d.four!==f.nom) return true;
-    return !fantomesIds.has(String(d.id));
+    return !aSupprimer.has(String(d.id));
   });
 
-  // Recalculer les soldes
+  // Recalculer les soldes avant/après dans le relevé
   const lignes2=[];
-  f.historiqueDetteAjouts.forEach(h=>lignes2.push({ref:h,type:'ajout'}));
+  (f.historiqueDetteAjouts||[]).forEach(h=>lignes2.push({ref:h,type:'ajout'}));
   f.historiquePaiementsFour.forEach(p=>lignes2.push({ref:p,type:'paiement'}));
   lignes2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
   let s=0;
@@ -11794,7 +11726,7 @@ La dépense correspondante dans le journal sera également supprimée.`))return;
   f.dette=s;
 
   saveData();
-  toast(`✅ ${nb} paiement(s) excédentaire(s) supprimé(s) · Nouveau solde : ${F(f.dette)}`);
+  toast(`✅ ${nb} doublon(s) supprimé(s) · Nouveau solde : ${F(f.dette)}`);
   voirHistoDette(fid);
 }
 
