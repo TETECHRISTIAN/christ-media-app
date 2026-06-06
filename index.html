@@ -11371,6 +11371,24 @@ function reconcilierHistoDette(fid){
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
 
+  // 0. Dédoublonner historiquePaiementsFour (même date + même montant + type règlement)
+  const paiementsSeen=new Set();
+  f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>{
+    const key=`${p.date}|${p.montantPaye||p.mt}|${(p.note||'').includes('Règlement')?'regl':'autre'}`;
+    if(paiementsSeen.has(key)) return false;
+    paiementsSeen.add(key);
+    return true;
+  });
+
+  // Dédoublonner historiqueDetteAjouts (même id)
+  const ajoutsSeen=new Set();
+  f.historiqueDetteAjouts=f.historiqueDetteAjouts.filter(h=>{
+    const key=String(h.id);
+    if(ajoutsSeen.has(key)) return false;
+    ajoutsSeen.add(key);
+    return true;
+  });
+
   // 1. Ajouter les achats "À payer" manquants dans historiqueDetteAjouts
   const achatsF=(S.achats||[]).filter(a=>a.fid==fid&&a.statut==='À payer'&&!a._deleted);
   achatsF.forEach(achat=>{
@@ -11389,10 +11407,12 @@ function reconcilierHistoDette(fid){
   });
 
   // 2. Ajouter les paiements (dépenses "Règlement dette") manquants dans historiquePaiementsFour
+  // On compare par ID ET par date+montant pour éviter les doublons
   const depensesF=(S.depenses||[]).filter(d=>d.cat==='Règlement dette'&&d.four===f.nom&&!d._deleted);
   depensesF.forEach(dep=>{
-    const dejaDans=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
-    if(!dejaDans){
+    const dejaParId=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
+    const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt&&p.note&&p.note.includes('Règlement'));
+    if(!dejaParId&&!dejaParDateMt){
       f.historiquePaiementsFour.push({
         id:dep.id,date:dep.date,montantPaye:dep.mt,
         avant:0,apres:0,
