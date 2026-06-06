@@ -10967,8 +10967,25 @@ function saveRembours(id){
   } else {
     crediterCompte(cid,mt);
   }
-  if(d.rembourse>=d.montant){d.statut='Soldé';toast('✅ Entièrement soldé !');}
-  else toast(`✅ ${F(mt)} · Reste: ${F(d.montant-d.rembourse)}`);
+  if(d.rembourse>=d.montant){
+    d.statut='Soldé';
+    // Auto-créer la ligne du mois suivant si c'est un loyer mensuel
+    if(d.personne&&d.personne.toLowerCase().startsWith('loyer maison')){
+      const moisFR=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+      const dateParts=d.date.split('-');
+      const annee=+dateParts[0], mois=+dateParts[1];
+      let nextMois=mois+1, nextAnnee=annee;
+      if(nextMois>12){nextMois=1;nextAnnee++;}
+      const nextDateStr=`${nextAnnee}-${String(nextMois).padStart(2,'0')}-01`;
+      const nextLabel=`${moisFR[nextMois-1]} ${nextAnnee}`;
+      const nextNom=`Loyer Maison — ${nextLabel}`;
+      const existe=(S.dettesPerso||[]).some(x=>x.personne===nextNom&&x.statut!=='Soldé');
+      if(!existe){
+        S.dettesPerso.push({id:genId(),bid:getBid(),typeDette:'emprunter',personne:nextNom,date:nextDateStr,montant:d.montant,rembourse:0,cid:d.cid||premierCompteId(),echeance:null,taux:0,notes:`Loyer mensuel ${nextLabel}`,statut:'En cours'});
+        toast(`✅ Soldé ! Ligne "${nextNom}" créée automatiquement 🏠`);
+      } else { toast('✅ Entièrement soldé !'); }
+    } else { toast('✅ Entièrement soldé !'); }
+  } else toast(`✅ ${F(mt)} · Reste: ${F(d.montant-d.rembourse)}`);
   saveData();closeModal();rDettes();
 }
 function delDettePerso(id){
