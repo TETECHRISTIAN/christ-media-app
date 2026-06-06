@@ -5436,6 +5436,68 @@ function delFour(id){
 
 // ─── FUSION DOUBLONS FOURNISSEURS ───
 function detecterDoublonsFournisseurs(){
+  const groupes={};
+  (S.fournisseurs||[]).forEach(f=>{
+    const key=(f.nom||'').trim().toLowerCase()+'|'+(f.tel||'').replace(/\s/g,'');
+    if(!groupes[key]) groupes[key]=[];
+    groupes[key].push(f);
+  });
+  return Object.values(groupes).filter(g=>g.length>1);
+}
+
+function fusionnerDoublonsFournisseurs(){
+  const doublons=detecterDoublonsFournisseurs();
+  if(doublons.length===0){toast('✅ Aucun doublon détecté');return;}
+  const lignes=doublons.map(g=>{
+    const totalDette=g.reduce((s,f)=>s+(f.dette||0),0);
+    return `<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
+      <strong>${g[0].nom}</strong> — ${g.length} entrées
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">
+        ${g.map(f=>`ID ${f.id} : ${F(f.dette||0)}`).join(' + ')}
+        → Dette fusionnée : <span style="color:var(--red);font-weight:700">${F(totalDette)}</span>
+      </div>
+    </div>`;
+  }).join('');
+  modal(`<div class="mft">🔀 Fusionner les doublons</div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${doublons.length} groupe(s) de doublons détecté(s). Les dettes et historiques seront cumulés sur la première entrée :</p>
+    ${lignes}
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="_executerFusionFournisseurs()">✅ Fusionner</button>
+    </div>`);
+}
+
+function _executerFusionFournisseurs(){
+  const doublons=detecterDoublonsFournisseurs();
+  let nbFusions=0;
+  doublons.forEach(groupe=>{
+    const principal=groupe.reduce((best,f)=>(f.historiqueDetteAjouts||[]).length>(best.historiqueDetteAjouts||[]).length?f:best, groupe[0]);
+    const doublonsASupprimer=groupe.filter(f=>f.id!==principal.id);
+    doublonsASupprimer.forEach(doublon=>{
+      principal.dette=(principal.dette||0)+(doublon.dette||0);
+      if(doublon.historiqueDetteAjouts&&doublon.historiqueDetteAjouts.length){
+        if(!principal.historiqueDetteAjouts) principal.historiqueDetteAjouts=[];
+        principal.historiqueDetteAjouts=[...principal.historiqueDetteAjouts,...doublon.historiqueDetteAjouts];
+        principal.historiqueDetteAjouts.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      }
+      if(doublon.historiquePaiementsFour&&doublon.historiquePaiementsFour.length){
+        if(!principal.historiquePaiementsFour) principal.historiquePaiementsFour=[];
+        principal.historiquePaiementsFour=[...principal.historiquePaiementsFour,...doublon.historiquePaiementsFour];
+        principal.historiquePaiementsFour.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      }
+      (S.achats||[]).forEach(a=>{if(a.fid==doublon.id) a.fid=principal.id;});
+      S.fournisseurs=S.fournisseurs.filter(f=>f.id!==doublon.id);
+      nbFusions++;
+    });
+    principal.ts=Date.now();
+  });
+  saveData();closeModal();
+  toast(`✅ ${nbFusions} doublon(s) fusionné(s) — utilisez 🗑️ Nettoyer dans le relevé si des excédents apparaissent`);
+  rDettes();
+}
+
+// ─── FUSION DOUBLONS FOURNISSEURS ───
+function detecterDoublonsFournisseurs(){
   // Regroupe par (nom normalisé + tel normalisé)
   const groupes={};
   (S.fournisseurs||[]).forEach(f=>{
@@ -6151,9 +6213,10 @@ function saveReglementDette(fid){
   f.dette=Math.max(0,f.dette-mt);
   const apresDette=f.dette;
   // ── Historique traçabilité paiements ──
+  const depId=genId(); // ID partagé entre historique et dépense pour éviter les doublons à la réconciliation
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   f.historiquePaiementsFour.push({
-    id:genId(),
+    id:depId,
     date:dateP,
     montantPaye:mt,
     avant:avantDette,
@@ -6163,7 +6226,7 @@ function saveReglementDette(fid){
     note:note||'—',
     ts:Date.now()
   });
-  S.depenses.push({id:genId(),date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+  S.depenses.push({id:depId,date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
   debiterCompte(cid_d,mt);
   saveData();closeModal();
   toast(`✅ ${F(mt)} payé · Reste : ${F(apresDette)}${apresDette===0?' — Compte soldé !':''}`);
@@ -11493,12 +11556,16 @@ function reconcilierHistoDette(fid){
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
 
-  // 0. Dédoublonner historiquePaiementsFour (même date + même montant + type règlement)
-  const paiementsSeen=new Set();
+  // 0. Dédoublonner historiquePaiementsFour (même id OU même date+montant)
+  const paiementsSeenId=new Set();
+  const paiementsSeenDateMt=new Set();
   f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>{
-    const key=`${p.date}|${p.montantPaye||p.mt}`;
-    if(paiementsSeen.has(key)) return false;
-    paiementsSeen.add(key);
+    const keyId=String(p.id||'');
+    const keyDateMt=`${p.date}|${p.montantPaye||p.mt||0}`;
+    if(keyId&&paiementsSeenId.has(keyId)) return false;
+    if(paiementsSeenDateMt.has(keyDateMt)) return false;
+    if(keyId) paiementsSeenId.add(keyId);
+    paiementsSeenDateMt.add(keyDateMt);
     return true;
   });
 
@@ -11533,7 +11600,8 @@ function reconcilierHistoDette(fid){
   const depensesF=(S.depenses||[]).filter(d=>d.cat==='Règlement dette'&&d.four===f.nom&&!d._deleted);
   depensesF.forEach(dep=>{
     const dejaParId=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
-    const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt&&p.note&&p.note.includes('Règlement'));
+    // Clé élargie : même date + même montant (sans exiger note="Règlement", car la note peut être personnalisée)
+    const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt);
     if(!dejaParId&&!dejaParDateMt){
       f.historiquePaiementsFour.push({
         id:dep.id,date:dep.date,montantPaye:dep.mt,
@@ -11659,7 +11727,7 @@ function voirHistoDette(fid){
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="reconcilierHistoDette(${fid})" style="font-size:11px;color:var(--teal);border-color:var(--teal)" title="Ajouter les achats manquants au relevé">🔄 Réconcilier</button>
         <button class="btn" onclick="corrigerSoldeManuellement(${fid})" style="font-size:11px;color:var(--amber);border-color:var(--amber)" title="Corriger manuellement le solde de la dette">✏️ Corriger solde</button>
-        ${nbFantomes>0?`<button class="btn" onclick="nettoyerPaiementsFantomes(${fid})" style="font-size:11px;color:var(--red);border-color:var(--red);font-weight:700" title="Supprimer les ${nbFantomes} paiement(s) excédentaire(s) — ils n'ont eu aucun effet sur la dette">🗑️ Nettoyer (${nbFantomes})</button>`:''}
+        ${nbFantomes>0?`<button class="btn" onclick="nettoyerPaiementsFantomes(${fid})" style="font-size:11px;color:var(--red);border-color:var(--red);font-weight:700" title="Supprimer les paiements excédentaires — ils n'ont eu aucun effet sur la dette">🗑️ Nettoyer (${nbFantomes})</button>`:''}
         <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
@@ -11686,7 +11754,6 @@ function nettoyerPaiementsFantomes(fid){
     } else {
       const mt=l.ref.montantPaye||l.ref.mt||0;
       if(solde<=0&&mt>0){
-        // Ce paiement est un fantôme : solde déjà à 0 avant lui
         fantomesIds.add(String(l.ref.id));
       } else {
         solde=Math.max(0,solde-mt);
@@ -11696,24 +11763,23 @@ function nettoyerPaiementsFantomes(fid){
 
   if(fantomesIds.size===0){toast('✅ Aucun paiement excédentaire trouvé');voirHistoDette(fid);return;}
 
-  // Confirmer avant suppression
   const nb=fantomesIds.size;
   if(!confirm(`Supprimer ${nb} paiement(s) excédentaire(s) du relevé de ${f.nom} ?
 
-Ces paiements ont été enregistrés quand la dette était déjà à 0 — ils n'ont eu aucun effet réel sur le solde.
+Ces paiements ont été enregistrés alors que la dette était déjà à 0 — ils n'ont eu aucun effet réel sur le solde.
 
 La dépense correspondante dans le journal sera également supprimée.`))return;
 
   // Supprimer de historiquePaiementsFour
   f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>!fantomesIds.has(String(p.id)));
 
-  // Supprimer les dépenses "Règlement dette" correspondantes de S.depenses
+  // Supprimer les dépenses "Règlement dette" correspondantes
   S.depenses=(S.depenses||[]).filter(d=>{
     if(d.cat!=='Règlement dette'||d.four!==f.nom) return true;
     return !fantomesIds.has(String(d.id));
   });
 
-  // Recalculer les soldes dans le relevé
+  // Recalculer les soldes
   const lignes2=[];
   f.historiqueDetteAjouts.forEach(h=>lignes2.push({ref:h,type:'ajout'}));
   f.historiquePaiementsFour.forEach(p=>lignes2.push({ref:p,type:'paiement'}));
