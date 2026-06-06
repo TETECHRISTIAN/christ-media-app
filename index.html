@@ -10493,10 +10493,32 @@ function saveTrancheAchat(acid){
 let dettesFiltreTab='tout';
 let dettesFourVue='groupe';
 
+function recalcTousDettes(){
+  // Recalculer f.dette chronologiquement pour tous les fournisseurs qui ont un historique
+  let changed=false;
+  (S.fournisseurs||[]).forEach(f=>{
+    const ajouts=f.historiqueDetteAjouts||[];
+    const paiements=f.historiquePaiementsFour||[];
+    if(!ajouts.length&&!paiements.length) return;
+    const lignes=[];
+    ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt||0,ts:h.ts||0}));
+    paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye||0,ts:p.ts||0}));
+    lignes.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
+    let solde=0;
+    lignes.forEach(l=>{
+      if(l.type==='ajout') solde+=l.mt;
+      else solde=Math.max(0,solde-l.mt);
+    });
+    if(f.dette!==solde){f.dette=solde;changed=true;}
+  });
+  if(changed) saveData();
+}
+
 function rDettes(){
   if(!S.achats)S.achats=[];
   if(!S.ventes)S.ventes=[];
   if(!S.dettesPerso)S.dettesPerso=[];
+  recalcTousDettes();
 
   const bid=getBid();
   const defaultBid=(S.boutiques||[])[0]?.id||1;
