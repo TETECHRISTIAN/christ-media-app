@@ -11386,17 +11386,39 @@ function reconcilierHistoDette(fid){
     }
   });
   if(nb>0){
-    // Recalculer avant/après dans l'ordre chronologique
-    f.historiqueDetteAjouts.sort((a,b)=>a.date.localeCompare(b.date)||(a.ts||0)-(b.ts||0));
+    // Fusionner ajouts + paiements et recalculer tous les soldes chronologiquement
+    const tousLignes=[];
+    (f.historiqueDetteAjouts||[]).forEach(h=>tousLignes.push({ref:h,type:'ajout'}));
+    (f.historiquePaiementsFour||[]).forEach(p=>tousLignes.push({ref:p,type:'paiement'}));
+    tousLignes.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
     let solde=0;
-    f.historiqueDetteAjouts.forEach(h=>{
-      if(h.notes&&!h.notes.includes('Paiement')){h.avant=solde;solde+=h.mt;h.apres=solde;}
+    tousLignes.forEach(l=>{
+      l.ref.avant=solde;
+      const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||0);
+      if(l.type==='ajout') solde+=mt;
+      else solde=Math.max(0,solde-mt);
+      l.ref.apres=solde;
     });
     saveData();
     toast(`✅ ${nb} achat(s) ajoutés au relevé de ${f.nom}`);
     voirHistoDette(fid);
   } else {
-    toast('✅ Relevé déjà à jour');
+    // Même si rien de nouveau, recalculer les soldes pour corriger les incohérences
+    const tousLignes=[];
+    (f.historiqueDetteAjouts||[]).forEach(h=>tousLignes.push({ref:h,type:'ajout'}));
+    (f.historiquePaiementsFour||[]).forEach(p=>tousLignes.push({ref:p,type:'paiement'}));
+    tousLignes.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
+    let solde=0;
+    tousLignes.forEach(l=>{
+      l.ref.avant=solde;
+      const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||0);
+      if(l.type==='ajout') solde+=mt;
+      else solde=Math.max(0,solde-mt);
+      l.ref.apres=solde;
+    });
+    saveData();
+    toast('✅ Soldes du relevé recalculés et corrigés');
+    voirHistoDette(fid);
   }
 }
 
@@ -11406,9 +11428,17 @@ function voirHistoDette(fid){
   const paiements=f.historiquePaiementsFour||[];
   // Fusionner et trier chronologiquement
   const lignes=[];
-  ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt,avant:h.avant,apres:h.apres,note:h.notes,ts:h.ts||0}));
-  paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye,avant:p.avant,apres:p.apres,note:p.note,compte:p.compte,ts:p.ts||0}));
+  ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt,note:h.notes,ts:h.ts||0}));
+  paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye,note:p.note,compte:p.compte,ts:p.ts||0}));
   lignes.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
+  // Recalculer avant/après de façon strictement chronologique
+  let _solde=0;
+  lignes.forEach(l=>{
+    l.avant=_solde;
+    if(l.type==='ajout') _solde+=l.mt;
+    else _solde=Math.max(0,_solde-l.mt);
+    l.apres=_solde;
+  });
   const totalAjoute=ajouts.reduce((s,h)=>s+h.mt,0);
   const totalPaye=paiements.reduce((s,p)=>s+p.montantPaye,0);
   modal(`<div class="mft">📜 Relevé de compte — ${f.nom}</div>
