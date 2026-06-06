@@ -11389,6 +11389,19 @@ function saveAugmentDette(fid){
   saveData();closeModal();toast(`➕ ${F(mt)} ajouté · Nouvelle dette : ${F(f.dette)}`);rDettes();
 }
 
+function corrigerSoldeManuellement(fid){
+  const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const val=prompt(`Corriger le solde de la dette de ${f.nom}\nSolde actuel : ${f.dette} FCFA\n\nEntrer le nouveau solde exact (en FCFA) :`, f.dette);
+  if(val===null) return; // annulé
+  const nouveau=parseInt(val.replace(/\s/g,''),10);
+  if(isNaN(nouveau)||nouveau<0) return toast('❌ Montant invalide');
+  f.dette=nouveau;
+  saveData();
+  toast(`✅ Solde de ${f.nom} corrigé à ${F(nouveau)}`);
+  voirHistoDette(fid);
+  if(currentPage==='dettes') rDettes();
+}
+
 function toggleReleveFullscreen(){
   const m=document.querySelector('#modal-root .modal');
   const btn=document.getElementById('btn-releve-fs');
@@ -11571,6 +11584,7 @@ function voirHistoDette(fid){
       <div style="font-size:11px;color:var(--text3)">${lignes.length} mouvement(s) · ${ajouts.length} ajout(s) · ${paiements.length} paiement(s)${nbFantomes>0?` · <span style="color:var(--amber);font-weight:600">⚠️ ${nbFantomes} paiement(s) excédentaire(s) ignoré(s) dans le total</span>`:''}</div>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="reconcilierHistoDette(${fid})" style="font-size:11px;color:var(--teal);border-color:var(--teal)" title="Ajouter les achats manquants au relevé">🔄 Réconcilier</button>
+        <button class="btn" onclick="corrigerSoldeManuellement(${fid})" style="font-size:11px;color:var(--amber);border-color:var(--amber)" title="Corriger manuellement le solde de la dette">✏️ Corriger solde</button>
         <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
