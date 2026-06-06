@@ -1978,6 +1978,35 @@ async function absorberPendingFirebase(){
         if(nb > 0) totalAbsorbes += nb;
       });
 
+      // Synchroniser historiqueDetteAjouts des fournisseurs à partir des achats absorbés
+      // Si un achat "À payer" est nouveau, s'assurer qu'il est tracé dans l'historique du fournisseur
+      if(Array.isArray(zone.achats)){
+        zone.achats.forEach(achat => {
+          if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
+          const f = (S.fournisseurs||[]).find(x => x.id == achat.fid);
+          if(!f) return;
+          if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
+          // Vérifier si cet achat est déjà dans l'historique
+          const dejaDans = f.historiqueDetteAjouts.some(h => String(h.id) === String(achat.id));
+          if(!dejaDans){
+            const art = (S.stock||[]).find(x => x.id == achat.aid);
+            const artNom = art ? art.nom : (achat.aid || 'Article');
+            const avantDette = f.dette || 0;
+            f.dette = avantDette + achat.mt;
+            f.historiqueDetteAjouts.push({
+              id: achat.id,
+              date: achat.date,
+              mt: achat.mt,
+              avant: avantDette,
+              apres: f.dette,
+              notes: `Achat — ${artNom}${achat.notes ? ' · ' + achat.notes : ''}`,
+              ts: achat.ts || Date.now()
+            });
+            console.log('[PENDING] HistoDette mis à jour pour', f.nom, '— achat', achat.date, '+', achat.mt);
+          }
+        });
+      }
+
       console.log('[PENDING] Zone absorbée:', bidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
     }
 
@@ -11335,6 +11364,42 @@ function toggleReleveFullscreen(){
   btn.title=isFs?'Réduire le relevé':'Agrandir en plein écran';
 }
 
+// Réconcilier l'historiqueDetteAjouts d'un fournisseur avec ses achats réels
+function reconcilierHistoDette(fid){
+  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
+  const achatsF=(S.achats||[]).filter(a=>a.fid==fid&&a.statut==='À payer'&&!a._deleted);
+  let nb=0;
+  achatsF.forEach(achat=>{
+    const dejaDans=f.historiqueDetteAjouts.some(h=>String(h.id)===String(achat.id));
+    if(!dejaDans){
+      const art=(S.stock||[]).find(x=>x.id==achat.aid);
+      const artNom=art?art.nom:(achat.aid||'Article');
+      // Recalculer avant/après approximatif
+      f.historiqueDetteAjouts.push({
+        id:achat.id,date:achat.date,mt:achat.mt,
+        avant:0,apres:achat.mt,
+        notes:`Achat — ${artNom}${achat.notes?' · '+achat.notes:''}`,
+        ts:achat.ts||Date.now()
+      });
+      nb++;
+    }
+  });
+  if(nb>0){
+    // Recalculer avant/après dans l'ordre chronologique
+    f.historiqueDetteAjouts.sort((a,b)=>a.date.localeCompare(b.date)||(a.ts||0)-(b.ts||0));
+    let solde=0;
+    f.historiqueDetteAjouts.forEach(h=>{
+      if(h.notes&&!h.notes.includes('Paiement')){h.avant=solde;solde+=h.mt;h.apres=solde;}
+    });
+    saveData();
+    toast(`✅ ${nb} achat(s) ajoutés au relevé de ${f.nom}`);
+    voirHistoDette(fid);
+  } else {
+    toast('✅ Relevé déjà à jour');
+  }
+}
+
 function voirHistoDette(fid){
   const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
   const ajouts=f.historiqueDetteAjouts||[];
@@ -11391,6 +11456,7 @@ function voirHistoDette(fid){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:var(--text3)">${lignes.length} mouvement(s) · ${ajouts.length} ajout(s) · ${paiements.length} paiement(s)</div>
       <div style="display:flex;gap:8px">
+        <button class="btn" onclick="reconcilierHistoDette(${fid})" style="font-size:11px;color:var(--teal);border-color:var(--teal)" title="Ajouter les achats manquants au relevé">🔄 Réconcilier</button>
         <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
