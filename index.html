@@ -11437,6 +11437,7 @@ function reconcilierHistoDette(fid){
       else solde=Math.max(0,solde-mt);
       l.ref.apres=solde;
     });
+    f.dette=solde;
     saveData();
     toast(`✅ ${nb} achat(s) ajoutés au relevé de ${f.nom}`);
     voirHistoDette(fid);
@@ -11454,6 +11455,7 @@ function reconcilierHistoDette(fid){
       else solde=Math.max(0,solde-mt);
       l.ref.apres=solde;
     });
+    f.dette=solde;
     saveData();
     toast('✅ Soldes du relevé recalculés et corrigés');
     voirHistoDette(fid);
