@@ -1570,6 +1570,7 @@ body.dark th{background:var(--surface3)}
 const F=n=>{const dev=(S&&S.parametres&&S.parametres.devise)||'FCFA';return Math.round(n).toLocaleString('fr-FR')+' '+dev;};
 const N=n=>Math.round(n).toLocaleString('fr-FR');
 const D=()=>{const n=new Date();return n.getFullYear()+'-'+(String(n.getMonth()+1).padStart(2,'0'))+'-'+(String(n.getDate()).padStart(2,'0'));};
+const fmtD=s=>{if(!s)return '—';const p=s.trim().split(' ')[0].split('-');if(p.length===3&&p[0].length===4)return p[2]+'-'+p[1]+'-'+p[0].slice(2);return s;};
 // genId : utilise un compteur local + timestamp pour éviter les collisions entre appareils
 // (deux caissiers sur deux boutiques différentes pouvaient générer le même ID numérique)
 const genId=()=>{
@@ -3680,7 +3681,7 @@ function rDash(){
       <div>
         <p class="st">Dernières ventes</p>
         <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Article</th><th>Montant</th><th>Statut</th></tr></thead><tbody>
-          ${ventesB.slice().reverse().slice(0,6).map(v=>{const a=stockB.find(x=>x.id==v.aid)||ga(v.aid);return`<tr><td>${v.date}</td><td style="font-size:11px;color:var(--text3)">${v.heure||'—'}</td><td class="tdm">${a?a.nom:'?'}</td><td>${F(v.mt)}</td><td>${sb(v.statut)}</td></tr>`}).join('')}
+          ${ventesB.slice().reverse().slice(0,6).map(v=>{const a=stockB.find(x=>x.id==v.aid)||ga(v.aid);return`<tr><td>${fmtD(v.date)}</td><td style="font-size:11px;color:var(--text3)">${v.heure||'—'}</td><td class="tdm">${a?a.nom:'?'}</td><td>${F(v.mt)}</td><td>${sb(v.statut)}</td></tr>`}).join('')}
         </tbody></table></div>
       </div>
       <div>
@@ -3920,7 +3921,7 @@ function rVente(){
           ?`<span class="badge" style="background:var(--amber-bg);color:var(--amber);cursor:pointer" onclick="marquerLivre(${v.id})" title="Cliquer pour marquer livré">📦 Non livré</span>`
           :`<span class="badge bg" style="font-size:10px">✅ Livré</span>`;
         return`<tr style="${estNL?'border-left:3px solid var(--amber);':''}">
-          <td style="font-family:'DM Mono',monospace;font-size:12px">${v.date}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px">${fmtD(v.date)}</td>
           <td style="font-size:11px;color:var(--text3);white-space:nowrap">${v.heure||'—'}</td>
           <td class="tdm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noms}">${noms}</td>
           <td style="font-weight:600">${F(v.mt)}</td>
@@ -4292,7 +4293,7 @@ function rAchats(){
           const payerBtn=a.statut!=='Payé'
             ?`<button class="btn-icon btn-sm" onclick="configurerTranchesAchat(${a.id})" title="Enregistrer un paiement" style="color:var(--green)">💳</button>`:'';
           return`<tr>
-          <td style="font-family:'DM Mono',monospace;font-size:12px">${a.date}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px">${fmtD(a.date)}</td>
           <td class="tdm">${fnom}</td><td>${anom}</td><td>${N(a.qte)}</td>
           <td style="font-weight:600;color:var(--purple)">${F(a.mt)}</td>
           <td><span class="badge bb">${a.cid?nomCompte(a.cid):(a.mode||'—')}</span></td>
@@ -5353,7 +5354,7 @@ function rapportFournisseur(fid){
       <thead><tr><th>Date</th><th>Article</th><th>Qté</th><th>Montant</th><th>Statut</th></tr></thead>
       <tbody>${achatsF.length===0?'<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">Aucun achat</td></tr>':
         achatsF.map(a=>`<tr>
-          <td style="font-size:11px;font-family:'DM Mono',monospace">${a.date}</td>
+          <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(a.date)}</td>
           <td class="tdm">${ga(a.aid)?ga(a.aid).nom:'—'}</td>
           <td>${N(a.qte)}</td>
           <td style="font-weight:600;color:var(--purple)">${F(a.mt)}</td>
@@ -5415,7 +5416,7 @@ function rDep(){
       <thead><tr><th>Date</th><th>Fournisseur</th><th>Catégorie</th><th>Montant</th><th>Mode</th><th>Notes</th><th></th></tr></thead>
       <tbody>${filtered.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Aucune dépense</td></tr>':
         filtered.slice().reverse().map(d=>`<tr>
-          <td style="font-family:'DM Mono',monospace;font-size:12px">${d.date}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px">${fmtD(d.date)}</td>
           <td class="tdm">${d.four}</td><td>${cb(d.cat)}</td>
           <td style="font-weight:600;color:var(--red)">${F(d.mt)}</td>
           <td><span class="badge bb">${d.cid?nomCompte(d.cid):(d.mode||'—')}</span></td>
@@ -5870,7 +5871,7 @@ function rHistorique(){
       <table>
         <thead><tr><th>Date</th><th>Type</th><th>Article</th><th>Catégorie</th><th>Qté</th><th>Notes</th></tr></thead>
         <tbody>${hist.map(h=>`<tr>
-          <td>${h.date}</td>
+          <td>${fmtD(h.date)}</td>
           <td><span class="badge ${h.type==='Entrée'?'bg':'br'}">${h.type==='Entrée'?'⬆️ Entrée':'⬇️ Sortie'}</span></td>
           <td class="tdm">${h.nom}</td>
           <td>${cb(h.cat)}</td>
@@ -5965,7 +5966,7 @@ function rTresorerie(){
           ${ventesCredit.length>0?`<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin:12px 0 8px">Ventes à crédit</div>
           <div class="fin-list">${ventesCredit.map(v=>{const a=ga(v.aid);return`
             <div class="fin-row">
-              <div><div class="fin-name">${v.client||'Client anonyme'}</div><div style="font-size:11px;color:var(--text3)">${v.date} · ${a?a.nom:'?'}</div></div>
+              <div><div class="fin-name">${v.client||'Client anonyme'}</div><div style="font-size:11px;color:var(--text3)">${fmtD(v.date)} · ${a?a.nom:'?'}</div></div>
               <div class="fin-val" style="color:var(--amber)">${F(v.mt)}</div>
             </div>`}).join('')}</div>`:''}
           ${pretsPerso.length>0?`<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin:12px 0 8px">Prêts perso</div>
@@ -6137,7 +6138,7 @@ function printFacture(vid){
       <div class="f-num-zone">
         <div class="f-num-title">FACTURE</div>
         <div class="f-num-ref">N° FAC-${String(factureNum).padStart(5,'0')}</div>
-        <div class="f-num-ref">Date : ${v.date.split('-').reverse().join('-')}${heure?' à '+heure:''}</div>
+        <div class="f-num-ref">Date : ${fmtD(v.date)}${heure?' à '+heure:''}</div>
         <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
       </div>
     </div>
@@ -6275,7 +6276,7 @@ function rRevenus(){
       <thead><tr><th>Date</th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Mode</th><th></th></tr></thead>
       <tbody>${S.revenus.length===0?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Aucun revenu enregistré</td></tr>':
         S.revenus.slice().reverse().map(r=>`<tr>
-          <td>${r.date}</td><td class="tdm">${r.desc}</td>
+          <td>${fmtD(r.date)}</td><td class="tdm">${r.desc}</td>
           <td><span class="badge bg">${r.cat}</span></td>
           <td style="font-weight:600;color:var(--green)">${F(r.mt)}</td>
           <td><span class="badge bb">${r.cid?nomCompte(r.cid):(r.mode||'—')}</span></td>
@@ -7505,7 +7506,7 @@ function rTransactions(){
           <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':'service'}">${t._icon}</div>
           <div style="flex:1">
             <div style="font-weight:500;font-size:13px">${desc}</div>
-            <div style="font-size:11px;color:var(--text3)">${t.date}${t.heure?' à '+t.heure:''}  · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''}  · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:14px">${montant}</div>
@@ -7554,7 +7555,7 @@ function rServices(){
       <thead><tr><th>Date</th><th>Service</th><th>Client</th><th>Montant</th><th>Mode</th><th>Statut</th><th></th></tr></thead>
       <tbody>${ventes_services.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune prestation enregistrée</td></tr>':
         S.ventes_services.slice().reverse().map(v=>`<tr>
-          <td>${v.date}</td><td class="tdm">${v.nom_service}</td>
+          <td>${fmtD(v.date)}</td><td class="tdm">${v.nom_service}</td>
           <td>${v.client||'—'}</td><td style="font-weight:600">${F(v.mt)}${v.avance>0&&v.statut!=='Payé'?`<br><small style='color:var(--orange)'>Avance: ${F(v.avance)} | Reste: ${F(v.reste||v.mt-v.avance)}</small>`:''}</td>
           <td><span class="badge bb">${v.cid?nomCompte(v.cid):(v.mode||'—')}</span></td><td>${sb(v.statut)}</td>
           <td><div class="td-actions">
@@ -7799,7 +7800,7 @@ function delVenteService(id){
 function partagerWhatsAppService(id){
   const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
   const nomShop=S.parametres?.nom||'Christ Media';
-  const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${v.date}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':'⏳ Non payé'}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
+  const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':'⏳ Non payé'}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
   window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`,'_blank');
 }
 
@@ -7816,7 +7817,7 @@ function configurerTranchesService(id){
     </div>
     <div class="tranche-progress"><div class="tranche-fill" style="width:${v.mt>0?Math.min(100,Math.round(totalPaye/v.mt*100)):0}%;background:var(--green)"></div></div>
     <div style="font-size:11px;color:var(--text3);text-align:right;margin-bottom:12px">${v.mt>0?Math.round(totalPaye/v.mt*100):0}% payé</div>
-    ${v.tranches.map(t=>`<div class="tranche-row"><span style="font-size:12px;flex:1">${t.date} · ${t.mode}</span><span style="font-weight:600;color:var(--green)">${F(t.mt)}</span></div>`).join('')}
+    ${v.tranches.map(t=>`<div class="tranche-row"><span style="font-size:12px;flex:1">${fmtD(t.date)} · ${t.mode}</span><span style="font-weight:600;color:var(--green)">${F(t.mt)}</span></div>`).join('')}
     ${restant>0?`
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">Nouveau versement</div>
@@ -7852,7 +7853,7 @@ function printFactureService(id){
   // Même modal de saisie client que printFacture
   modal(`<div class="mft">📄 Facture — ${v.nom_service}</div>
     <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;display:flex;justify-content:space-between">
-      <span style="color:var(--text2)">${v.nom_service} — ${v.date}</span>
+      <span style="color:var(--text2)">${v.nom_service} — ${fmtD(v.date)}</span>
       <span style="font-weight:700;color:var(--navy)">${F(v.mt)}</span>
     </div>
     <div class="fg">
@@ -7953,7 +7954,7 @@ function _genererFactureService(id){
       <div class="f-num-zone">
         <div class="f-num-title">FACTURE</div>
         <div class="f-num-ref"><strong>N°</strong> ${numFac}</div>
-        <div class="f-num-ref"><strong>Date :</strong> ${v.date.split('-').reverse().join('-')}${v.heure?' à '+v.heure:''}</div>
+        <div class="f-num-ref"><strong>Date :</strong> ${fmtD(v.date)}${v.heure?' à '+v.heure:''}</div>
         <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
       </div>
     </div>
@@ -8038,7 +8039,7 @@ function imprimerThermiqueService(id){
   <div class="center bold" style="font-size:11px;margin:3px 0">REÇU DE SERVICE</div>
   <div class="center" style="font-size:10px;color:#555">${numRecu}</div>
   <div class="line"></div>
-  <div class="row"><span>Date</span><span>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('/'):d;})()}</span></div>
+  <div class="row"><span>Date</span><span>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('-'):d;})()}</span></div>
   <div class="row"><span>Heure</span><span>${v.heure||''}</span></div>
   <div class="row"><span>Client</span><span>${v.client||'—'}</span></div>
   <div class="line"></div>
@@ -8063,7 +8064,7 @@ function imprimerRecuService(id){
   // Modal de préparation — même flux que printFacture
   modal(`<div class="mft">🧾 Préparer le reçu de service</div>
     <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;display:flex;justify-content:space-between">
-      <span style="color:var(--text2)">${v.nom_service} — ${v.date}</span>
+      <span style="color:var(--text2)">${v.nom_service} — ${fmtD(v.date)}</span>
       <span style="font-weight:700;color:var(--navy)">${F(v.mt)}</span>
     </div>
     <div class="fg">
@@ -8173,7 +8174,7 @@ function _renderRecuService(id){
     </div>
     <div class="body">
       <table class="det">
-        <tr><td>Date</td><td>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('/'):d;})()}</td></tr>
+        <tr><td>Date</td><td>${(()=>{if(!v.date)return '—';const d=v.date.trim().split(' ')[0];const p=d.split('-');return p.length===3&&p[0].length===4?p.reverse().join('-'):d;})()}</td></tr>
         <tr><td>Heure</td><td>${v.heure||heure}</td></tr>
         <tr><td>Client</td><td>${v.client}</td></tr>
         ${v.client_adresse?`<tr><td>Adresse</td><td>${v.client_adresse}</td></tr>`:''}
@@ -8516,13 +8517,13 @@ function rechercheGlobale(q){
   S.ventes.filter(v=>(v.client||'').toLowerCase().includes(r)||(v.date||'').includes(r)).slice(0,4).forEach(v=>{
     const lignes=v.lignes||[{aid:v.aid}];
     const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
-    addR('🛒 Ventes','🛒','var(--green-bg)',v.client||'Anonyme',`${v.date} · ${noms.slice(0,40)} · ${F(v.mt)}`,
+    addR('🛒 Ventes','🛒','var(--green-bg)',v.client||'Anonyme',`${fmtD(v.date)} · ${noms.slice(0,40)} · ${F(v.mt)}`,
       `nav(document.querySelector('[data-page=vente]'),'vente');fermerRecherche()`,
       v.statut==='Non payé'?'<span style="font-size:10px;background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:8px;font-weight:600">Impayé</span>':'');
   });
   // Devis
   (S.devis||[]).filter(d=>d.client.toLowerCase().includes(r)).slice(0,3).forEach(d=>{
-    addR('📄 Devis','📄','var(--purple-bg)',`DEV-${String(d.id).padStart(4,'0')} · ${d.client}`,`${d.date} · ${F(d.mt)} · ${d.statut}`,
+    addR('📄 Devis','📄','var(--purple-bg)',`DEV-${String(d.id).padStart(4,'0')} · ${d.client}`,`${fmtD(d.date)} · ${F(d.mt)} · ${d.statut}`,
       `nav(document.querySelector('[data-page=devis]'),'devis');fermerRecherche()`,'');
   });
   // Services
@@ -8537,7 +8538,7 @@ function rechercheGlobale(q){
   });
   // Dépenses
   S.depenses.filter(d=>d.four.toLowerCase().includes(r)||(d.notes||'').toLowerCase().includes(r)).slice(0,3).forEach(d=>{
-    addR('💸 Dépenses','💸','var(--red-bg)',d.four,`${d.date} · ${d.cat} · ${F(d.mt)}`,
+    addR('💸 Dépenses','💸','var(--red-bg)',d.four,`${fmtD(d.date)} · ${d.cat} · ${F(d.mt)}`,
       `nav(document.querySelector('[data-page=depenses]'),'depenses');fermerRecherche()`,'');
   });
 
@@ -8673,7 +8674,7 @@ function rComptes(){
           const versB=(S.boutiques||[]).find(b=>b.id==(vers?.bid));
           const interBoutique = de&&vers&&de.bid!=vers.bid;
           return`<tr${interBoutique?' style="background:var(--navy-bg)"':''}>
-            <td>${t.date}</td>
+            <td>${fmtD(t.date)}</td>
             <td class="tdm">${de?`${deB&&interBoutique?deB.emoji+' ':''}${de.nom}`:'?'}</td>
             <td class="tdm">${vers?`${versB&&interBoutique?versB.emoji+' ':''}${vers.nom}`:'?'}</td>
             <td style="font-weight:600">${F(t.mt)}</td>
@@ -8952,7 +8953,7 @@ function rDevis(){
           const peutConvertir=d.statut!=='Accepté'&&d.statut!=='Refusé';
           return`<tr style="${peutConvertir?'cursor:pointer':''}" ${peutConvertir?'onclick="aperçuDevisConversion('+d.id+')"':''}>
             <td style="font-family:'DM Mono',monospace;font-size:12px">DEV-${String(d.id).padStart(4,'0')}</td>
-            <td>${d.date}</td><td class="tdm">${d.client}</td>
+            <td>${fmtD(d.date)}</td><td class="tdm">${d.client}</td>
             <td style="font-size:12px;color:var(--text3)">${(d.lignes||[]).length} article${(d.lignes||[]).length>1?'s':''}</td>
             <td style="font-weight:600">${F(d.mt)}</td>
             <td style="font-size:11px;color:${isExpire?'var(--red)':'var(--text3)'};font-weight:${isExpire?'700':'400'}">${d.validite||'—'}${isExpire?' ⚠️':''}</td>
@@ -9044,7 +9045,7 @@ function aperçuDevisConversion(id){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
           <div style="font-size:14px;font-weight:700">${d.client}</div>
-          <div style="font-size:11px;color:var(--text3)">Devis du ${d.date}</div>
+          <div style="font-size:11px;color:var(--text3)">Devis du ${fmtD(d.date)}</div>
         </div>
         <div style="font-size:20px;font-weight:900;color:var(--navy)">${F(d.mt)}</div>
       </div>
@@ -9203,7 +9204,7 @@ function imprimerDevis(id){
     <div class="devis-meta">
       <div class="num">DEV-${String(d.id).padStart(4,'0')}</div>
       <div class="info">
-        Date : ${d.date}<br>
+        Date : ${fmtD(d.date)}<br>
         Validité : ${d.validite||'—'}<br>
         <span class="status-badge">${d.statut}</span>
       </div>
@@ -9281,7 +9282,7 @@ function rPlanning(){
         return`<div class="alerte-row">
           <div>
             <div class="alerte-row-titre">${p.titre}</div>
-            <div class="alerte-row-info">📅 Échéance : ${p.date} ${p.mt?`· ${F(p.mt)}`:''} · ${p.cat||'Tâche'}</div>
+            <div class="alerte-row-info">📅 Échéance : ${fmtD(p.date)} ${p.mt?`· ${F(p.mt)}`:''} · ${p.cat||'Tâche'}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <span class="alerte-countdown">${alertLabel}</span>
@@ -9311,7 +9312,7 @@ function rPlanning(){
         </div>
         <div style="text-align:right">
           <div class="plan-date-badge" style="background:${diff<0?'var(--red-bg)':diff<=3?'var(--amber-bg)':'var(--green-bg)'};color:${diff<0?'var(--red)':diff<=3?'var(--amber)':'var(--green)'}">${dateLbl}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">${p.date}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">${fmtD(p.date)}</div>
           ${p.mt?`<div style="font-weight:600;font-size:13px;margin-top:4px">${F(p.mt)}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-left:8px">
@@ -9371,11 +9372,11 @@ function partagerWhatsApp(id, type){
     const v=S.ventes.find(v=>v.id==id);if(!v)return;
     const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu,mt:v.mt}];
     const detail=lignes.map(l=>{const a=ga(l.aid);return`- ${a?a.nom:'Article'} x${l.qte} = ${F(l.mt)}`;}).join(String.fromCharCode(10));
-    texte=`🧾 *REÇU - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${v.client||'—'}\nDate: ${v.date}\n\n${detail}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode}\nStatut: ${v.statut}\n\nMerci pour votre confiance ! 🙏`;
+    texte=`🧾 *REÇU - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}\n\n${detail}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode}\nStatut: ${v.statut}\n\nMerci pour votre confiance ! 🙏`;
   }else if(type==='devis'){
     const d=S.devis.find(d=>d.id==id);if(!d)return;
     const detail=(d.lignes||[]).map(l=>`- ${l.nom} x${l.qte} = ${F(l.mt)}`).join('\n');
-    texte=`📄 *DEVIS N° DEV-${String(d.id).padStart(4,'0')} - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${d.client}\nDate: ${d.date}\nValidité: ${d.validite}\n\n${detail}\n\n💰 *Total: ${F(d.mt)}*\n${d.notes?'\n'+d.notes:''}\n\nCe devis est valable jusqu'au ${d.validite}`;
+    texte=`📄 *DEVIS N° DEV-${String(d.id).padStart(4,'0')} - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${d.client}\nDate: ${fmtD(d.date)}\nValidité: ${d.validite}\n\n${detail}\n\n💰 *Total: ${F(d.mt)}*\n${d.notes?'\n'+d.notes:''}\n\nCe devis est valable jusqu'au ${d.validite}`;
   }
   const url=`https://wa.me/?text=${encodeURIComponent(texte)}`;
   window.open(url,'_blank');
@@ -9406,7 +9407,7 @@ function gererAcompte(vid){
       <div class="acompte-bar"><div class="acompte-fill" style="width:${Math.min(100,Math.round(totalPaye/v.mt*100))}%"></div></div>
       <div style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px">${Math.round(totalPaye/v.mt*100)}% payé</div>
     </div>
-    ${v.acomptes.length>0?`<div style="margin-bottom:12px">${v.acomptes.map(a=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)"><span>${a.date} · ${a.mode}</span><span style="font-weight:600;color:var(--green)">+${F(a.mt)}</span></div>`).join('')}</div>`:''}
+    ${v.acomptes.length>0?`<div style="margin-bottom:12px">${v.acomptes.map(a=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)"><span>${fmtD(a.date)} · ${a.mode}</span><span style="font-weight:600;color:var(--green)">+${F(a.mt)}</span></div>`).join('')}</div>`:''}
     ${restant>0?`
     <div class="fg"><label class="fl">Nouveau versement</label><input class="fi" type="number" id="ac-mt" placeholder="0" max="${restant}"></div>
     <div class="fg"><label class="fl">Compte encaissement</label>${selectComptes('ac-mode', premierCompteId())}</div>
@@ -10103,7 +10104,7 @@ function genRecuA4HTML(vid){
       <div class="recu-zigzag"></div>
       <div class="recu-body">
         <div class="recu-meta">
-          <div class="recu-meta-cell"><div class="recu-meta-label">Date</div><div class="recu-meta-val">${v.date?v.date.split('-').reverse().join('/'):''}</div></div>
+          <div class="recu-meta-cell"><div class="recu-meta-label">Date</div><div class="recu-meta-val">${v.date?fmtD(v.date):''}</div></div>
           <div class="recu-meta-cell"><div class="recu-meta-label">Heure</div><div class="recu-meta-val">${v.heure||heure}</div></div>
           <div class="recu-meta-cell" style="grid-column:span 2"><div class="recu-meta-label">Client</div><div class="recu-meta-val">${v.client||'Client anonyme'}</div></div>
         </div>
@@ -10349,7 +10350,7 @@ function configurerTranches(vid){
     <div style="font-size:11px;color:var(--text3);text-align:right;margin-bottom:12px">${v.mt>0?Math.round(totalPaye/v.mt*100):0}% payé</div>
     ${v.tranches.map((t,i)=>`
       <div class="tranche-row">
-        <span style="font-size:12px;flex:1">${t.date} · ${t.mode}</span>
+        <span style="font-size:12px;flex:1">${fmtD(t.date)} · ${t.mode}</span>
         <span style="font-weight:600;color:var(--green)">${F(t.mt)}</span>
       </div>`).join('')}
     ${restant>0?`
@@ -10394,7 +10395,7 @@ function configurerTranchesAchat(acid){
       <div class="total-preview-row" style="color:var(--green)"><span>Déjà payé</span><span>${F(totalPaye)}</span></div>
       <div class="total-preview-final"><span>Restant</span><span style="color:${restant>0?'var(--red)':'var(--green)'}">${F(restant)}</span></div>
     </div>
-    ${ac.tranches.map(t=>`<div class="tranche-row"><span style="font-size:12px;flex:1">${t.date} · ${t.mode}</span><span style="font-weight:600;color:var(--red)">−${F(t.mt)}</span></div>`).join('')}
+    ${ac.tranches.map(t=>`<div class="tranche-row"><span style="font-size:12px;flex:1">${fmtD(t.date)} · ${t.mode}</span><span style="font-weight:600;color:var(--red)">−${F(t.mt)}</span></div>`).join('')}
     ${restant>0?`
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="fr">
@@ -10495,7 +10496,7 @@ function rDettes(){
       const pct=Math.round((d.rembourse||0)/d.montant*100);
       const compte=S.comptes&&S.comptes.find(c=>c.id==d.cid);
       return`<tr>
-        <td style="font-size:11px;font-family:'DM Mono',monospace">${d.date}</td>
+        <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(d.date)}</td>
         <td class="tdm">${d.personne}</td>
         <td><span class="badge" style="background:${d.typeDette==='emprunter'?'var(--red-bg)':'var(--green-bg)'};color:${d.typeDette==='emprunter'?'var(--red)':'var(--green)'}">${d.typeDette==='emprunter'?'📥 Emprunt':'📤 Prêt'}</span></td>
         <td style="font-weight:600">${F(d.montant)}</td>
@@ -10540,7 +10541,7 @@ function rDettes(){
           const reste=Math.max(0, a.mt-paye);
           const pct=a.mt>0?Math.min(100,Math.round((paye/a.mt)*100)):0;
           return`<tr>
-            <td style="font-size:11px;font-family:'DM Mono',monospace">${a.date}</td>
+            <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(a.date)}</td>
             <td class="tdm">${f?f.nom:'—'}</td><td>${art?art.nom:'—'}</td>
             <td style="color:var(--purple);font-weight:600">${F(a.mt)}</td>
             <td style="color:var(--green)">${F(paye)}</td>
@@ -10615,7 +10616,7 @@ function rDettes(){
           }
           const labelType=v._type==='service'?`<span style="font-size:10px;background:var(--teal-bg,#e0f7f4);color:var(--teal);border-radius:3px;padding:1px 5px;margin-left:4px">🛠 Service</span>`:''
           return`<tr>
-            <td style="font-size:11px;font-family:'DM Mono',monospace">${v.date}</td>
+            <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(v.date)}</td>
             <td class="tdm">${v.client||'Anonyme'}${labelType}${v._type==='service'?`<div style="font-size:10px;color:var(--text3)">${v.nom_service||''}</div>`:''}</td>
             <td style="color:var(--navy);font-weight:600">${F(totalRef)}</td>
             <td style="color:var(--green)">${F(paye)}</td>
@@ -11373,7 +11374,7 @@ function voirHistoDette(fid){
       </tr></thead>
       <tbody>${lignes.map(l=>`
         <tr style="border-bottom:1px solid var(--surface2)">
-          <td style="padding:7px 8px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap">${l.date}</td>
+          <td style="padding:7px 8px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap">${fmtD(l.date)}</td>
           <td style="padding:7px 8px">
             ${l.type==='ajout'
               ?'<span style="background:var(--red-bg);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">📈 Ajout</span>'
@@ -11443,7 +11444,7 @@ function rFlux(){
   const historique=buildHist(window._fluxFiltre);
   const renderHist=(h)=>h.length===0?'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">Aucune opération</td></tr>':
     h.slice(0,100).map(x=>`<tr>
-      <td style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)">${x.date}</td>
+      <td style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)">${fmtD(x.date)}</td>
       <td><span style="font-size:11px;font-weight:600;color:${x.couleur}">${x.type}</span></td>
       <td class="tdm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.label}</td>
       <td><span class="badge bb" style="font-size:10px">${x.compte}</span></td>
@@ -11937,7 +11938,7 @@ function rAgenda(){
             <div style="flex:1">
               <div style="font-weight:600;font-size:13px">${op.titre}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-                <span style="font-size:11px;color:var(--text3)">📅 ${op.date}</span>
+                <span style="font-size:11px;color:var(--text3)">📅 ${fmtD(op.date)}</span>
                 <span style="font-size:11px;color:${couleurType[op.type]||'var(--navy)'}">● ${op.type}</span>
                 ${op.montant?`<span style="font-size:11px;font-weight:600">${F(op.montant)}</span>`:''}
                 ${compte?`<span style="font-size:11px;color:var(--text3)">🏦 ${compte.nom}</span>`:''}
@@ -12986,7 +12987,7 @@ function renderJournalMain(){
     </div>`:
     entries.map((e,i)=>`
     <div class="journal-entry" onclick="journalVoir(${i})">
-      <div class="journal-entry-date">${e.date}</div>
+      <div class="journal-entry-date">${fmtD(e.date)}</div>
       <div style="display:flex;align-items:center">
         <span class="journal-entry-mood">${e.mood||'📝'}</span>
         <span class="journal-entry-title">${e.titre||'Sans titre'}</span>
@@ -13025,7 +13026,7 @@ function journalVoir(i){
   const entries=loadJournal();
   const e=entries[i];if(!e)return;
   modal(`<div class="mft">${e.mood||'📝'} ${e.titre||'Note'}</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${e.date}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${fmtD(e.date)}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:14px;font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;min-height:80px">${e.contenu||'(vide)'}</div>
     <div class="mff">
       <button class="btn btn-danger" onclick="journalSupprimer(${i})">🗑️ Supprimer</button>
@@ -15068,7 +15069,7 @@ function rClotureCaisse(){
             <div style="font-weight:700;color:var(--red)">${F(e.mensualite)}</div>
           </div>`).join('')}
           ${proches.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px">
-            <div><span style="font-weight:600;color:var(--amber)">📅 ${e.date}</span> — ${e.personne} · Échéance n°${e.n}</div>
+            <div><span style="font-weight:600;color:var(--amber)">📅 ${fmtD(e.date)}</span> — ${e.personne} · Échéance n°${e.n}</div>
             <div style="font-weight:700">${F(e.mensualite)}</div>
           </div>`).join('')}
           <div style="margin-top:8px;text-align:right">
@@ -17389,7 +17390,7 @@ function rPromos(){
               <td class="tdm">${p.nom||'Sans nom'}</td>
               <td style="color:var(--red);font-weight:700">${p.remise}${p.remiseType==='%'?'%':' FCFA'} de réduction</td>
               <td style="font-size:12px">${portee}</td>
-              <td style="font-size:11px;font-family:'DM Mono',monospace">${p.dateDebut||'—'} → ${p.dateFin||'∞'}</td>
+              <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(p.dateDebut)||'—'} → ${fmtD(p.dateFin)||'∞'}</td>
               <td>${isExpired ? '<span class="badge br">Expirée</span>' : isActive ? '<span class="badge bg">Active</span>' : '<span class="badge ba">Inactive</span>'}</td>
               <td><div class="td-actions">
                 <button class="btn-icon btn-sm" onclick="togglePromo(${p.id})" title="${p.actif===false?'Activer':'Désactiver'}">${p.actif===false?'▶':'⏸'}</button>
@@ -17583,7 +17584,7 @@ function rCommandes(){
               <td class="tdm">${f?f.nom:'—'}</td>
               <td style="font-size:12px">${nbLignes} article${nbLignes>1?'s':''}</td>
               <td style="font-weight:600;color:var(--purple)">${total>0?F(total):'—'}</td>
-              <td style="font-size:11px;font-family:'DM Mono',monospace">${c.date||'—'}</td>
+              <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(c.date)||'—'}</td>
               <td><span class="badge ${statusColor}">${c.statut}</span></td>
               <td><div class="td-actions">
                 <button class="btn-icon btn-sm" onclick="voirCommande(${c.id})" title="Voir détail">👁️</button>
@@ -18192,7 +18193,7 @@ function rDepots(){
                 <div style="font-size:11px;color:var(--text3)">
                   ${dSrc?.emoji||'📦'} ${dSrc?.nom||'—'} → ${dDst?.emoji||'📦'} ${dDst?.nom||'—'}
                 </div>
-                <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.date} · ${t.note||''}</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtD(t.date)} · ${t.note||''}</div>
               </div>`;
             }).join('')}
           </div>`}
@@ -18807,7 +18808,7 @@ function rAudit(){
           <thead><tr><th>Date/Heure</th><th>Utilisateur</th><th>Action</th><th>Catégorie</th><th>Détails</th><th>Avant/Après</th></tr></thead>
           <tbody>
             ${slice.map(e => `<tr>
-              <td style="font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${e.date}<br>${e.heure}</td>
+              <td style="font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${fmtD(e.date)}<br>${e.heure}</td>
               <td style="white-space:nowrap">${e.userEmoji||'👤'} <span style="font-size:12px;font-weight:600">${e.user||'—'}</span><br><span style="font-size:10px;color:var(--text3)">${e.userRole||''}</span></td>
               <td><span class="badge" style="background:${actionColor[e.action]||'var(--surface2)'}20;color:${actionColor[e.action]||'var(--text2)'};border:1px solid ${actionColor[e.action]||'var(--border)'}40;font-size:10px">${actionLabel[e.action]||e.action}</span></td>
               <td><span class="badge bb" style="font-size:10px">${e.categorie||'—'}</span></td>
@@ -19213,7 +19214,7 @@ function voirHistoPrix(aid){
     `<div class="tbl-wrap" style="max-height:260px;overflow-y:auto"><table>
       <thead><tr><th>Date</th><th>Anc. P.Achat</th><th>Nouv. P.Achat</th><th>Anc. P.Vente</th><th>Nouv. P.Vente</th></tr></thead>
       <tbody>${hist.map(h=>`<tr>
-        <td style="font-size:11px;font-family:'DM Mono',monospace">${h.date}</td>
+        <td style="font-size:11px;font-family:'DM Mono',monospace">${fmtD(h.date)}</td>
         <td style="color:var(--text3)">${F(h.ancienPa)}</td>
         <td style="color:${h.nvPa>h.ancienPa?'var(--red)':'var(--green)'};font-weight:600">${F(h.nvPa)} ${h.nvPa>h.ancienPa?'↑':'↓'}</td>
         <td style="color:var(--text3)">${F(h.ancienPv)}</td>
@@ -20058,7 +20059,7 @@ function renderJournal(){
     </div>
     ${ecritures.length===0?'<div style="padding:20px;text-align:center;color:var(--text3)">Aucune écriture ce mois</div>':
       ecritures.map(e=>`<div class="journal-line">
-        <span style="font-family:'DM Mono',monospace;font-size:11px">${e.date}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px">${fmtD(e.date)}</span>
         <span style="font-size:11px;color:var(--text3)">${e.heure}</span>
         <span><span style="font-weight:600;color:var(--navy);margin-right:6px">${e.num}</span>${e.libelle}</span>
         <span style="font-size:10px;color:var(--text3)">${e.ref}</span>
@@ -20204,12 +20205,12 @@ function renderTresoEtat(){
       ${encaissements.slice().reverse().slice(0,15).map(v=>{
         const lignes=v.lignes||[{aid:v.aid}];
         const desc=lignes.map(l=>(ga(l.aid)||{}).nom||'?').join(', ');
-        return `<div class="bilan-row"><span>${v.date} ${v.heure?'à '+v.heure:''} — ${desc}</span><span style="color:var(--green);font-weight:600">+${F(v.mt)}</span></div>`;
+        return `<div class="bilan-row"><span>${fmtD(v.date)} ${v.heure?'à '+v.heure:''} — ${desc}</span><span style="color:var(--green);font-weight:600">+${F(v.mt)}</span></div>`;
       }).join('')}
     </div>
     <div class="bilan-section">
       <div class="bilan-title" style="background:var(--red)"><span>❤️ DÉCAISSEMENTS</span><span>${F(totalDec)}</span></div>
-      ${decaissements.slice(0,15).map(d=>`<div class="bilan-row"><span>${d.date} — ${d._type} : ${d._desc}</span><span style="color:var(--red);font-weight:600">−${F(d.mt||d.montant||0)}</span></div>`).join('')}
+      ${decaissements.slice(0,15).map(d=>`<div class="bilan-row"><span>${fmtD(d.date)} — ${d._type} : ${d._desc}</span><span style="color:var(--red);font-weight:600">−${F(d.mt||d.montant||0)}</span></div>`).join('')}
     </div>
   </div>
   <div class="bilan-section" style="margin-top:0">
@@ -20364,7 +20365,7 @@ function renderAvances(){
       ${avances.slice().reverse().map(a=>{
         const emp=(S.employes||[]).find(e=>e.id==a.emp_id);
         return `<tr>
-          <td style="font-size:11px">${a.date}</td>
+          <td style="font-size:11px">${fmtD(a.date)}</td>
           <td>${emp?emp.emoji+' '+emp.nom:'?'}</td>
           <td style="font-weight:600;color:var(--purple)">${F(a.montant)}</td>
           <td style="font-size:12px">${a.motif||'—'}</td>
@@ -20702,7 +20703,7 @@ function renderFourniHistorique(){
         achats.map(a=>{
           const f=gf(a.fid); const art=ga(a.aid);
           return `<tr>
-            <td style="font-size:11px">${a.date}</td>
+            <td style="font-size:11px">${fmtD(a.date)}</td>
             <td>${f?f.nom:'?'}</td>
             <td class="tdm">${art?art.nom:'?'}</td>
             <td>${a.qte}</td>
