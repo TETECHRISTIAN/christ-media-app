@@ -10521,6 +10521,7 @@ function rDettes(){
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
       ${tabs.map(t=>`<button onclick="dettesFiltreTab='${t.id}';rDettes()" class="btn btn-sm" style="${dettesFiltreTab===t.id?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${t.label}</button>`).join('')}
       <button class="btn btn-sm btn-success" onclick="addDettePerso()" style="margin-left:auto">+ Emprunter / Prêter</button>
+      <button class="btn btn-sm" onclick="restructurerLoyerMaison()" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber);font-size:11px">🏠 Restructurer Loyer</button>
     </div>
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='fournisseurs')?`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -10974,6 +10975,49 @@ function delDettePerso(id){
   if(!confirm('Supprimer ?'))return;
   S.dettesPerso=S.dettesPerso.filter(d=>d.id!=id);
   saveData();rDettes();toast('🗑️ Supprimé');
+}
+
+// Restructure le loyer maison en 9 lignes mensuelles (oct 2025 → juin 2026)
+function restructurerLoyerMaison(){
+  const mois=[
+    {label:'Octobre 2025',   date:'2025-10-01'},
+    {label:'Novembre 2025',  date:'2025-11-01'},
+    {label:'Décembre 2025',  date:'2025-12-01'},
+    {label:'Janvier 2026',   date:'2026-01-01'},
+    {label:'Février 2026',   date:'2026-02-01'},
+    {label:'Mars 2026',      date:'2026-03-01'},
+    {label:'Avril 2026',     date:'2026-04-01'},
+    {label:'Mai 2026',       date:'2026-05-01'},
+    {label:'Juin 2026',      date:'2026-06-01'},
+  ];
+  const bid=getBid();
+  const cid=premierCompteId();
+  // Trouver et supprimer les anciennes entrées Loyer Maison
+  const anciennes=(S.dettesPerso||[]).filter(d=>d.personne&&d.personne.toLowerCase().includes('loyer'));
+  if(anciennes.length===0&&!confirm('Aucune entrée "Loyer" existante trouvée. Créer quand même les 9 lignes ?')) return;
+  if(anciennes.length>0&&!confirm(`⚠️ ${anciennes.length} entrée(s) "Loyer Maison" existante(s) vont être supprimées et remplacées par 9 lignes mensuelles (Oct 2025 → Juin 2026). Continuer ?`)) return;
+  // Supprimer les anciennes
+  S.dettesPerso=(S.dettesPerso||[]).filter(d=>!d.personne||!d.personne.toLowerCase().includes('loyer'));
+  // Créer les 9 nouvelles lignes
+  mois.forEach(m=>{
+    S.dettesPerso.push({
+      id:genId(),
+      bid:bid,
+      typeDette:'emprunter',
+      personne:`Loyer Maison — ${m.label}`,
+      date:m.date,
+      montant:26000,
+      rembourse:0,
+      cid:cid,
+      echeance:null,
+      taux:0,
+      notes:`Loyer mensuel ${m.label}`,
+      statut:'En cours'
+    });
+  });
+  saveData();
+  rDettes();
+  toast('✅ 9 lignes de loyer créées — Oct 2025 à Juin 2026');
 }
 
 function voirTableauAmort(id){
