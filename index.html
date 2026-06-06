@@ -11489,9 +11489,9 @@ function voirHistoDette(fid){
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total payé</div>
         <div style="font-size:15px;font-weight:800;color:var(--green)">−${F(totalPaye)}</div>
       </div>
-      <div style="flex:1;min-width:110px;background:${f.dette>0?'var(--amber-bg)':'var(--green-bg)'};border-radius:var(--rs);padding:10px 12px;text-align:center">
+      <div style="flex:1;min-width:110px;background:${_solde>0?'var(--amber-bg)':'var(--green-bg)'};border-radius:var(--rs);padding:10px 12px;text-align:center">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Solde actuel</div>
-        <div style="font-size:15px;font-weight:800;color:${f.dette>0?'var(--amber)':'var(--green)'}">${F(f.dette)}</div>
+        <div style="font-size:15px;font-weight:800;color:${_solde>0?'var(--amber)':'var(--green)'}">${F(_solde)}</div>
       </div>
     </div>
     <div class="releve-table-wrap" style="max-height:320px;overflow-y:auto;overflow-x:auto">
