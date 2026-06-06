@@ -11368,19 +11368,37 @@ function toggleReleveFullscreen(){
 function reconcilierHistoDette(fid){
   const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
   if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
-  const achatsF=(S.achats||[]).filter(a=>a.fid==fid&&a.statut==='À payer'&&!a._deleted);
+  if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
+
+  // 1. Ajouter les achats "À payer" manquants dans historiqueDetteAjouts
+  const achatsF=(S.achats||[]).filter(a=>a.fid==fid&&a.statut==='À payer'&&!a._deleted);
   achatsF.forEach(achat=>{
     const dejaDans=f.historiqueDetteAjouts.some(h=>String(h.id)===String(achat.id));
     if(!dejaDans){
       const art=(S.stock||[]).find(x=>x.id==achat.aid);
       const artNom=art?art.nom:(achat.aid||'Article');
-      // Recalculer avant/après approximatif
       f.historiqueDetteAjouts.push({
         id:achat.id,date:achat.date,mt:achat.mt,
         avant:0,apres:achat.mt,
         notes:`Achat — ${artNom}${achat.notes?' · '+achat.notes:''}`,
         ts:achat.ts||Date.now()
+      });
+      nb++;
+    }
+  });
+
+  // 2. Ajouter les paiements (dépenses "Règlement dette") manquants dans historiquePaiementsFour
+  const depensesF=(S.depenses||[]).filter(d=>d.cat==='Règlement dette'&&d.four===f.nom&&!d._deleted);
+  depensesF.forEach(dep=>{
+    const dejaDans=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
+    if(!dejaDans){
+      f.historiquePaiementsFour.push({
+        id:dep.id,date:dep.date,montantPaye:dep.mt,
+        avant:0,apres:0,
+        compte:dep.mode||'—',cid:dep.cid,
+        note:dep.notes||'Règlement dette',
+        ts:dep.ts||Date.now()
       });
       nb++;
     }
