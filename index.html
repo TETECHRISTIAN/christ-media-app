@@ -6151,9 +6151,10 @@ function saveReglementDette(fid){
   f.dette=Math.max(0,f.dette-mt);
   const apresDette=f.dette;
   // ── Historique traçabilité paiements ──
+  const depId=genId(); // ID partagé entre l'historique et la dépense pour éviter les doublons à la réconciliation
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   f.historiquePaiementsFour.push({
-    id:genId(),
+    id:depId,
     date:dateP,
     montantPaye:mt,
     avant:avantDette,
@@ -6163,7 +6164,7 @@ function saveReglementDette(fid){
     note:note||'—',
     ts:Date.now()
   });
-  S.depenses.push({id:genId(),date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+  S.depenses.push({id:depId,date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
   debiterCompte(cid_d,mt);
   saveData();closeModal();
   toast(`✅ ${F(mt)} payé · Reste : ${F(apresDette)}${apresDette===0?' — Compte soldé !':''}`);
@@ -11493,12 +11494,16 @@ function reconcilierHistoDette(fid){
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
 
-  // 0. Dédoublonner historiquePaiementsFour (même date + même montant + type règlement)
-  const paiementsSeen=new Set();
+  // 0. Dédoublonner historiquePaiementsFour (même id OU même date+montant)
+  const paiementsSeenId=new Set();
+  const paiementsSeenDateMt=new Set();
   f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>{
-    const key=`${p.date}|${p.montantPaye||p.mt}`;
-    if(paiementsSeen.has(key)) return false;
-    paiementsSeen.add(key);
+    const keyId=String(p.id||'');
+    const keyDateMt=`${p.date}|${p.montantPaye||p.mt||0}`;
+    if(keyId&&paiementsSeenId.has(keyId)) return false;
+    if(paiementsSeenDateMt.has(keyDateMt)) return false;
+    if(keyId) paiementsSeenId.add(keyId);
+    paiementsSeenDateMt.add(keyDateMt);
     return true;
   });
 
@@ -11533,7 +11538,8 @@ function reconcilierHistoDette(fid){
   const depensesF=(S.depenses||[]).filter(d=>d.cat==='Règlement dette'&&d.four===f.nom&&!d._deleted);
   depensesF.forEach(dep=>{
     const dejaParId=f.historiquePaiementsFour.some(p=>String(p.id)===String(dep.id));
-    const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt&&p.note&&p.note.includes('Règlement'));
+    // Clé élargie : même date + même montant (sans exiger que la note contienne "Règlement", car la note peut être personnalisée)
+    const dejaParDateMt=f.historiquePaiementsFour.some(p=>p.date===dep.date&&(p.montantPaye||p.mt)===dep.mt);
     if(!dejaParId&&!dejaParDateMt){
       f.historiquePaiementsFour.push({
         id:dep.id,date:dep.date,montantPaye:dep.mt,
