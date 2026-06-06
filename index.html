@@ -5434,6 +5434,80 @@ function delFour(id){
   saveData();toast('🗑️ Fournisseur supprimé');rFour();
 }
 
+// ─── FUSION DOUBLONS FOURNISSEURS ───
+function detecterDoublonsFournisseurs(){
+  // Regroupe par (nom normalisé + tel normalisé)
+  const groupes={};
+  (S.fournisseurs||[]).forEach(f=>{
+    const key=(f.nom||'').trim().toLowerCase()+'|'+(f.tel||'').replace(/\s/g,'');
+    if(!groupes[key]) groupes[key]=[];
+    groupes[key].push(f);
+  });
+  return Object.values(groupes).filter(g=>g.length>1);
+}
+
+function fusionnerDoublonsFournisseurs(){
+  const doublons=detecterDoublonsFournisseurs();
+  if(doublons.length===0){toast('✅ Aucun doublon détecté');return;}
+
+  // Afficher un modal de confirmation avec détail des fusions
+  const lignes=doublons.map(g=>{
+    const totalDette=g.reduce((s,f)=>s+(f.dette||0),0);
+    return `<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
+      <strong>${g[0].nom}</strong> — ${g.length} entrées
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">
+        ${g.map(f=>`ID ${f.id} : ${F(f.dette||0)}`).join(' + ')}
+        → Dette fusionnée : <span style="color:var(--red);font-weight:700">${F(totalDette)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  modal(`<div class="mft">🔀 Fusionner les doublons</div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">${doublons.length} groupe(s) de doublons détecté(s). Les dettes et historiques seront cumulés sur la première entrée :</p>
+    ${lignes}
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="_executerFusionFournisseurs()">✅ Fusionner</button>
+    </div>`);
+}
+
+function _executerFusionFournisseurs(){
+  const doublons=detecterDoublonsFournisseurs();
+  let nbFusions=0;
+  doublons.forEach(groupe=>{
+    // Garder le premier (le plus ancien ou le plus gros historique)
+    const principal=groupe.reduce((best,f)=>(f.historiqueDetteAjouts||[]).length>(best.historiqueDetteAjouts||[]).length?f:best, groupe[0]);
+    const doublonsASupprimer=groupe.filter(f=>f.id!==principal.id);
+
+    doublonsASupprimer.forEach(doublon=>{
+      // Fusionner la dette
+      principal.dette=(principal.dette||0)+(doublon.dette||0);
+      // Fusionner historiqueDetteAjouts
+      if(doublon.historiqueDetteAjouts&&doublon.historiqueDetteAjouts.length){
+        if(!principal.historiqueDetteAjouts) principal.historiqueDetteAjouts=[];
+        principal.historiqueDetteAjouts=[...principal.historiqueDetteAjouts,...doublon.historiqueDetteAjouts];
+        principal.historiqueDetteAjouts.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      }
+      // Fusionner historiquePaiementsFour
+      if(doublon.historiquePaiementsFour&&doublon.historiquePaiementsFour.length){
+        if(!principal.historiquePaiementsFour) principal.historiquePaiementsFour=[];
+        principal.historiquePaiementsFour=[...principal.historiquePaiementsFour,...doublon.historiquePaiementsFour];
+        principal.historiquePaiementsFour.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      }
+      // Réassigner les achats liés au doublon vers le principal
+      (S.achats||[]).forEach(a=>{if(a.fid==doublon.id) a.fid=principal.id;});
+      // Supprimer le doublon
+      S.fournisseurs=S.fournisseurs.filter(f=>f.id!==doublon.id);
+      nbFusions++;
+    });
+    principal.ts=Date.now();
+  });
+
+  saveData();closeModal();
+  toast(`✅ ${nbFusions} doublon(s) fusionné(s) avec succès`);
+  rDettes();
+}
+
 // ─── DÉPENSES ───
 function rDep(){
   const bid = getBid();
@@ -10644,7 +10718,7 @@ function rDettes(){
       })()}
       </tbody></table></div>`}`:``}
     ${(dettesFiltreTab==='tout'||dettesFiltreTab==='foursDirects')?`
-    <p class="st" style="margin-top:16px">🏭 Fournisseurs — Solde direct (${F(totalFoursDirects)})</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:16px;margin-bottom:8px"><p class="st" style="margin:0">🏭 Fournisseurs — Solde direct (${F(totalFoursDirects)})</p>${(()=>{const db=detecterDoublonsFournisseurs();return db.length>0?`<button class="btn btn-sm" onclick="fusionnerDoublonsFournisseurs()" style="background:var(--red-bg);color:var(--red);border-color:var(--red);font-size:11px;margin-left:auto">🔀 Fusionner doublons <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;margin-left:4px">${db.length}</span></button>`:'';})()}</div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Fournisseur</th><th>Tél</th><th>Secteur</th><th style="color:var(--red)">Dette</th><th></th></tr></thead>
       <tbody>${foursDirects.length===0?'<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucune dette fournisseur directe</td></tr>':
