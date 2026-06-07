@@ -11664,13 +11664,12 @@ function voirHistoDette(fid){
         <button class="btn" onclick="reconcilierHistoDette(${fid})" style="font-size:11px;color:var(--teal);border-color:var(--teal)" title="Ajouter les achats manquants au relevé">🔄 Réconcilier</button>
         <button class="btn" onclick="corrigerSoldeManuellement(${fid})" style="font-size:11px;color:var(--amber);border-color:var(--amber)" title="Corriger manuellement le solde de la dette">✏️ Corriger solde</button>
         ${nbDoublonsPaiements>0?`<button class="btn" onclick="nettoyerDoublonsPaiements(${fid})" style="font-size:11px;color:var(--red);border-color:var(--red);font-weight:700" title="Supprimer les ${nbDoublonsPaiements} paiement(s) en double exact (même date + même montant)">🗑️ Doublons (${nbDoublonsPaiements})</button>`:''}
+        <button class="btn" onclick="ouvrirReconstructionExcel(${fid})" style="font-size:11px;color:var(--purple);border-color:var(--purple)" title="Reconstruire l'historique complet depuis les données Excel">📊 Reconstruire</button>
         <button id="btn-releve-fs" class="btn" onclick="toggleReleveFullscreen()" title="Agrandir en plein écran">⛶ Agrandir</button>
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
     </div>`);
 }
-
-// ─── NETTOYER DOUBLONS PAIEMENTS FOURNISSEUR ───
 
 // ─── NETTOYER DOUBLONS PAIEMENTS (stricts : même date + même montant) ───
 function nettoyerDoublonsPaiements(fid){
