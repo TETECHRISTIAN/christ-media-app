@@ -11719,59 +11719,50 @@ function ouvrirReconstructionExcel(fid){
 function executerReconstructionExcel(fid){
   const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
   const raw=document.getElementById('excel-paste').value.trim();
-  const soldeFinal=parseInt((document.getElementById('excel-solde-final').value||'').replace(/\s/g,''),10);
-  if(!raw)return toast('❌ Aucune donnée collée');
+  const soldeFinalStr=(document.getElementById('excel-solde-final').value||'').replace(/[^\d]/g,'');
+  const soldeFinal=parseInt(soldeFinalStr,10);
+  if(!raw)return toast('\u274c Aucune donn\u00e9e coll\u00e9e');
 
-  const lignes=raw.split('
-').map(l=>l.trim()).filter(Boolean);
+  const lignes=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const nouvelAjouts=[];
   const nouvelPaiements=[];
 
-  lignes.forEach((ligne,i)=>{
-    // Séparer par tabulation ou point-virgule
-    const cols=ligne.split(/	|;/).map(c=>c.trim().replace(/\s/g,'').replace(/[^\d\-\/]/g,''));
-    const rawCols=ligne.split(/	|;/).map(c=>c.trim());
-    // Date (col 0) — formats dd-mm-yyyy ou dd/mm/yyyy
-    let date='';
+  lignes.forEach(function(ligne,i){
+    const sep=/\t|;/;
+    const cols=ligne.split(sep).map(function(c){return c.trim().replace(/[^\d]/g,"");});
+    const rawCols=ligne.split(sep).map(function(c){return c.trim();});
     const dRaw=rawCols[0]||'';
-    const dm=dRaw.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-    if(dm) date=`${dm[3]}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`;
-    else return; // Ligne sans date valide → skip
-
+    const dm=dRaw.match(/(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
+    if(!dm) return;
+    const date=dm[3]+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0');
     const ancienneDette=parseInt(cols[1]||'0',10)||0;
     const nouvelleDette=parseInt(cols[2]||'0',10)||0;
     const paiementPartiel=parseInt(cols[3]||'0',10)||0;
-    const resteAPayer=parseInt(cols[4]||'0',10)||0;
     const note=rawCols[5]||'';
 
-    // Si nouvelleDette > ancienneDette → c'est un AJOUT
     if(nouvelleDette>ancienneDette&&nouvelleDette>0){
       const mt=nouvelleDette-ancienneDette;
-      nouvelAjouts.push({id:genId(),date,mt,avant:ancienneDette,apres:nouvelleDette,notes:note||`Ajout ligne ${i+1}`,ts:Date.now()+i});
+      nouvelAjouts.push({id:genId(),date:date,mt:mt,avant:ancienneDette,apres:nouvelleDette,notes:note||("Ajout ligne "+(i+1)),ts:Date.now()+i});
     }
-    // Si paiementPartiel > 0 → c'est un PAIEMENT
     if(paiementPartiel>0){
       const avant=nouvelleDette>0?nouvelleDette:ancienneDette;
       const apres=Math.max(0,avant-paiementPartiel);
       const depId=genId();
-      nouvelPaiements.push({id:depId,date,montantPaye:paiementPartiel,avant,apres,compte:'—',cid:null,note:note||`Paiement ligne ${i+1}`,ts:Date.now()+i+1000});
-      // Ajouter aussi dans S.depenses
-      S.depenses=(S.depenses||[]).filter(d=>!(d.cat==='Règlement dette'&&d.four===f.nom&&d.date===date&&d.mt===paiementPartiel));
-      S.depenses.push({id:depId,date,four:f.nom,cat:'Règlement dette',mt:paiementPartiel,mode:'—',cid:null,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,bid:f.bid||getBid(),ts:Date.now()+i+1000});
+      nouvelPaiements.push({id:depId,date:date,montantPaye:paiementPartiel,avant:avant,apres:apres,compte:'\u2014',cid:null,note:note||('Paiement ligne '+(i+1)),ts:Date.now()+i+1000});
+      S.depenses=(S.depenses||[]).filter(function(d){return !(d.cat==='R\u00e8glement dette'&&d.four===f.nom&&d.date===date&&d.mt===paiementPartiel);});
+      S.depenses.push({id:depId,date:date,four:f.nom,cat:'R\u00e8glement dette',mt:paiementPartiel,mode:'\u2014',cid:null,notes:'R\u00e8glement dette \u2014 '+f.nom+(note?' \u00b7 '+note:''),bid:f.bid||getBid(),ts:Date.now()+i+1000});
     }
   });
 
-  if(nouvelAjouts.length===0&&nouvelPaiements.length===0)return toast('❌ Aucune ligne valide détectée. Vérifiez le format.');
+  if(nouvelAjouts.length===0&&nouvelPaiements.length===0)return toast('\u274c Aucune ligne valide. V\u00e9rifiez le format.');
 
-  // Remplacer l'historique
   f.historiqueDetteAjouts=nouvelAjouts;
   f.historiquePaiementsFour=nouvelPaiements;
-  // Appliquer le solde final réel
-  f.dette=isNaN(soldeFinal)||soldeFinal<0?resteAPayer:soldeFinal;
+  f.dette=isNaN(soldeFinal)||soldeFinal<0?(nouvelPaiements.length>0?nouvelPaiements[nouvelPaiements.length-1].apres:0):soldeFinal;
   f.ts=Date.now();
 
   saveData();closeModal();
-  toast(`✅ Historique reconstruit — ${nouvelAjouts.length} ajout(s), ${nouvelPaiements.length} paiement(s) · Solde : ${F(f.dette)}`);
+  toast('\u2705 Historique reconstruit \u2014 '+nouvelAjouts.length+' ajout(s), '+nouvelPaiements.length+' paiement(s) \u00b7 Solde : '+F(f.dette));
   voirHistoDette(fid);
   if(currentPage==='dettes') rDettes();
 }
