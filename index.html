@@ -11641,6 +11641,7 @@ function voirHistoDette(fid){
         <th style="padding:7px 8px;text-align:right;font-size:10px;letter-spacing:.5px;text-transform:uppercase;position:sticky;top:0;background:var(--surface2);z-index:5">Mouvement</th>
         <th style="padding:7px 8px;text-align:right;font-size:10px;letter-spacing:.5px;text-transform:uppercase;position:sticky;top:0;background:var(--surface2);z-index:5">Nouveau solde</th>
         <th style="padding:7px 8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;position:sticky;top:0;background:var(--surface2);z-index:5">Note / Compte</th>
+        <th style="padding:7px 8px;position:sticky;top:0;background:var(--surface2);z-index:5"></th>
       </tr></thead>
       <tbody>${lignes.map(l=>`
         <tr style="border-bottom:1px solid var(--surface2);${l.fantome?'opacity:0.55;background:var(--surface2)':''}">
@@ -11654,6 +11655,7 @@ function voirHistoDette(fid){
           <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.fantome?'var(--text3)':l.type==='ajout'?'var(--red)':'var(--green)'}">${l.type==='ajout'?'+':'−'}${F(l.mt)}</td>
           <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.apres>0?'var(--amber)':'var(--green)'}">${F(l.apres)}</td>
           <td style="padding:7px 8px;color:var(--text2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.note}">${l.note}</td>
+          <td style="padding:4px 6px;text-align:center"><button onclick="supprimerLigneReleve(${fid},'${l.type}','${l.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:0.4;transition:opacity .2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4" title="Supprimer cette ligne">🗑️</button></td>
         </tr>`).join('')}
       </tbody>
     </table>`}
@@ -11669,6 +11671,37 @@ function voirHistoDette(fid){
         <button class="btn" onclick="closeModal()">Fermer</button>
       </div>
     </div>`);
+}
+
+// ─── SUPPRIMER UNE LIGNE DU RELEVÉ FOURNISSEUR ───
+function supprimerLigneReleve(fid, type, lid){
+  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const sid=String(lid);
+  if(!confirm('Supprimer cette ligne du relevé ?\nCette action est irréversible.'))return;
+  if(type==='ajout'){
+    f.historiqueDetteAjouts=(f.historiqueDetteAjouts||[]).filter(h=>String(h.id)!==sid);
+  } else {
+    const p=(f.historiquePaiementsFour||[]).find(x=>String(x.id)===sid);
+    f.historiquePaiementsFour=(f.historiquePaiementsFour||[]).filter(x=>String(x.id)!==sid);
+    if(p) S.depenses=(S.depenses||[]).filter(d=>String(d.id)!==sid);
+  }
+  // Recalculer soldes avant/après
+  const lignes2=[];
+  (f.historiqueDetteAjouts||[]).forEach(h=>lignes2.push({ref:h,type:'ajout'}));
+  (f.historiquePaiementsFour||[]).forEach(p=>lignes2.push({ref:p,type:'paiement'}));
+  lignes2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
+  let s=0;
+  lignes2.forEach(l=>{
+    l.ref.avant=s;
+    const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);
+    if(l.type==='ajout') s+=mt; else s=Math.max(0,s-mt);
+    l.ref.apres=s;
+  });
+  f.dette=s;
+  saveData();
+  toast('🗑️ Ligne supprimée · Solde recalculé : '+F(f.dette));
+  voirHistoDette(fid);
+  if(currentPage==='dettes') rDettes();
 }
 
 // ─── NETTOYER DOUBLONS PAIEMENTS (stricts : même date + même montant) ───
