@@ -11586,8 +11586,8 @@ function voirHistoDette(fid){
   const paiements=f.historiquePaiementsFour||[];
   // Fusionner et trier chronologiquement
   const lignes=[];
-  ajouts.forEach(h=>lignes.push({date:h.date,type:'ajout',mt:h.mt,note:h.notes,ts:h.ts||0}));
-  paiements.forEach(p=>lignes.push({date:p.date,type:'paiement',mt:p.montantPaye,note:p.note,compte:p.compte,ts:p.ts||0}));
+  ajouts.forEach(h=>lignes.push({id:h.id,date:h.date,type:'ajout',mt:h.mt,note:h.notes,ts:h.ts||0}));
+  paiements.forEach(p=>lignes.push({id:p.id,date:p.date,type:'paiement',mt:p.montantPaye,note:p.note,compte:p.compte,ts:p.ts||0}));
   lignes.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
   // Recalculer avant/après de façon strictement chronologique
   let _solde=0;
