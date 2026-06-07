@@ -5435,6 +5435,8 @@ function delFour(id){
 }
 
 // ─── FUSION DOUBLONS FOURNISSEURS ───
+
+// ─── FUSION DOUBLONS FOURNISSEURS ───
 function detecterDoublonsFournisseurs(){
   const groupes={};
   (S.fournisseurs||[]).forEach(f=>{
@@ -11669,65 +11671,109 @@ function voirHistoDette(fid){
 }
 
 // ─── NETTOYER DOUBLONS PAIEMENTS FOURNISSEUR ───
+
+// ─── NETTOYER DOUBLONS PAIEMENTS (stricts : même date + même montant) ───
 function nettoyerDoublonsPaiements(fid){
   const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
-
-  // Identifier les doublons stricts : même date + même montant
-  // On garde le PREMIER de chaque groupe (le plus ancien ts), on supprime les suivants
-  const seen=new Map(); // clé → premier paiement gardé
-  const aSupprimer=new Set();
+  const seen=new Map();const aSupprimer=new Set();
   f.historiquePaiementsFour.forEach(p=>{
     const k=`${p.date}|${p.montantPaye||p.mt||0}`;
-    if(!seen.has(k)){
-      seen.set(k,p);
-    } else {
-      // Doublon : garder celui avec le ts le plus ancien
-      const existant=seen.get(k);
-      if((p.ts||0)<(existant.ts||0)){
-        // p est plus ancien → supprimer l'existant, garder p
-        aSupprimer.add(String(existant.id));
-        seen.set(k,p);
-      } else {
-        aSupprimer.add(String(p.id));
-      }
+    if(!seen.has(k)){seen.set(k,p);}
+    else{const ex=seen.get(k);if((p.ts||0)<(ex.ts||0)){aSupprimer.add(String(ex.id));seen.set(k,p);}else{aSupprimer.add(String(p.id));}}
+  });
+  if(aSupprimer.size===0){toast('✅ Aucun doublon exact trouvé');voirHistoDette(fid);return;}
+  if(!confirm(`Supprimer ${aSupprimer.size} paiement(s) en double exact de ${f.nom} ?`))return;
+  f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>!aSupprimer.has(String(p.id)));
+  S.depenses=(S.depenses||[]).filter(d=>d.cat!=='Règlement dette'||d.four!==f.nom||!aSupprimer.has(String(d.id)));
+  const l2=[];
+  (f.historiqueDetteAjouts||[]).forEach(h=>l2.push({ref:h,type:'ajout'}));
+  f.historiquePaiementsFour.forEach(p=>l2.push({ref:p,type:'paiement'}));
+  l2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
+  let s=0;l2.forEach(l=>{l.ref.avant=s;const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);if(l.type==='ajout')s+=mt;else s=Math.max(0,s-mt);l.ref.apres=s;});
+  f.dette=s;saveData();toast(`✅ ${aSupprimer.size} doublon(s) supprimé(s) · Solde : ${F(f.dette)}`);voirHistoDette(fid);
+}
+
+// ─── RECONSTRUCTION HISTORIQUE DEPUIS EXCEL ───
+function ouvrirReconstructionExcel(fid){
+  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  modal(`<div class="mft">📊 Reconstruire depuis Excel — ${f.nom}</div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:10px">
+      Collez les lignes du tableau Excel (colonnes : <strong>Date · Ancienne Dette · Nouvelle Dette · Paiement Partiel · Reste à Payer · Observations</strong>).<br>
+      Séparez les colonnes par tabulation ou point-virgule. Une ligne par ligne du tableau.
+    </p>
+    <textarea class="fi" id="excel-paste" rows="12" style="width:100%;font-family:'DM Mono',monospace;font-size:11px" placeholder="Exemple :
+06-06-2026&#9;0&#9;40500&#9;3000&#9;37500&#9;Zman début
+..."></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <label class="fl" style="margin:0">Solde final réel (FCFA) :</label>
+      <input class="fi" type="number" id="excel-solde-final" value="${f.dette}" style="width:140px">
+    </div>
+    <p style="font-size:11px;color:var(--amber);margin-top:8px">⚠️ L'historique actuel sera <strong>remplacé</strong> par les données collées.</p>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="executerReconstructionExcel(${fid})">✅ Reconstruire</button>
+    </div>`);
+}
+
+function executerReconstructionExcel(fid){
+  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const raw=document.getElementById('excel-paste').value.trim();
+  const soldeFinal=parseInt((document.getElementById('excel-solde-final').value||'').replace(/\s/g,''),10);
+  if(!raw)return toast('❌ Aucune donnée collée');
+
+  const lignes=raw.split('
+').map(l=>l.trim()).filter(Boolean);
+  const nouvelAjouts=[];
+  const nouvelPaiements=[];
+
+  lignes.forEach((ligne,i)=>{
+    // Séparer par tabulation ou point-virgule
+    const cols=ligne.split(/	|;/).map(c=>c.trim().replace(/\s/g,'').replace(/[^\d\-\/]/g,''));
+    const rawCols=ligne.split(/	|;/).map(c=>c.trim());
+    // Date (col 0) — formats dd-mm-yyyy ou dd/mm/yyyy
+    let date='';
+    const dRaw=rawCols[0]||'';
+    const dm=dRaw.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+    if(dm) date=`${dm[3]}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`;
+    else return; // Ligne sans date valide → skip
+
+    const ancienneDette=parseInt(cols[1]||'0',10)||0;
+    const nouvelleDette=parseInt(cols[2]||'0',10)||0;
+    const paiementPartiel=parseInt(cols[3]||'0',10)||0;
+    const resteAPayer=parseInt(cols[4]||'0',10)||0;
+    const note=rawCols[5]||'';
+
+    // Si nouvelleDette > ancienneDette → c'est un AJOUT
+    if(nouvelleDette>ancienneDette&&nouvelleDette>0){
+      const mt=nouvelleDette-ancienneDette;
+      nouvelAjouts.push({id:genId(),date,mt,avant:ancienneDette,apres:nouvelleDette,notes:note||`Ajout ligne ${i+1}`,ts:Date.now()+i});
+    }
+    // Si paiementPartiel > 0 → c'est un PAIEMENT
+    if(paiementPartiel>0){
+      const avant=nouvelleDette>0?nouvelleDette:ancienneDette;
+      const apres=Math.max(0,avant-paiementPartiel);
+      const depId=genId();
+      nouvelPaiements.push({id:depId,date,montantPaye:paiementPartiel,avant,apres,compte:'—',cid:null,note:note||`Paiement ligne ${i+1}`,ts:Date.now()+i+1000});
+      // Ajouter aussi dans S.depenses
+      S.depenses=(S.depenses||[]).filter(d=>!(d.cat==='Règlement dette'&&d.four===f.nom&&d.date===date&&d.mt===paiementPartiel));
+      S.depenses.push({id:depId,date,four:f.nom,cat:'Règlement dette',mt:paiementPartiel,mode:'—',cid:null,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,bid:f.bid||getBid(),ts:Date.now()+i+1000});
     }
   });
 
-  if(aSupprimer.size===0){toast('✅ Aucun doublon exact trouvé');voirHistoDette(fid);return;}
+  if(nouvelAjouts.length===0&&nouvelPaiements.length===0)return toast('❌ Aucune ligne valide détectée. Vérifiez le format.');
 
-  const nb=aSupprimer.size;
-  if(!confirm(`Supprimer ${nb} paiement(s) en double exact (même date + même montant) du relevé de ${f.nom} ?
+  // Remplacer l'historique
+  f.historiqueDetteAjouts=nouvelAjouts;
+  f.historiquePaiementsFour=nouvelPaiements;
+  // Appliquer le solde final réel
+  f.dette=isNaN(soldeFinal)||soldeFinal<0?resteAPayer:soldeFinal;
+  f.ts=Date.now();
 
-Seul le premier exemplaire de chaque doublon est conservé.
-La dépense correspondante sera aussi supprimée.`))return;
-
-  // Supprimer de historiquePaiementsFour
-  f.historiquePaiementsFour=f.historiquePaiementsFour.filter(p=>!aSupprimer.has(String(p.id)));
-
-  // Supprimer les dépenses correspondantes
-  S.depenses=(S.depenses||[]).filter(d=>{
-    if(d.cat!=='Règlement dette'||d.four!==f.nom) return true;
-    return !aSupprimer.has(String(d.id));
-  });
-
-  // Recalculer les soldes avant/après dans le relevé
-  const lignes2=[];
-  (f.historiqueDetteAjouts||[]).forEach(h=>lignes2.push({ref:h,type:'ajout'}));
-  f.historiquePaiementsFour.forEach(p=>lignes2.push({ref:p,type:'paiement'}));
-  lignes2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
-  let s=0;
-  lignes2.forEach(l=>{
-    l.ref.avant=s;
-    const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);
-    if(l.type==='ajout') s+=mt; else s=Math.max(0,s-mt);
-    l.ref.apres=s;
-  });
-  f.dette=s;
-
-  saveData();
-  toast(`✅ ${nb} doublon(s) supprimé(s) · Nouveau solde : ${F(f.dette)}`);
+  saveData();closeModal();
+  toast(`✅ Historique reconstruit — ${nouvelAjouts.length} ajout(s), ${nouvelPaiements.length} paiement(s) · Solde : ${F(f.dette)}`);
   voirHistoDette(fid);
+  if(currentPage==='dettes') rDettes();
 }
 
 // ─── MODULE : FLUX FINANCIER ───
