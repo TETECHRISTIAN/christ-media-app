@@ -3664,8 +3664,8 @@ function rDash(){
            +svcsB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+(v.avance||v.mt),0);
   const vi=ventesB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0)
            +svcsB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
-  const dep=depensesB.reduce((s,d)=>s+d.mt,0)+achatsB.reduce((s,a)=>s+a.mt,0);
-  const solde=vp-dep;
+  const dep=depensesB.reduce((s,d)=>s+d.mt,0);
+  const solde=vpCur-depCur;
   const sv=stockB.reduce((s,a)=>s+(sa(a)*a.pv),0);
   const al=stockB.filter(a=>sa(a)<=a.seuil&&sa(a)>=0);
   const vc=cat=>ventesB.filter(v=>{const a=stockB.find(x=>x.id==v.aid);return a&&a.cat===cat&&v.statut==='Payé'}).reduce((s,v)=>s+v.mt,0);
