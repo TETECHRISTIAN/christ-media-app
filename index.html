@@ -3656,7 +3656,7 @@ function rDash(){
                     +(svcsB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(mois)).reduce((s,v)=>s+(v.avance||v.mt),0));
   const achatsB=(S.achats||[]).filter(a=>a.bid==bid||((!a.bid)&&bid==(S.boutiques[0]?.id||1)));
   const depM=mois=>depensesB.filter(d=>d.date&&d.date.startsWith(mois)).reduce((s,d)=>s+d.mt,0)
-                  +achatsB.filter(a=>a.date&&a.date.startsWith(mois)).reduce((s,a)=>s+a.mt,0);
+                  +achatsB.filter(a=>a.statut==='Payé'&&a.date&&a.date.startsWith(mois)).reduce((s,a)=>s+a.mt,0);
   const vpCur=ventesM(curM),vpPrev=ventesM(prevM);
   const depCur=depM(curM),depPrev=depM(prevM);
   const trend=(cur,prev)=>{if(!prev)return'<span class="trend-flat">— nouveau</span>';const pct=Math.round((cur-prev)/prev*100);if(pct>0)return`<span class="trend-up">↑ +${pct}% vs mois préc.</span>`;if(pct<0)return`<span class="trend-down">↓ ${pct}% vs mois préc.</span>`;return'<span class="trend-flat">= stable</span>';};
@@ -3753,7 +3753,7 @@ function rObjectifs(){
     moisLabels.push(label);
     caHisto.push(ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(m)).reduce((s,v)=>s+v.mt,0));
     depHisto.push(depensesB.filter(d2=>d2.date&&d2.date.startsWith(m)).reduce((s,d2)=>s+d2.mt,0)
-                 +achatsB.filter(a=>a.date&&a.date.startsWith(m)).reduce((s,a)=>s+a.mt,0));
+                 +achatsB.filter(a=>a.statut==='Payé'&&a.date&&a.date.startsWith(m)).reduce((s,a)=>s+a.mt,0));
   }
   const curM=now.toISOString().slice(0,7);
   const vpCur=caHisto[5],depCur=depHisto[5];
