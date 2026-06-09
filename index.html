@@ -13488,7 +13488,7 @@ function rCaisse(){
   const ventesPayees = ventesJour.filter(v => v.statut === 'Payé');
   const ventesCredit = ventesJour.filter(v => v.statut === 'Non payé');
   const depensesJour = depensesB.filter(d => d.date && d.date.startsWith(selDate));
-  const achatsJour = S.achats ? achatsB.filter(a => a.date && a.date.startsWith(selDate)) : [];
+  const achatsJour = getAchatsBoutique(bid).filter(a => a.date && a.date.startsWith(selDate));
 
   // Totaux
   const totalVentes = ventesPayees.reduce((s,v) => s+v.mt, 0);
