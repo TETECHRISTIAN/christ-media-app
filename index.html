@@ -5679,8 +5679,8 @@ function rRap(){
   const achatsF=getAchatsBoutique(bid).filter(filterV);
   const vp=ventesF.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   const dep=depF.reduce((s,d)=>s+d.mt,0);
-  const achats=achatsF.reduce((s,a)=>s+a.mt,0);
-  const solde=vp-dep;
+  const achats=achatsF.filter(a=>a.statut==="Payé").reduce((s,a)=>s+a.mt,0);
+  const solde=vp-dep-achats;
   const sv=stockB.reduce((s,a)=>s+(sa(a)*a.pv),0);
   const sc=stockB.reduce((s,a)=>s+(sa(a)*a.pa),0);
   const mg=sv>0?Math.round((sv-sc)/sv*100):0;
@@ -5765,8 +5765,8 @@ function bilanMoisData(moisStr){
   const nbVentes=ventesP.length;
   const impayés=ventes.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
   const dep=S.depenses.filter(d=>d.date&&d.date.startsWith(moisStr)).reduce((s,d)=>s+d.mt,0);
-  const achats=S.achats.filter(a=>a.date&&a.date.startsWith(moisStr)).reduce((s,a)=>s+a.mt,0);
-  const resultat=ca-dep;
+  const achats=S.achats.filter(a=>a.statut==="Payé"&&a.date&&a.date.startsWith(moisStr)).reduce((s,a)=>s+a.mt,0);
+  const resultat=ca-dep-achats;
   const cats=['Lingerie','Audio-Vidéo','Bureautique'];
   const catsCA=cats.map(cat=>ventesP.filter(v=>{const a=ga(v.aid);return a&&a.cat===cat;}).reduce((s,v)=>s+v.mt,0));
   const modes=['Espèces','Flooz','Mixx','Virement'];
@@ -15237,13 +15237,15 @@ function rClotureCaisse(){
   const svcsPayesJour = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.statut==='Payé' && !(v.avance>0));
   const svcsAvanceJour = (S.ventes_services||[]).filter(v => v.date && v.date.startsWith(today) && (!bid || v.bid==bid) && v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d => d.date && d.date.startsWith(today) && (!bid || d.bid==bid));
+  const achatsPayesJour = (S.achats||[]).filter(a => a.date && a.date.startsWith(today) && (!bid || a.bid==bid) && a.statut==='Payé');
 
   // ── Totaux par compte ──
   const comptes = (S.comptes||[]).filter(c => !bid || c.bid==bid || !c.bid);
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0)
     + svcsPayesJour.reduce((s,v)=>s+v.mt,0)
     + svcsAvanceJour.reduce((s,v)=>s+(v.avance||0),0);
-  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
+  const totalAchatsJour = achatsPayesJour.reduce((s,a)=>s+a.mt,0);
+  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
 
   // ── Ventes par mode de paiement → compte ──
   const ventesParCompte = {};
@@ -15546,7 +15548,8 @@ function rClotureCaisse(){
         + svcsRecents.reduce((s,v)=>s+(v.avance||0),0)
         + revsRecents.reduce((s,v)=>s+v.mt,0);
       const depsRecentes = (S.depenses||[]).filter(d=>d.date>=d30&&(!bid2||d.bid==bid2));
-      const totalDeps30 = depsRecentes.reduce((s,d)=>s+d.mt,0);
+      const achatsRecents = (S.achats||[]).filter(a=>a.date>=d30&&(!bid2||a.bid==bid2)&&a.statut==="Payé");
+      const totalDeps30 = depsRecentes.reduce((s,d)=>s+d.mt,0) + achatsRecents.reduce((s,a)=>s+a.mt,0);
       const fluxNetJour = (totalEntrees30 - totalDeps30) / 30;
 
       // Charges fixes mensuelles
@@ -15868,7 +15871,8 @@ function ouvrirModalCloture(){
   const svcsAvanceJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d=>d.date&&d.date.startsWith(today)&&(!bid||d.bid==bid));
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsPayesJour2.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
-  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0);
+  const totalAchatsJour = achatsPayesJour.reduce((s,a)=>s+a.mt,0);
+  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
 
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
   const derniere = historique[0];
@@ -16059,7 +16063,8 @@ function imprimerCaisse(){
   const depensesJour = S.depenses.filter(d => d.date && d.date.startsWith(selDate));
   const totalVentes = ventesPayees.reduce((s,v) => s+v.mt, 0);
   const totalCredit = ventesCredit.reduce((s,v) => s+v.mt, 0);
-  const totalDepenses = depensesJour.reduce((s,d) => s+d.mt, 0);
+  const achatsPayesRapport = (S.achats||[]).filter(a=>a.date&&a.date.startsWith(selDate)&&a.statut==="Payé");
+  const totalDepenses = depensesJour.reduce((s,d) => s+d.mt, 0) + achatsPayesRapport.reduce((s,a)=>s+a.mt,0);
   const soldeNet = totalVentes - totalDepenses;
   const dateLabel = new Date(selDate+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const modes = {};
@@ -16113,7 +16118,8 @@ function partagerCaisseWA(){
   const depensesJour = S.depenses.filter(d => d.date && d.date.startsWith(selDate));
   const totalVentes = ventesPayees.reduce((s,v) => s+v.mt, 0);
   const totalCredit = ventesCredit.reduce((s,v) => s+v.mt, 0);
-  const totalDepenses = depensesJour.reduce((s,d) => s+d.mt, 0);
+  const achatsPayesWA = (S.achats||[]).filter(a=>a.date&&a.date.startsWith(selDate)&&a.statut==="Payé");
+  const totalDepenses = depensesJour.reduce((s,d) => s+d.mt, 0) + achatsPayesWA.reduce((s,a)=>s+a.mt,0);
   const soldeNet = totalVentes - totalDepenses;
   const dateLabel = new Date(selDate+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   const modes = {};
