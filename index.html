@@ -15870,6 +15870,7 @@ function ouvrirModalCloture(){
   const svcsPayesJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé'&&!(v.avance>0));
   const svcsAvanceJour2 = (S.ventes_services||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d=>d.date&&d.date.startsWith(today)&&(!bid||d.bid==bid));
+  const achatsPayesJour = (S.achats||[]).filter(a=>a.date&&a.date.startsWith(today)&&(!bid||a.bid==bid)&&a.statut==='Payé');
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsPayesJour2.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
   const totalAchatsJour = achatsPayesJour.reduce((s,a)=>s+a.mt,0);
   const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
