@@ -7543,7 +7543,7 @@ function rTransactions(){
 
   const totalVentes=ventes.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   const totalAPercevoir=ventes.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
-  const totalAchats=achats.reduce((s,a)=>s+a.mt,0);
+  const totalAchats=achats.filter(a=>a.statut==="Payé").reduce((s,a)=>s+a.mt,0);
   const totalAchatsPayables=achats.filter(a=>a.statut==='À payer').reduce((s,a)=>s+a.mt,0);
   const totalDeps=deps.reduce((s,d)=>s+d.mt,0);
   const totalRevs=revs.reduce((s,r)=>s+r.mt,0);
@@ -13494,7 +13494,7 @@ function rCaisse(){
   const totalVentes = ventesPayees.reduce((s,v) => s+v.mt, 0);
   const totalCredit = ventesCredit.reduce((s,v) => s+v.mt, 0);
   const totalDepenses = depensesJour.reduce((s,d) => s+d.mt, 0);
-  const totalAchats = achatsJour.reduce((s,a) => s+(a.mt||a.total||0), 0);
+  const totalAchats = achatsJour.filter(a=>a.statut==="Payé").reduce((s,a) => s+(a.mt||a.total||0), 0);
   const soldeNet = totalVentes - totalDepenses - totalAchats;
 
   // Par mode de paiement
