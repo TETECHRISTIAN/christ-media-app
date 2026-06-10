@@ -6124,19 +6124,22 @@ function editerDetteFour(fid){
   if(!f) return;
   const overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML=`
-    <div style="background:var(--surface);border-radius:12px;padding:24px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px">✏️ Modifier — ${f.nom}</div>
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Nom du fournisseur</label>
-      <input id="_ef_nom" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:12px" value="${f.nom}">
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Dette actuelle (FCFA)</label>
-      <input id="_ef_dette" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:16px" value="${f.dette||0}">
-      <div style="display:flex;gap:8px">
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">Annuler</button>
-        <button id="_ef_save" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Enregistrer</button>
-      </div>
-    </div>`;
+  const box=document.createElement('div');
+  box.style.cssText='background:var(--surface);border-radius:12px;padding:24px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.3)';
+  box.innerHTML='<div style="font-size:16px;font-weight:600;margin-bottom:16px">✏️ Modifier fournisseur</div>'
+    +'<label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Nom du fournisseur</label>'
+    +'<input id="_ef_nom" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:12px">'
+    +'<label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Dette actuelle (FCFA)</label>'
+    +'<input id="_ef_dette" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:16px">'
+    +'<div style="display:flex;gap:8px">'
+    +'<button id="_ef_cancel" style="flex:1;padding:10px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">Annuler</button>'
+    +'<button id="_ef_save" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Enregistrer</button>'
+    +'</div>';
+  overlay.appendChild(box);
   document.body.appendChild(overlay);
+  document.getElementById('_ef_nom').value=f.nom||'';
+  document.getElementById('_ef_dette').value=f.dette||0;
+  document.getElementById('_ef_cancel').onclick=()=>overlay.remove();
   document.getElementById('_ef_save').onclick=()=>{
     const nom=document.getElementById('_ef_nom').value.trim();
     const dette=parseFloat(document.getElementById('_ef_dette').value)||0;
@@ -6156,21 +6159,25 @@ function editerEmprunt(did){
   const reste=d.montant-(d.rembourse||0);
   const overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML=`
-    <div style="background:var(--surface);border-radius:12px;padding:24px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px">✏️ Modifier emprunt — ${d.personne}</div>
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Nom / Personne</label>
-      <input id="_ee_nom" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:12px" value="${d.personne||''}">
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Montant total (FCFA)</label>
-      <input id="_ee_mt" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:8px" value="${d.montant||0}">
-      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Déjà remboursé (FCFA)</label>
-      <input id="_ee_remb" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:16px" value="${d.rembourse||0}">
-      <div style="display:flex;gap:8px">
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">Annuler</button>
-        <button id="_ee_save" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Enregistrer</button>
-      </div>
-    </div>`;
+  const box2=document.createElement('div');
+  box2.style.cssText='background:var(--surface);border-radius:12px;padding:24px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.3)';
+  box2.innerHTML='<div style="font-size:16px;font-weight:600;margin-bottom:16px">✏️ Modifier emprunt</div>'
+    +'<label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Nom / Personne</label>'
+    +'<input id="_ee_nom" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:12px">'
+    +'<label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Montant total (FCFA)</label>'
+    +'<input id="_ee_mt" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:8px">'
+    +'<label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Déjà remboursé (FCFA)</label>'
+    +'<input id="_ee_remb" type="number" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;background:var(--bg);color:var(--text1);margin-bottom:16px">'
+    +'<div style="display:flex;gap:8px">'
+    +'<button id="_ee_cancel" style="flex:1;padding:10px;border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">Annuler</button>'
+    +'<button id="_ee_save" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Enregistrer</button>'
+    +'</div>';
+  overlay.appendChild(box2);
   document.body.appendChild(overlay);
+  document.getElementById('_ee_nom').value=d.personne||'';
+  document.getElementById('_ee_mt').value=d.montant||0;
+  document.getElementById('_ee_remb').value=d.rembourse||0;
+  document.getElementById('_ee_cancel').onclick=()=>overlay.remove();
   document.getElementById('_ee_save').onclick=()=>{
     const nom=document.getElementById('_ee_nom').value.trim();
     const mt=parseFloat(document.getElementById('_ee_mt').value)||0;
