@@ -6001,7 +6001,6 @@ function rTresorerie(){
   const vi=ventesB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0)
            +svcsB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
   const dep=depensesB.reduce((s,d)=>s+d.mt,0);
-  const achatsPayes=achatsB.filter(a=>a.statut==='Payé').reduce((s,a)=>s+a.mt,0);
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
@@ -6017,7 +6016,7 @@ function rTresorerie(){
   // Total dettes = fournisseurs + emprunts perso
   const totalDettes=detteFour+totalEmpruntsPerso;
   const creanceClients=clientsB.reduce((s,c)=>s+c.solde,0)+vi+totalPretsPerso;
-  const tresorerie=vp-dep-achatsPayes;
+  const tresorerie=vp-dep;
   const sv=stockB.reduce((s,a)=>s+(sa(a)*a.pv),0);
   const patrimoine=tresorerie+sv-totalDettes;
 
