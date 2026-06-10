@@ -6079,7 +6079,10 @@ function rTresorerie(){
       </div>
 
       <div>
-        <p class="st">Débiteurs — Ce que tu dois (${F(totalDettes)})</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <p class="st" style="margin:0">Débiteurs — Ce que tu dois (${F(totalDettes)})</p>
+          <button class="btn btn-sm" onclick="corrigerTousLesSoldes()" style="font-size:10px;color:var(--amber);border-color:var(--amber)" title="Corriger les soldes avec les vrais chiffres du relevé">🔧 Corriger soldes</button>
+        </div>
         <div class="fin-card">
           ${foursDette.length===0&&empruntsPerso.length===0?'<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">✅ Aucune dette en cours</div>':
           `<div class="fin-list">${foursDette.map(f=>`
@@ -6090,7 +6093,7 @@ function rTresorerie(){
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="reglerDette(${f.id})">Régler</button>
                 <button class="btn btn-sm" style="margin-top:4px;font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜</button>
             <button class="btn btn-sm" onclick="convertirEnEmprunt('fourDirect',${f.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button>
-                <button class="btn btn-sm" style="margin-top:4px;font-size:10px;color:var(--green);border-color:var(--green)" onclick="editerDetteFour(${f.id})">✏️</button>
+                <button class="btn btn-sm" style="margin-top:4px;font-size:10px;color:var(--green);border-color:var(--green)" onclick="corrigerSoldeManuellement(${f.id})">✏️</button>
               </div>
             </div>`).join('')}
           ${empruntsPerso.map(d=>{const reste=d.montant-(d.rembourse||0);return`
@@ -11546,8 +11549,27 @@ function corrigerSoldeManuellement(fid){
   f.dette=nouveau;
   saveData();
   toast(`✅ Solde de ${f.nom} corrigé à ${F(nouveau)}`);
-  voirHistoDette(fid);
-  if(currentPage==='dettes') rDettes();
+  if(currentPage==='dettes') { rDettes(); voirHistoDette(fid); }
+  else if(currentPage==='tresorerie') rTresorerie();
+}
+
+// Correction manuelle des soldes réels issus des relevés Google Sheets
+function corrigerTousLesSoldes(){
+  const corrections=[
+    {nom:"Maman Matelas", solde:64500},
+    {nom:"Dové Matelas",  solde:46250},
+    {nom:"Medzira Rideaux", solde:46850},
+  ];
+  const lignes=[];
+  corrections.forEach(({nom,solde})=>{
+    const f=(S.fournisseurs||[]).find(x=>x.nom&&x.nom.trim().toLowerCase()===nom.trim().toLowerCase());
+    if(f){const avant=f.dette;f.dette=solde;lignes.push(nom+": "+avant+" → "+solde);}
+    else lignes.push("⚠️ "+nom+" introuvable");
+  });
+  saveData();
+  alert("Soldes corrigés :\n"+lignes.join("\n"));
+  if(currentPage==="tresorerie") rTresorerie();
+  else if(currentPage==="dettes") rDettes();
 }
 
 function toggleReleveFullscreen(){
