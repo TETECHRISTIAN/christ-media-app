@@ -4063,14 +4063,14 @@ function ouvrirPanierModal(){
     ${isAdmin() && (S.boutiques||[]).length > 1 ? `
     <div class="fg" style="margin-bottom:8px;background:var(--amber-bg);border:1px solid var(--amber-light);border-radius:var(--rs);padding:8px 10px">
       <label class="fl" style="color:var(--amber)">🏪 Boutique du caissier</label>
-      <select class="fs" id="pa-boutique">
+      <select class="fs" id="pa-boutique" onchange="(function(){const bid=parseInt(document.getElementById('pa-boutique').value);const wrap=document.getElementById('pa-mode-wrap');if(wrap)wrap.innerHTML=selectComptes('pa-mode',premierCompteId(bid),bid);})();">
         ${(S.boutiques||[]).map(b=>`<option value="${b.id}"${b.id==getBid()?' selected':''}>${b.emoji||'🏪'} ${b.nom}</option>`).join('')}
       </select>
       <div style="font-size:10px;color:var(--amber);margin-top:3px">⚠️ Si tu enregistres une vente à la place du caissier, choisis sa boutique ici</div>
     </div>` : ''}
     <div class="fr">
       <div class="fg"><label class="fl">Client</label><input class="fi" id="pa-client" placeholder="Nom du client"></div>
-      <div class="fg"><label class="fl">Compte encaissement</label>${selectComptes('pa-mode', premierCompteId())}</div>
+      <div class="fg"><label class="fl">Compte encaissement</label><span id="pa-mode-wrap">${selectComptes('pa-mode', premierCompteId(getBid()), getBid())}</span></div>
     </div>
     <div class="fg"><label class="fl">Statut</label>
       <select class="fs" id="pa-statut" onchange="toggleChampRecu(this.value,${totalFinal})"><option value="Payé">✅ Payé</option><option value="Non payé">⏳ À percevoir</option></select>
@@ -4159,12 +4159,12 @@ function viderPanier(){window.panier=[];rVente();}
 function validerPanier(){
   if(!window.panier||window.panier.length===0)return toast('⚠️ Panier vide');
   const client=document.getElementById('pa-client')?.value||'';
-  const cid=document.getElementById('pa-mode')?.value||premierCompteId();
-  const mode=nomCompte(cid);
   const statut=document.getElementById('pa-statut')?.value||'Payé';
   // Si l'admin enregistre à la place d'un caissier, utiliser la boutique sélectionnée
   const _paBoutique = document.getElementById('pa-boutique');
   const _bidFinal = _paBoutique ? parseInt(_paBoutique.value) : getBid();
+  const cid=document.getElementById('pa-mode')?.value||premierCompteId(_bidFinal);
+  const mode=nomCompte(cid);
   const montantRecu=+document.getElementById('pa-recu')?.value||0;
   const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
   const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
