@@ -2012,6 +2012,7 @@ async function absorberPendingFirebase(){
 
     if(totalAbsorbes > 0){
       saveLocal(S);
+      recalculerSoldesComptes(); // RECALCUL soldes comptes après absorption pending
       toast('📥 ' + totalAbsorbes + ' enregistrement(s) récupérés depuis les vendeurs', 4000);
     }
 
@@ -4200,7 +4201,8 @@ function validerPanier(){
       heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
       montant_recu: statut==='Payé' && montantRecu > 0 ? montantRecu : null,
       monnaie: statut==='Payé' && montantRecu > 0 ? Math.max(0, montantRecu - mt) : null,
-      livraison: document.getElementById('pa-livraison-diff')?.checked ? 'Non livré' : 'Livré'
+      livraison: document.getElementById('pa-livraison-diff')?.checked ? 'Non livré' : 'Livré',
+      _compte_credite: statut==='Payé' ? true : undefined
     });
     window.panier=[];
     window.remise={type:'%',val:0};
@@ -4228,7 +4230,7 @@ function payerVente(id){
 function confirmerPaiementVente(id){
   const v=S.ventes.find(v=>v.id==id);if(!v)return;
   const cid=document.getElementById('pv-cid').value;
-  v.statut='Payé';v.cid=cid;v.mode=nomCompte(cid);
+  v.statut='Payé';v.cid=cid;v.mode=nomCompte(cid);v._compte_credite=true;
   crediterCompte(cid,v.mt);
   saveData();closeModal();toast('✅ Vente encaissée sur "'+nomCompte(cid)+'"');rVente();
 }
@@ -10512,6 +10514,48 @@ function debiterCompte(cid, montant){
   const compte=S.comptes.find(c=>c.id==cid);
   if(compte) compte.solde=(compte.solde||0)-montant;
 }
+
+// ── CRÉDIT DES VENTES NON REFLÉTÉES DANS LES COMPTES ────────────────────────
+// Après absorption du pending, certaines ventes Payées n'ont pas déclenché
+// crediterCompte() sur le master (car l'événement s'est produit côté vendeur).
+// On identifie ces ventes via le flag _compte_credite et on crédite le delta.
+function recalculerSoldesComptes(){
+  if(!S.comptes || S.comptes.length === 0) return;
+  let nbCredites = 0;
+
+  // Ventes simples Payées sans flag _compte_credite
+  (S.ventes||[]).filter(v => !v._deleted && v.statut === 'Payé' && v.cid && !v._compte_credite).forEach(v => {
+    const c = S.comptes.find(x => x.id == v.cid);
+    if(c){ c.solde = (c.solde||0) + (v.mt||0); nbCredites++; }
+    // Acomptes
+    (v.acomptes||[]).filter(a => a.cid && !a._compte_credite).forEach(a => {
+      const ca = S.comptes.find(x => x.id == a.cid);
+      if(ca){ ca.solde = (ca.solde||0) + (a.mt||0); a._compte_credite = true; }
+    });
+    // Tranches payées
+    (v.tranches||[]).filter(t => t.cid && t.statut==='Payé' && !t._compte_credite).forEach(t => {
+      const ct = S.comptes.find(x => x.id == t.cid);
+      if(ct){ ct.solde = (ct.solde||0) + (t.mt||0); t._compte_credite = true; }
+    });
+    v._compte_credite = true;
+  });
+
+  // Ventes services sans flag
+  (S.ventes_services||[]).filter(v => !v._deleted && v.cid && !v._compte_credite).forEach(v => {
+    if(v.statut === 'Payé'){
+      const c = S.comptes.find(x => x.id == v.cid);
+      if(c){ c.solde = (c.solde||0) + (v.mt||0); nbCredites++; }
+    } else if(v.statut === 'Avance' && (v.avance||0) > 0){
+      const c = S.comptes.find(x => x.id == v.cid);
+      if(c){ c.solde = (c.solde||0) + (v.avance||0); nbCredites++; }
+    }
+    v._compte_credite = true;
+  });
+
+  if(nbCredites > 0)
+    console.log('[COMPTES] ' + nbCredites + ' vente(s) créditée(s) sur les comptes après absorption pending');
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 // ─── PAIEMENTS PAR TRANCHES (VENTES) ───
 function configurerTranches(vid){
