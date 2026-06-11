@@ -1940,9 +1940,6 @@ async function absorberPendingFirebase(){
   if(!fbReady||!db) return false;
   if(S.session?.role !== 'admin') return false;
 
-  // Capturer les IDs de ventes AVANT absorption pour ne créditer que les nouvelles
-  const _idsVentesAvantAbsorption = new Set((S.ventes||[]).map(v=>String(v.id)));
-  const _idsSvcsAvantAbsorption   = new Set((S.ventes_services||[]).map(v=>String(v.id)));
   let totalAbsorbes = 0;
   try {
     const snap = await db.ref('christmedia/pending').once('value');
@@ -1968,6 +1965,31 @@ async function absorberPendingFirebase(){
             S[col].push(item);
             existingIds.add(key);
             nb++;
+            // Créditer le compte si c'est une vente Payée nouvellement absorbée
+            if(col === 'ventes' && item.statut === 'Payé' && item.cid && S.comptes){
+              const cpt = S.comptes.find(x => x.id == item.cid);
+              if(cpt){ cpt.solde = (cpt.solde||0) + (item.mt||0);
+                console.log('[PENDING→COMPTE] +' + item.mt + ' sur ' + cpt.nom); }
+              // Acomptes
+              (item.acomptes||[]).forEach(a => {
+                if(!a.cid) return;
+                const ca = S.comptes.find(x => x.id == a.cid);
+                if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
+              });
+              // Tranches
+              (item.tranches||[]).filter(t => t.cid && t.statut === 'Payé').forEach(t => {
+                const ct = S.comptes.find(x => x.id == t.cid);
+                if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
+              });
+            }
+            if(col === 'ventes_services' && item.cid && S.comptes){
+              const cpt = S.comptes.find(x => x.id == item.cid);
+              if(cpt){
+                const montant = item.statut === 'Payé' ? (item.mt||0) : (item.avance||0);
+                if(montant > 0){ cpt.solde = (cpt.solde||0) + montant;
+                  console.log('[PENDING→COMPTE] svc +' + montant + ' sur ' + cpt.nom); }
+              }
+            }
           } else {
             // Mettre à jour si l'item pending est plus récent
             const idx = S[col].findIndex(x => String(x.id) === key);
@@ -2015,7 +2037,6 @@ async function absorberPendingFirebase(){
 
     if(totalAbsorbes > 0){
       // Créditer uniquement les ventes arrivées pendant cette absorption
-      crediterVentesNouvelles(_idsVentesAvantAbsorption);
       saveLocal(S);
       toast('📥 ' + totalAbsorbes + ' enregistrement(s) récupérés depuis les vendeurs', 4000);
     }
@@ -2135,9 +2156,6 @@ function activerListenerTempsReel(){
     const localVer  = S.version  || 0;
 
     const savedSession = S.session;
-    // Capturer IDs ventes locales avant toute fusion (pour créditer seulement les nouvelles)
-    const _idsVentesAvantSync = new Set((S.ventes||[]).map(v=>String(v.id)));
-
     // CAS 1 : Remote plus récent → fusion complète puis republication
     // CORRECTIF ÉCRASEMENT : après fusion on remonte la version locale ET on
     // republie immédiatement vers Firebase. Ainsi le prochain update Firebase
@@ -2167,7 +2185,6 @@ function activerListenerTempsReel(){
         // Monter la version locale à remoteVer pour que les prochains updates
         // n'écrasent plus (on est maintenant "à jour" côté version)
         S.version = remoteVer;
-        crediterVentesNouvelles(_idsVentesAvantSync); // CAS1: nouvelles ventes reçues
         saveLocal(S);
         rafraichirPageCourante();
         toast('🔄 Données mises à jour', 1800);
@@ -2201,7 +2218,6 @@ function activerListenerTempsReel(){
           if(savedSession.boutique_active) S.boutique_active = savedSession.boutique_active;
         }
         S.version = Date.now();
-        crediterVentesNouvelles(_idsVentesAvantSync); // CAS2
         saveLocal(S);
         // NE PAS republier vers Firebase — évite la boucle de sync
         rafraichirPageCourante();
@@ -2246,7 +2262,6 @@ function activerListenerTempsReel(){
           S.session = savedSession;
           if(savedSession.boutique_active) S.boutique_active = savedSession.boutique_active;
         }
-        crediterVentesNouvelles(_idsVentesAvantSync); // CAS3
         saveLocal(S);
         rafraichirPageCourante();
         toast('🔄 Nouvelles données reçues', 1800);
@@ -2335,6 +2350,17 @@ function fusionnerDonnees(local, remote){
   // Version finale = la plus haute (timestamp)
   result.version = Math.max(local.version||0, remote.version||0);
 
+  // ── PROTECTION SOLDES COMPTES ────────────────────────────────────────────
+  // Les soldes des comptes sont gérés UNIQUEMENT par crediterCompte()/debiterCompte()
+  // lors des opérations locales. La fusion Firebase ne doit JAMAIS écraser un solde
+  // local par un solde remote (qui peut venir d'un appareil vendeur sans la vraie caisse).
+  // Exception : si local n'a aucun compte (premier chargement), on prend le remote.
+  const _soldesToProteger = new Map();
+  if(Array.isArray(local.comptes) && local.comptes.length > 0){
+    local.comptes.forEach(c => { if(c && c.id != null) _soldesToProteger.set(String(c.id), c.solde||0); });
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // Collections à fusionner par ID
   FB_COLLECTIONS.forEach(col => {
     const L = Array.isArray(local[col])  ? local[col]  : [];
@@ -2382,6 +2408,17 @@ function fusionnerDonnees(local, remote){
     result[col] = Array.from(map.values()).filter(item => !item._deleted);
   });
 
+  // ── RESTAURER LES SOLDES LOCAUX sur les comptes fusionnés ──────────────────
+  if(_soldesToProteger.size > 0 && Array.isArray(result.comptes)){
+    result.comptes = result.comptes.map(c => {
+      if(c && c.id != null && _soldesToProteger.has(String(c.id))){
+        return Object.assign({}, c, { solde: _soldesToProteger.get(String(c.id)) });
+      }
+      return c; // Nouveau compte venant du remote : garder tel quel
+    });
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // Paramètres : garder celui de l'appareil avec la version la plus haute
   if((local.version||0) > (remote.version||0)){
     result.parametres    = local.parametres    || remote.parametres;
@@ -2402,7 +2439,7 @@ function fusionnerDonnees(local, remote){
   return result;
 }
 
-function appliquerEtatFusionne(merged, idsVentesAvant){
+function appliquerEtatFusionne(merged){
   const savedSession = S.session;
   S = merged;
   if(savedSession && savedSession.uid){
@@ -2413,7 +2450,6 @@ function appliquerEtatFusionne(merged, idsVentesAvant){
     }
   }
   // Créditer uniquement les ventes NOUVELLES (absentes avant la fusion)
-  if(idsVentesAvant) crediterVentesNouvelles(idsVentesAvant);
   // Nettoyer les doublons d'agenda après chaque fusion Firebase
   if(S.agenda && S.agenda.length > 0) dedupAgenda();
   // Migration bid : corriger les enregistrements sans bid à chaque fusion Firebase
@@ -2446,7 +2482,7 @@ async function manualSync(){
     // Vendeur/caissier : juste lire et fusionner (pas d'écriture)
     setSyncStatus('syncing','Réception...');
     const remote = await loadFromFirebase();
-    if(remote){ const _idsAv1=new Set((S.ventes||[]).map(v=>String(v.id))); appliquerEtatFusionne(fusionnerDonnees(remote, S), _idsAv1); saveLocal(S); }
+    if(remote){ appliquerEtatFusionne(fusionnerDonnees(remote, S)); saveLocal(S); }
     setSyncStatus('online','Synchronisé ✓');
     rafraichirPageCourante();
     return;
@@ -2455,8 +2491,7 @@ async function manualSync(){
   const remote = await loadFromFirebase();
   if(remote){
     const merged = fusionnerDonnees(S, remote);
-    const _idsAv2=new Set((S.ventes||[]).map(v=>String(v.id)));
-    appliquerEtatFusionne(merged, _idsAv2);
+    appliquerEtatFusionne(merged);
     genVersion(); // nouvelle version = fusion gagne sur tous les appareils
     saveLocal(S);
     await saveToFirebase(S);
@@ -2649,8 +2684,7 @@ async function startFirebaseSync(){
           // Local est plus récent (travail hors ligne) → fusionner local+remote
           merged = fusionnerDonnees(S, remote);
         }
-        const _idsAv3=new Set((S.ventes||[]).map(v=>String(v.id)));
-        appliquerEtatFusionne(merged, _idsAv3);
+        appliquerEtatFusionne(merged);
         // Supprimer Boutique B définitivement si elle revient de Firebase
         if((S.boutiques||[]).some(b=>b.id===2&&b.nom==='Boutique B')){
           S.boutiques = S.boutiques.filter(b=>!(b.id===2&&b.nom==='Boutique B'));
@@ -2769,8 +2803,7 @@ window.addEventListener('online', async()=>{
     const remote = await loadFromFirebase();
     if(remote){
       const merged = fusionnerDonnees(S, remote);
-      const _idsAv4=new Set((S.ventes||[]).map(v=>String(v.id)));
-      appliquerEtatFusionne(merged, _idsAv4);
+      appliquerEtatFusionne(merged);
     }
     // PRINCIPE : seul l'admin republie vers Firebase à la reconnexion
     const _roleReconnect = S.session?.role || null;
@@ -9802,8 +9835,7 @@ function _ouvrirSession(u){
         if(remote){
           const savedSession=S.session;
           const merged=fusionnerDonnees(S,remote);
-          const _idsAv5=new Set((S.ventes||[]).map(v=>String(v.id)));
-          appliquerEtatFusionne(merged,_idsAv5);
+          appliquerEtatFusionne(merged);
           if(savedSession&&savedSession.uid) S.session=savedSession;
           setSyncStatus('online','Synchronise ✓');
           if(!_realtimeListener) activerListenerTempsReel();
@@ -10530,45 +10562,7 @@ function debiterCompte(cid, montant){
   if(compte) compte.solde=(compte.solde||0)-montant;
 }
 
-// ── CRÉDIT DES VENTES REÇUES VIA SYNC SANS CREDITER LES COMPTES ─────────────
-// Problème : quand une vente arrive via Firebase (pending ou listener), elle entre
-// dans S.ventes mais crediterCompte() ne s'exécute pas sur le master.
-// Solution : comparer les IDs de ventes AVANT et APRÈS la fusion, ne créditer
-// que les NOUVEAUX IDs apparus. Appelé avec la liste des IDs connus avant fusion.
-function crediterVentesNouvelles(idsAvant){
-  if(!S.comptes || S.comptes.length === 0) return;
-  if(!idsAvant) return;
-  let nb = 0;
-
-  // Ventes simples : créditer uniquement les IDs absents avant la fusion
-  (S.ventes||[]).filter(v => !v._deleted && v.statut === 'Payé' && v.cid && !idsAvant.has(String(v.id))).forEach(v => {
-    const c = S.comptes.find(x => x.id == v.cid);
-    if(c){ c.solde = (c.solde||0) + (v.mt||0); nb++; }
-    (v.acomptes||[]).forEach(a => {
-      if(!a.cid) return;
-      const ca = S.comptes.find(x => x.id == a.cid);
-      if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
-    });
-    (v.tranches||[]).filter(t => t.cid && t.statut==='Payé').forEach(t => {
-      const ct = S.comptes.find(x => x.id == t.cid);
-      if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
-    });
-  });
-
-  // Ventes services : même principe
-  (S.ventes_services||[]).filter(v => !v._deleted && v.cid && !idsAvant.has(String(v.id))).forEach(v => {
-    if(v.statut === 'Payé'){
-      const c = S.comptes.find(x => x.id == v.cid);
-      if(c){ c.solde = (c.solde||0) + (v.mt||0); nb++; }
-    } else if(v.statut === 'Avance' && (v.avance||0) > 0){
-      const c = S.comptes.find(x => x.id == v.cid);
-      if(c){ c.solde = (c.solde||0) + (v.avance||0); nb++; }
-    }
-  });
-
-  if(nb > 0) console.log('[COMPTES] ' + nb + ' nouvelle(s) vente(s) créditée(s) sur les comptes');
-}
-// ────────────────────────────────────────────────────────────────────────────
+// [COMPTES] Soldes gérés uniquement par crediterCompte()/debiterCompte() lors des opérations locales.
 
 // ─── PAIEMENTS PAR TRANCHES (VENTES) ───
 function configurerTranches(vid){
@@ -22171,8 +22165,7 @@ async function priseDeService(){
   const remote = await loadFromFirebase();
   if(remote){
     const merged = fusionnerDonnees(S, remote);
-    const _idsAv6=new Set((S.ventes||[]).map(v=>String(v.id)));
-    appliquerEtatFusionne(merged, _idsAv6);
+    appliquerEtatFusionne(merged);
     saveLocal(S);
   }
 
