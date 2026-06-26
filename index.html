@@ -7648,6 +7648,40 @@ async function supprimerPhoto(aid){
 
 // ─── TRANSACTIONS ───
 let txnFilter='jour';
+window._txnSearch={mot:'',type:'tous',dateD:'',dateF:'',mtMin:'',mtMax:''};
+
+function _txnGetDesc(t){
+  if(t._type==='vente'){const lignes=t.lignes||[{aid:t.aid}];return lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');}
+  if(t._type==='achat'){const ar=ga(t.aid);return ar?ar.nom:'?';}
+  if(t._type==='depense') return (t.four||'')+' '+(t.cat||'');
+  if(t._type==='revenu') return t.desc||'';
+  if(t._type==='service') return t.nom_service||'Service';
+  if(t._type==='transfert'){
+    const de=(S.comptes||[]).find(c=>c.id==t.de);
+    const vers=(S.comptes||[]).find(c=>c.id==t.vers);
+    return (de?de.nom:'?')+' → '+(vers?vers.nom:'?');
+  }
+  return '';
+}
+
+function txnLancerRecherche(){
+  const s=window._txnSearch;
+  s.mot=(document.getElementById('txnsMot')||{}).value||'';
+  s.type=(document.getElementById('txnsType')||{}).value||'tous';
+  s.dateD=(document.getElementById('txnsDateD')||{}).value||'';
+  s.dateF=(document.getElementById('txnsDateF')||{}).value||'';
+  s.mtMin=(document.getElementById('txnsMtMin')||{}).value||'';
+  s.mtMax=(document.getElementById('txnsMtMax')||{}).value||'';
+  txnFilter='recherche';
+  rTransactions();
+}
+
+function txnResetRecherche(){
+  window._txnSearch={mot:'',type:'tous',dateD:'',dateF:'',mtMin:'',mtMax:''};
+  txnFilter='jour';
+  rTransactions();
+}
+
 function rTransactions(){
   const bid = getBid();
   const bActive = getBoutiqueActive();
@@ -7663,6 +7697,7 @@ function rTransactions(){
     if(txnFilter==='date') return item.date===jourChoisi;
     if(txnFilter==='semaine') return item.date>=monStr2&&item.date<=today;
     if(txnFilter==='mois') return item.date&&item.date.startsWith(curM2);
+    if(txnFilter==='recherche') return true; // filtre appliqué après
     return true;
   };
   const ventes=getVentesBoutique(bid).filter(filterFn);
@@ -7681,8 +7716,8 @@ function rTransactions(){
   const totalSvcs=svcs.filter(s=>s.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   const solde=totalVentes+totalRevs+totalSvcs-totalDeps-totalAchats;
 
-  // Grouper par jour
-  const allTxns=[
+  // Grouper toutes les transactions
+  let allTxns=[
     ...ventes.map(v=>({...v,_type:'vente',_icon:'🛒',_color:'var(--green)'})),
     ...achats.map(a=>({...a,_type:'achat',_icon:'📦',_color:'var(--purple)'})),
     ...deps.map(d=>({...d,_type:'depense',_icon:'💸',_color:'var(--red)'})),
@@ -7690,6 +7725,83 @@ function rTransactions(){
     ...svcs.map(s=>({...s,_type:'service',_icon:'⭐',_color:'var(--amber)'})),
     ...transferts.map(t=>({...t,_type:'transfert',_icon:'↔️',_color:'var(--teal)'})),
   ].sort((a,b)=>b.id-a.id);
+
+  // Appliquer le filtre recherche
+  if(txnFilter==='recherche'){
+    const s=window._txnSearch;
+    const mot=(s.mot||'').toLowerCase().trim();
+    allTxns=allTxns.filter(t=>{
+      if(s.type&&s.type!=='tous'&&t._type!==s.type) return false;
+      if(s.dateD&&t.date<s.dateD) return false;
+      if(s.dateF&&t.date>s.dateF) return false;
+      if(s.mtMin&&t.mt<parseFloat(s.mtMin)) return false;
+      if(s.mtMax&&t.mt>parseFloat(s.mtMax)) return false;
+      if(mot){
+        const desc=_txnGetDesc(t).toLowerCase();
+        const client=(t.client||t.four||t.cat||t.desc||'').toLowerCase();
+        const notes=(t.notes||'').toLowerCase();
+        if(!desc.includes(mot)&&!client.includes(mot)&&!notes.includes(mot)) return false;
+      }
+      return true;
+    });
+  }
+
+  const s=window._txnSearch;
+  const recherchePanneauHTML=`
+    <div id="txn-search-panel" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--rs);padding:14px;margin-bottom:14px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--text1)">🔍 Recherche avancée</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="grid-column:1/-1">
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Mot-clé (article, client, note…)</label>
+          <input id="txnsMot" type="text" placeholder="Ex: rideaux, Amivi, café..." value="${s.mot||''}"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg);box-sizing:border-box"
+            onkeydown="if(event.key==='Enter')txnLancerRecherche()">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Type d'opération</label>
+          <select id="txnsType" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg)">
+            <option value="tous" ${s.type==='tous'?'selected':''}>Tous les types</option>
+            <option value="vente" ${s.type==='vente'?'selected':''}>🛒 Ventes</option>
+            <option value="achat" ${s.type==='achat'?'selected':''}>📦 Achats</option>
+            <option value="depense" ${s.type==='depense'?'selected':''}>💸 Dépenses</option>
+            <option value="revenu" ${s.type==='revenu'?'selected':''}>💵 Revenus</option>
+            <option value="service" ${s.type==='service'?'selected':''}>⭐ Services</option>
+            <option value="transfert" ${s.type==='transfert'?'selected':''}>↔️ Transferts</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Montant min (FCFA)</label>
+          <input id="txnsMtMin" type="number" placeholder="0" value="${s.mtMin||''}"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Date début</label>
+          <input id="txnsDateD" type="date" value="${s.dateD||''}"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Date fin</label>
+          <input id="txnsDateF" type="date" value="${s.dateF||''}"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Montant max (FCFA)</label>
+          <input id="txnsMtMax" type="number" placeholder="∞" value="${s.mtMax||''}"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:13px;background:var(--bg);box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="txnResetRecherche()" style="padding:7px 14px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--bg);font-size:13px;cursor:pointer">✖ Effacer</button>
+        <button onclick="txnLancerRecherche()" style="padding:7px 18px;border:none;border-radius:var(--rs);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">🔍 Rechercher</button>
+      </div>
+    </div>`;
+
+  const periodeLabel=txnFilter==='jour'?"d'aujourd'hui"
+    :txnFilter==='date'?'du '+new Date(jourChoisi+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+    :txnFilter==='semaine'?'cette semaine'
+    :txnFilter==='mois'?'ce mois'
+    :txnFilter==='recherche'?'— résultats de recherche'
+    :'(tout)';
 
   document.getElementById('content').innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;background:${bActive.couleur||'var(--navy)'};color:#fff;border-radius:var(--rs);padding:7px 14px;margin-bottom:12px;font-size:12px;font-weight:600">
@@ -7701,8 +7813,10 @@ function rTransactions(){
       <button class="ptab${txnFilter==='mois'?' active':''}" onclick="txnFilter='mois';rTransactions()">Ce mois</button>
       <button class="ptab${txnFilter==='tout'?' active':''}" onclick="txnFilter='tout';rTransactions()">Tout</button>
       <button class="ptab${txnFilter==='date'?' active':''}" onclick="txnFilter='date';if(!window._txnDateJour)window._txnDateJour=D();rTransactions()">📅 Jour précis</button>
+      <button class="ptab${txnFilter==='recherche'?' active':''}" onclick="txnFilter='recherche';rTransactions()" style="${txnFilter==='recherche'?'':''}">🔍 Recherche</button>
       ${txnFilter==='date'?`<input type="date" id="txn-date-input" value="${jourChoisi}" onchange="window._txnDateJour=this.value;rTransactions()" style="padding:4px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface);height:32px">`:' '}
     </div>
+    ${txnFilter==='recherche'?recherchePanneauHTML:''}
     <div class="g4" style="margin-bottom:16px">
       <div class="card" style="border-left:3px solid var(--green)">
         <div class="ct">Ventes encaissées</div><div class="mv" style="color:var(--green)">${F(totalVentes)}</div>
@@ -7721,34 +7835,25 @@ function rTransactions(){
         <span class="badge ${solde>=0?'bg':'br'}">${solde>=0?'Bénéfice':'Déficit'}</span>
       </div>
     </div>
-    <p class="st">Transactions ${txnFilter==='jour'?"d'aujourd'hui":txnFilter==='date'?'du '+new Date(jourChoisi+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):txnFilter==='semaine'?'cette semaine':txnFilter==='mois'?'ce mois':'(tout)'} — ${allTxns.length} opération(s)</p>
-    ${allTxns.length===0?'<div class="empty"><p>Aucune transaction</p><small>Les opérations apparaîtront ici</small></div>':
+    <p class="st">Transactions ${periodeLabel} — ${allTxns.length} opération(s)</p>
+    ${allTxns.length===0?`<div class="empty"><p>${txnFilter==='recherche'?'Aucun résultat':'Aucune transaction'}</p><small>${txnFilter==='recherche'?'Essayez d\'autres critères':'Les opérations apparaîtront ici'}</small></div>`:
     `<div class="tbl-wrap">
       ${allTxns.map(t=>{
-        let desc='',montant=F(t.mt),statut='';
-        if(t._type==='vente'){
-          const lignes=t.lignes||[{aid:t.aid}];
-          desc=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
-          statut=sb(t.statut);
-        }else if(t._type==='achat'){
-          const ar=ga(t.aid);desc=ar?ar.nom:'?';
+        let desc=_txnGetDesc(t),montant=F(t.mt),statut='';
+        if(t._type==='vente'){statut=sb(t.statut);}
+        else if(t._type==='achat'){
           statut=`<span class="badge ${t.statut==='À payer'?'ba':'bg'}">${t.statut||'Payé'}</span>`;
           montant=`<span style="color:var(--red)">−${F(t.mt)}</span>`;
-        }else if(t._type==='depense'){desc=t.four||t.cat;montant=`<span style="color:var(--red)">−${F(t.mt)}</span>`;statut='';}
-        else if(t._type==='revenu'){desc=t.desc;statut='';}
-        else if(t._type==='service'){desc=t.nom_service||'Service';statut=sb(t.statut);}
+        }else if(t._type==='depense'){montant=`<span style="color:var(--red)">−${F(t.mt)}</span>`;}
         else if(t._type==='transfert'){
-          const de=(S.comptes||[]).find(c=>c.id==t.de);
-          const vers=(S.comptes||[]).find(c=>c.id==t.vers);
-          desc=(de?de.nom:'?')+' → '+(vers?vers.nom:'?');
           montant=`<span style="color:var(--teal)">${F(t.mt)}</span>`;
           statut=`<span class="badge bt">Transfert</span>`;
         }
         return`<div class="txn-item">
-          <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':t._type==='transfert'?'rev':'service'}" style="${t._type==='transfert'?'background:var(--teal-bg);color:var(--teal)':''}">${t._icon}</div>
+          <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':'service'}" style="${t._type==='transfert'?'background:var(--teal-bg,#e0f7f4);color:var(--teal)':''}">${t._icon}</div>
           <div style="flex:1">
-            <div style="font-weight:500;font-size:13px">${desc}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''} · ${t.notes||t.client||t.four||t.cat||''}</div>
+            <div style="font-weight:500;font-size:13px">${desc||'—'}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''} · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:14px">${montant}</div>
