@@ -16968,6 +16968,10 @@ function majDateDriveBackup(){
   toast('✅ Fichier téléchargé — pensez à le glisser dans Drive !', 4000);
 }
 
+function ouvrirGDrive(){
+  window.open('https://drive.google.com', '_blank');
+}
+
 function initGoogleAuth(){
   if(!window.google || !window.google.accounts){
     const script = document.createElement('script');
