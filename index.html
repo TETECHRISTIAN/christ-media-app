@@ -7657,8 +7657,10 @@ function rTransactions(){
   const mon2=new Date(now2);mon2.setDate(now2.getDate()-day2+1);
   const monStr2=mon2.toISOString().split('T')[0];
   const curM2=today.slice(0,7);
+  const jourChoisi=window._txnDateJour||today;
   const filterFn=item=>{
     if(txnFilter==='jour') return item.date===today;
+    if(txnFilter==='date') return item.date===jourChoisi;
     if(txnFilter==='semaine') return item.date>=monStr2&&item.date<=today;
     if(txnFilter==='mois') return item.date&&item.date.startsWith(curM2);
     return true;
@@ -7691,11 +7693,13 @@ function rTransactions(){
     <div style="display:flex;align-items:center;gap:8px;background:${bActive.couleur||'var(--navy)'};color:#fff;border-radius:var(--rs);padding:7px 14px;margin-bottom:12px;font-size:12px;font-weight:600">
       ${bActive.emoji||'🏪'} ${bActive.nom} — Transactions
     </div>
-    <div class="period-tabs" id="txn-tabs">
+    <div class="period-tabs" id="txn-tabs" style="flex-wrap:wrap;gap:4px">
       <button class="ptab${txnFilter==='jour'?' active':''}" onclick="txnFilter='jour';rTransactions()">Aujourd\'hui</button>
       <button class="ptab${txnFilter==='semaine'?' active':''}" onclick="txnFilter='semaine';rTransactions()">Semaine</button>
       <button class="ptab${txnFilter==='mois'?' active':''}" onclick="txnFilter='mois';rTransactions()">Ce mois</button>
       <button class="ptab${txnFilter==='tout'?' active':''}" onclick="txnFilter='tout';rTransactions()">Tout</button>
+      <button class="ptab${txnFilter==='date'?' active':''}" onclick="txnFilter='date';if(!window._txnDateJour)window._txnDateJour=D();rTransactions()">📅 Jour précis</button>
+      ${txnFilter==='date'?`<input type="date" id="txn-date-input" value="${jourChoisi}" onchange="window._txnDateJour=this.value;rTransactions()" style="padding:4px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface);height:32px">`:' '}
     </div>
     <div class="g4" style="margin-bottom:16px">
       <div class="card" style="border-left:3px solid var(--green)">
@@ -7715,7 +7719,7 @@ function rTransactions(){
         <span class="badge ${solde>=0?'bg':'br'}">${solde>=0?'Bénéfice':'Déficit'}</span>
       </div>
     </div>
-    <p class="st">Toutes les transactions ${txnFilter==='jour'?"d'aujourd'hui":'(tout)'} — ${allTxns.length} opérations</p>
+    <p class="st">Transactions ${txnFilter==='jour'?"d'aujourd'hui":txnFilter==='date'?'du '+new Date(jourChoisi+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):txnFilter==='semaine'?'cette semaine':txnFilter==='mois'?'ce mois':'(tout)'} — ${allTxns.length} opération(s)</p>
     ${allTxns.length===0?'<div class="empty"><p>Aucune transaction</p><small>Les opérations apparaîtront ici</small></div>':
     `<div class="tbl-wrap">
       ${allTxns.map(t=>{
