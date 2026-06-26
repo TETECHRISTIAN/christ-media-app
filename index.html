@@ -3026,7 +3026,7 @@ const actionsMap={
   comptabilite:()=>'<button class="btn" onclick="exportJournal()">📥 Exporter journal</button>',
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
-  bilan_jour:()=>`<input type="date" id="bj-date" value="${D()}" onchange="rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
+  bilan_jour:()=>`<input type="date" id="bj-date" value="${window._bilanJourDate||D()}" onchange="window._bilanJourDate=this.value;rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
   cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>'  };
 
 let currentPage='dashboard';
@@ -21534,8 +21534,7 @@ function renderFourniCapacite(){
 // MODULE — BILAN JOURNALIER (ENTRÉES VS SORTIES PAR JOUR)
 // ═══════════════════════════════════════════════════════════════════
 function rBilanJour(){
-  const dateEl = document.getElementById('bj-date');
-  const jour = dateEl ? dateEl.value : D();
+  const jour = window._bilanJourDate || (document.getElementById('bj-date')||{}).value || D();
   const bid = getBid();
 
   // ── Collecte toutes les opérations du jour ──
@@ -21580,7 +21579,7 @@ function rBilanJour(){
 
   document.getElementById('content').innerHTML=`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-    <input type="date" id="bj-date" value="${jour}" onchange="rBilanJour()" style="padding:6px 12px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">
+    <input type="date" id="bj-date" value="${jour}" onchange="window._bilanJourDate=this.value;rBilanJour()" style="padding:6px 12px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">
     <span style="font-size:13px;color:var(--text3)">${new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span>
     <span style="font-size:12px;background:var(--surface2);padding:3px 10px;border-radius:20px;color:var(--text2)">${nbOps} opération(s)</span>
   </div>
