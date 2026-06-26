@@ -7670,6 +7670,7 @@ function rTransactions(){
   const deps=getDepensesBoutique(bid).filter(filterFn);
   const revs=(S.revenus||[]).filter(filterFn);
   const svcs=(S.ventes_services||[]).filter(filterFn);
+  const transferts=(S.transferts||[]).filter(filterFn);
 
   const totalVentes=ventes.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   const totalAPercevoir=ventes.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
@@ -7687,6 +7688,7 @@ function rTransactions(){
     ...deps.map(d=>({...d,_type:'depense',_icon:'💸',_color:'var(--red)'})),
     ...revs.map(r=>({...r,_type:'revenu',_icon:'💵',_color:'var(--teal)'})),
     ...svcs.map(s=>({...s,_type:'service',_icon:'⭐',_color:'var(--amber)'})),
+    ...transferts.map(t=>({...t,_type:'transfert',_icon:'↔️',_color:'var(--teal)'})),
   ].sort((a,b)=>b.id-a.id);
 
   document.getElementById('content').innerHTML=`
@@ -7735,11 +7737,18 @@ function rTransactions(){
         }else if(t._type==='depense'){desc=t.four||t.cat;montant=`<span style="color:var(--red)">−${F(t.mt)}</span>`;statut='';}
         else if(t._type==='revenu'){desc=t.desc;statut='';}
         else if(t._type==='service'){desc=t.nom_service||'Service';statut=sb(t.statut);}
+        else if(t._type==='transfert'){
+          const de=(S.comptes||[]).find(c=>c.id==t.de);
+          const vers=(S.comptes||[]).find(c=>c.id==t.vers);
+          desc=(de?de.nom:'?')+' → '+(vers?vers.nom:'?');
+          montant=`<span style="color:var(--teal)">${F(t.mt)}</span>`;
+          statut=`<span class="badge bt">Transfert</span>`;
+        }
         return`<div class="txn-item">
-          <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':'service'}">${t._icon}</div>
+          <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':t._type==='transfert'?'rev':'service'}" style="${t._type==='transfert'?'background:var(--teal-bg);color:var(--teal)':''}">${t._icon}</div>
           <div style="flex:1">
             <div style="font-weight:500;font-size:13px">${desc}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''}  · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''} · ${t.notes||t.client||t.four||t.cat||''}</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:14px">${montant}</div>
