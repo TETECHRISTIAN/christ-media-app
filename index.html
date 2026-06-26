@@ -7700,9 +7700,11 @@ function rTransactions(){
     if(txnFilter==='recherche') return true; // filtre appliqué après
     return true;
   };
-  const ventes=getVentesBoutique(bid).filter(filterFn);
-  const achats=getAchatsBoutique(bid).filter(filterFn);
-  const deps=getDepensesBoutique(bid).filter(filterFn);
+  // En mode recherche : toutes boutiques ; sinon : boutique active
+  const isRecherche=txnFilter==='recherche';
+  const ventes=(isRecherche?(S.ventes||[]):(getVentesBoutique(bid))).filter(filterFn);
+  const achats=(isRecherche?(S.achats||[]):(getAchatsBoutique(bid))).filter(filterFn);
+  const deps=(isRecherche?(S.depenses||[]):(getDepensesBoutique(bid))).filter(filterFn);
   const revs=(S.revenus||[]).filter(filterFn);
   const svcs=(S.ventes_services||[]).filter(filterFn);
   const transferts=(S.transferts||[]).filter(filterFn);
@@ -7749,7 +7751,10 @@ function rTransactions(){
   const s=window._txnSearch;
   const recherchePanneauHTML=`
     <div id="txn-search-panel" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--rs);padding:14px;margin-bottom:14px">
-      <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--text1)">🔍 Recherche avancée</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-weight:600;font-size:13px;color:var(--text1)">🔍 Recherche avancée</span>
+        <span style="font-size:11px;color:var(--text3);background:var(--bg);padding:2px 8px;border-radius:10px;border:1px solid var(--border2)">📦 Toutes les boutiques</span>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="grid-column:1/-1">
           <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Mot-clé (article, client, note…)</label>
@@ -7853,7 +7858,7 @@ function rTransactions(){
           <div class="txn-icon txn-${t._type==='vente'?'vente':t._type==='achat'?'achat':t._type==='depense'?'dep':t._type==='revenu'?'rev':'service'}" style="${t._type==='transfert'?'background:var(--teal-bg,#e0f7f4);color:var(--teal)':''}">${t._icon}</div>
           <div style="flex:1">
             <div style="font-weight:500;font-size:13px">${desc||'—'}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''} · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtD(t.date)}${t.heure?' à '+t.heure:''} · ${t.client||t.four||t.cat||''} · ${t.cid?nomCompte(t.cid):(t.mode||'')}${isRecherche&&t.bid?(()=>{const b=(S.boutiques||[]).find(b=>b.id==t.bid);return b?' · <span style="color:var(--accent);font-weight:600">'+b.nom+'</span>':''})():''}</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:14px">${montant}</div>
