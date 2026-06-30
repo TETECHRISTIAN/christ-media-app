@@ -4306,7 +4306,7 @@ function delVente(id){
   // Permet à la fusion Firebase de propager la suppression sur tous les appareils
   const vDelIdx = S.ventes.findIndex(v=>v.id==id);
   if(vDelIdx>=0){ S.ventes[vDelIdx]={...S.ventes[vDelIdx], _deleted:true, ts:Date.now()}; }
-  saveData();toast('🗑️ Vente supprimée — stock et comptes mis à jour');rVente();
+  saveData();toast('🗑️ Vente supprimée — stock et comptes mis à jour');(currentPage==='transactions'?rTransactions:rVente)();
 }
 
 // ─── ACHATS ───
@@ -4627,7 +4627,7 @@ function delAchat(id){
     }
   }
   S.achats=S.achats.filter(a=>a.id!=id);
-  saveData();toast('🗑️ Achat annulé — stock et comptes mis à jour');rAchats();
+  saveData();toast('🗑️ Achat annulé — stock et comptes mis à jour');(currentPage==='transactions'?rTransactions:rAchats)();
 }
 
 // ─── STOCK ───
@@ -5696,7 +5696,7 @@ function delDep(id){
   const d=S.depenses.find(x=>x.id==id);
   if(d&&d.cid) crediterCompte(d.cid, d.mt);
   S.depenses=S.depenses.filter(x=>x.id!=id);
-  saveData();toast('🗑️ Dépense supprimée — compte mis à jour');rDep();
+  saveData();toast('🗑️ Dépense supprimée — compte mis à jour');(currentPage==='transactions'?rTransactions:rDep)();
 }
 
 // ─── RAPPORTS AVEC GRAPHIQUES ───
@@ -6556,7 +6556,7 @@ function delRevenu(id){
   const r=(S.revenus||[]).find(x=>x.id==id);
   if(r&&r.cid) debiterCompte(r.cid, r.mt);
   S.revenus=revenus.filter(x=>x.id!=id);
-  saveData();toast('🗑️ Revenu supprimé — compte mis à jour');rRevenus();
+  saveData();toast('🗑️ Revenu supprimé — compte mis à jour');(currentPage==='transactions'?rTransactions:rRevenus)();
 }
 function addCharge(){
   revTab='charges';
@@ -7682,6 +7682,15 @@ function txnResetRecherche(){
   rTransactions();
 }
 
+function txnDelete(type,id){
+  if(type==='vente') delVente(id);
+  else if(type==='achat') delAchat(id);
+  else if(type==='depense') delDep(id);
+  else if(type==='revenu') delRevenu(id);
+  else if(type==='service') delVenteService(id);
+  else if(type==='transfert') delTransfert(id);
+}
+
 function rTransactions(){
   const bid = getBid();
   const bActive = getBoutiqueActive();
@@ -7864,6 +7873,7 @@ function rTransactions(){
             <div style="font-weight:700;font-size:14px">${montant}</div>
             <div>${statut}</div>
           </div>
+          <button class="btn-icon btn-sm" onclick="txnDelete('${t._type}',${t.id})" title="Supprimer" style="color:var(--red);margin-left:8px;flex-shrink:0">✕</button>
         </div>`;
       }).join('')}
     </div>`}`;
@@ -8146,7 +8156,7 @@ function delVenteService(id){
   const v=S.ventes_services&&S.ventes_services.find(x=>x.id==id);
   if(v && v.statut==='Payé' && v.cid) debiterCompte(v.cid, v.mt);
   S.ventes_services=S.ventes_services.filter(v=>v.id!=id);
-  saveData();toast('🗑️ Prestation supprimée — compte mis à jour');rServices();
+  saveData();toast('🗑️ Prestation supprimée — compte mis à jour');(currentPage==='transactions'?rTransactions:rServices)();
 }
 
 function partagerWhatsAppService(id){
@@ -9258,7 +9268,7 @@ function delTransfert(id){
     if(vers)vers.solde-=t.mt;
   }
   S.transferts=S.transferts.filter(t=>t.id!=id);
-  saveData();toast('↩️ Transfert annulé');rComptes();
+  saveData();toast('↩️ Transfert annulé');(currentPage==='transactions'?rTransactions:rComptes)();
 }
 
 // ─── DEVIS CLIENTS ───
