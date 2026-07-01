@@ -4347,6 +4347,10 @@ function ouvrirModifVente(vid){
       </div>
       <div class="fg"><label class="fl">Compte / Mode</label>${selectComptes('mv-cid', v.cid)}</div>
     </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Montant reçu du client</label><input class="fi" type="number" min="0" id="mv-recu" value="${v.montant_recu||v.mt||0}" oninput="recalcModifVente()"></div>
+      <div class="fg"><label class="fl">Monnaie à rendre</label><input class="fi" id="mv-monnaie" readonly style="background:var(--green-bg);color:var(--green);font-weight:700" value="${F(Math.max(0,(v.montant_recu||v.mt||0)-v.mt))}"></div>
+    </div>
     <div class="total-preview" style="margin-top:8px">
       <div class="total-preview-final"><span>Nouveau total</span><span id="mv-total">${F(v.mt)}</span></div>
     </div>
@@ -4364,6 +4368,8 @@ function recalcModifVente(){
     total+=mt;
   });
   const totalEl=document.getElementById('mv-total');if(totalEl)totalEl.textContent=F(total);
+  const recuEl=document.getElementById('mv-recu'),monnaieEl=document.getElementById('mv-monnaie');
+  if(recuEl&&monnaieEl){const recu=+recuEl.value||0;monnaieEl.value=F(Math.max(0,recu-total));}
 }
 function sauvegarderModifVente(vid){
   const v=S.ventes.find(v=>v.id==vid);if(!v)return;
@@ -4383,6 +4389,8 @@ function sauvegarderModifVente(vid){
   const nouveauClient=(document.getElementById('mv-client')||{}).value?.trim()||'';
   const nouveauStatut=(document.getElementById('mv-statut')||{}).value||'Payé';
   const nouveauCid=(document.getElementById('mv-cid')||{}).value||'';
+  const nouveauMontantRecu=Math.max(0,+((document.getElementById('mv-recu')||{}).value)||0);
+  const nouvelleMonnaie=Math.max(0,nouveauMontantRecu-nouveauTotal);
 
   // Ajuster les comptes : annuler l'ancien encaissement, appliquer le nouveau
   if(oldStatut==='Payé'&&oldCid) debiterCompte(oldCid,oldMt);
@@ -4398,6 +4406,8 @@ function sauvegarderModifVente(vid){
   v.mt=nouveauTotal;
   v.statut=nouveauStatut;
   v.cid=nouveauCid;
+  v.montant_recu=nouveauMontantRecu;
+  v.monnaie=nouvelleMonnaie;
   v.ts=Date.now();
   saveData();
   closeModal();
