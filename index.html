@@ -6314,47 +6314,9 @@ function printFacture(vid){
   const typePrixLabel=v.typePrix==='gros'?'Gros':v.typePrix==='semi'?'Semi-gros':'Détail';
   const heure=v.heure||'';
   const boutique=getBoutiqueActive();
+  const numFac='FAC-'+String(factureNum).padStart(5,'0');
 
-  const fd=document.getElementById('facture-print');
-  fd.style.display='block';
-  fd.innerHTML=`
-  <style>
-    .f-wrap{font-family:'DM Sans',system-ui,sans-serif;font-size:13px;color:#111;max-width:800px;margin:0 auto;padding:32px 40px;background:#fff}
-    .f-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:3px solid ${couleur};margin-bottom:24px}
-    .f-logo-zone{display:flex;align-items:center;gap:12px}
-    .f-logo-icon{width:48px;height:48px;background:${couleur};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;flex-shrink:0}
-    .f-logo-text{font-size:22px;font-weight:800;color:${couleur};letter-spacing:-.5px}
-    .f-logo-sub{font-size:11px;color:#888;margin-top:2px}
-    .f-num-zone{text-align:right}
-    .f-num-title{font-size:22px;font-weight:900;color:${couleur};letter-spacing:1px}
-    .f-num-ref{font-size:13px;color:#555;margin-top:4px}
-    .f-statut{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;
-      background:${v.statut==='Payé'?'#e6f9ef':'#fff8e6'};color:${v.statut==='Payé'?'#1a7a3c':'#8a5200'};
-      border:1px solid ${v.statut==='Payé'?'#9ee6bf':'#f0c87a'}}
-    .f-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
-    .f-party{background:#f9f9f9;border:1px solid #eee;border-radius:10px;padding:14px 18px}
-    .f-party-title{font-size:9px;font-weight:800;color:#aaa;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
-    .f-party-name{font-size:15px;font-weight:700;color:#111}
-    .f-party-info{font-size:11px;color:#777;margin-top:4px;line-height:1.7}
-    table.ft{width:100%;border-collapse:collapse;margin-bottom:20px}
-    table.ft thead tr{background:${couleur}}
-    table.ft thead th{color:#fff;padding:9px 12px;font-size:11px;font-weight:700;text-align:left;letter-spacing:.3px}
-    table.ft thead th:last-child{text-align:right}
-    table.ft tbody tr:nth-child(even){background:#f9f9f9}
-    table.ft tbody td{padding:9px 12px;font-size:12px;border-bottom:1px solid #eee}
-    table.ft tbody td:last-child{text-align:right;font-weight:700}
-    table.ft tfoot td{padding:8px 12px;font-size:12px}
-    .f-totaux{margin-left:auto;width:280px;border:1px solid #eee;border-radius:10px;overflow:hidden;margin-bottom:20px}
-    .f-tot-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:13px;border-bottom:1px solid #eee}
-    .f-tot-row:last-child{border-bottom:none}
-    .f-tot-remise{color:#8a5200;background:#fffbf0}
-    .f-tot-recu{color:#555;background:#f9f9f9}
-    .f-tot-monnaie{color:#1a7a3c;background:#f0faf4;font-weight:700}
-    .f-tot-final{background:${couleur};color:#fff;font-size:16px;font-weight:800;padding:12px 16px}
-    .f-footer{text-align:center;margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:14px;line-height:1.8}
-    .f-meta{font-size:10px;color:#bbb;margin-top:4px}
-    @media print{@page{margin:12mm}body{padding:0}.no-print{display:none}}
-  </style>
+  const bodyHTML=`
   <div class="f-wrap">
     <div class="f-header">
       <div class="f-logo-zone">
@@ -6366,7 +6328,7 @@ function printFacture(vid){
       </div>
       <div class="f-num-zone">
         <div class="f-num-title">FACTURE</div>
-        <div class="f-num-ref">N° FAC-${String(factureNum).padStart(5,'0')}</div>
+        <div class="f-num-ref">N° ${numFac}</div>
         <div class="f-num-ref">Date : ${fmtD(v.date)}${heure?' à '+heure:''}</div>
         <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
       </div>
@@ -6424,8 +6386,61 @@ function printFacture(vid){
       <div class="f-meta">Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
     </div>
   </div>`;
-  window.print();
-  setTimeout(()=>{fd.style.display='none';},500);
+
+  const w=window.open('','_facture_vente','width=900,height=1000');
+  if(!w){toast('❌ Popup bloquée — autorisez les popups');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Facture ${numFac}</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#e8eaf0;padding:24px;font-family:'DM Sans',system-ui,sans-serif}
+    @media print{body{background:#fff;padding:0}.no-print{display:none!important}@page{margin:12mm}}
+    .no-print{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+    button{padding:9px 22px;border-radius:8px;border:1px solid #ccc;cursor:pointer;font-size:14px;font-family:inherit;font-weight:600}
+    .btn-p{background:${couleur};color:#fff;border-color:${couleur}}
+    .f-wrap{font-family:'DM Sans',system-ui,sans-serif;font-size:13px;color:#111;max-width:800px;margin:0 auto;padding:32px 40px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.12)}
+    @media print{.f-wrap{box-shadow:none;border-radius:0;padding:0}}
+    .f-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:3px solid ${couleur};margin-bottom:24px}
+    .f-logo-zone{display:flex;align-items:center;gap:12px}
+    .f-logo-icon{width:48px;height:48px;background:${couleur};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;flex-shrink:0}
+    .f-logo-text{font-size:22px;font-weight:800;color:${couleur};letter-spacing:-.5px}
+    .f-logo-sub{font-size:11px;color:#888;margin-top:2px}
+    .f-num-zone{text-align:right}
+    .f-num-title{font-size:22px;font-weight:900;color:${couleur};letter-spacing:1px}
+    .f-num-ref{font-size:13px;color:#555;margin-top:4px}
+    .f-statut{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;
+      background:${v.statut==='Payé'?'#e6f9ef':'#fff8e6'};color:${v.statut==='Payé'?'#1a7a3c':'#8a5200'};
+      border:1px solid ${v.statut==='Payé'?'#9ee6bf':'#f0c87a'}}
+    .f-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .f-party{background:#f9f9f9;border:1px solid #eee;border-radius:10px;padding:14px 18px}
+    .f-party-title{font-size:9px;font-weight:800;color:#aaa;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+    .f-party-name{font-size:15px;font-weight:700;color:#111}
+    .f-party-info{font-size:11px;color:#777;margin-top:4px;line-height:1.7}
+    table.ft{width:100%;border-collapse:collapse;margin-bottom:20px}
+    table.ft thead tr{background:${couleur}}
+    table.ft thead th{color:#fff;padding:9px 12px;font-size:11px;font-weight:700;text-align:left;letter-spacing:.3px}
+    table.ft thead th:last-child{text-align:right}
+    table.ft tbody tr:nth-child(even){background:#f9f9f9}
+    table.ft tbody td{padding:9px 12px;font-size:12px;border-bottom:1px solid #eee}
+    table.ft tbody td:last-child{text-align:right;font-weight:700}
+    table.ft tfoot td{padding:8px 12px;font-size:12px}
+    .f-totaux{margin-left:auto;width:280px;border:1px solid #eee;border-radius:10px;overflow:hidden;margin-bottom:20px}
+    .f-tot-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:13px;border-bottom:1px solid #eee}
+    .f-tot-row:last-child{border-bottom:none}
+    .f-tot-remise{color:#8a5200;background:#fffbf0}
+    .f-tot-recu{color:#555;background:#f9f9f9}
+    .f-tot-monnaie{color:#1a7a3c;background:#f0faf4;font-weight:700}
+    .f-tot-final{background:${couleur};color:#fff;font-size:16px;font-weight:800;padding:12px 16px}
+    .f-footer{text-align:center;margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:14px;line-height:1.8}
+    .f-meta{font-size:10px;color:#bbb;margin-top:4px}
+  </style></head><body>
+  <div class="no-print">
+    <button class="btn-p" onclick="window.print()">🖨️ Imprimer</button>
+    <button onclick="window.close()">✕ Fermer</button>
+  </div>
+  ${bodyHTML}
+  </body></html>`);
+  w.document.close();
 }
 
 // ─── SCANNER CODE-BARRES ───
