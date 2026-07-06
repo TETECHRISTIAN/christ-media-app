@@ -12371,7 +12371,8 @@ function rLimites(){
               <div style="font-weight:700;font-size:15px;color:${couleur}">${F(depense)}</div>
               <div style="font-size:11px;color:var(--text3)">/ ${F(l.montant)}</div>
             </div>
-            <button class="btn-icon" onclick="delLimite(${l.id})" style="color:var(--red);margin-left:8px">✕</button>
+            <button class="btn-icon" onclick="editLimite(${l.id})" style="color:var(--navy);margin-left:8px" title="Modifier">✏️</button>
+            <button class="btn-icon" onclick="delLimite(${l.id})" style="color:var(--red);margin-left:4px">✕</button>
           </div>
           <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
             <div style="width:${pct}%;background:${couleur};height:100%;border-radius:6px;transition:width .4s"></div>
@@ -12383,6 +12384,7 @@ function rLimites(){
 function addLimite(){
   const cats=['Toutes',...getCatsDep()];
   modal(`<div class="mft">🎯 Nouvelle limite de dépenses</div>
+    <input type="hidden" id="lim-id" value="">
     <div class="fg"><label class="fl">Catégorie</label>
       <select class="fs" id="lim-cat">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
     </div>
@@ -12398,14 +12400,44 @@ function addLimite(){
     </div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveLimite()">Enregistrer</button></div>`);
 }
+function editLimite(id){
+  const l=(S.limites||[]).find(x=>x.id==id);
+  if(!l)return toast('❌ Limite introuvable');
+  const cats=['Toutes',...getCatsDep()];
+  if(!cats.includes(l.cat))cats.push(l.cat);
+  modal(`<div class="mft">✏️ Modifier la limite de dépenses</div>
+    <input type="hidden" id="lim-id" value="${l.id}">
+    <div class="fg"><label class="fl">Catégorie</label>
+      <select class="fs" id="lim-cat">${cats.map(c=>`<option ${c===l.cat?'selected':''}>${c}</option>`).join('')}</select>
+    </div>
+    <div class="fg"><label class="fl">Montant limite (${(S.parametres&&S.parametres.devise)||'FCFA'})</label>
+      <input class="fi" type="number" id="lim-mt" value="${l.montant}" placeholder="Ex: 100000">
+    </div>
+    <div class="fg"><label class="fl">Période</label>
+      <select class="fs" id="lim-per">
+        <option value="mois" ${l.periode==='mois'?'selected':''}>Ce mois</option>
+        <option value="semaine" ${l.periode==='semaine'?'selected':''}>Cette semaine</option>
+        <option value="jour" ${l.periode==='jour'?'selected':''}>Aujourd'hui</option>
+      </select>
+    </div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveLimite()">Enregistrer</button></div>`);
+}
 function saveLimite(){
+  const idEl=document.getElementById('lim-id');
+  const id=idEl&&idEl.value?idEl.value:null;
   const cat=document.getElementById('lim-cat').value;
   const mt=+document.getElementById('lim-mt').value||0;
   const per=document.getElementById('lim-per').value;
   if(!mt)return toast('❌ Montant requis');
   if(!S.limites)S.limites=[];
-  S.limites.push({id:genId(),cat,montant:mt,periode:per});
-  saveData();closeModal();toast('✅ Limite enregistrée');rLimites();
+  if(id){
+    const l=S.limites.find(x=>x.id==id);
+    if(l){l.cat=cat;l.montant=mt;l.periode=per;}
+    saveData();closeModal();toast('✅ Limite modifiée');rLimites();
+  }else{
+    S.limites.push({id:genId(),cat,montant:mt,periode:per});
+    saveData();closeModal();toast('✅ Limite enregistrée');rLimites();
+  }
 }
 function delLimite(id){
   if(!confirm('Supprimer cette limite ?'))return;
