@@ -22612,6 +22612,11 @@ async function masterSave(){
   // mémoire et sur disque, mais l'écran restait figé sur les anciennes valeurs tant
   // qu'on ne rechargeait pas la page manuellement.
   rafraichirPageCourante();
+  // FIX : forcer une relecture immédiate du badge "vendeur en attente" au lieu de
+  // compter uniquement sur le listener passif. Filet de sécurité utile si le listener
+  // n'était pas encore attaché (rechargement de page récent, cache SW pas encore
+  // renouvelé) — le badge se met à jour tout de suite après un Master Save réussi.
+  verifierPendingDisponible();
   if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
 }
 
