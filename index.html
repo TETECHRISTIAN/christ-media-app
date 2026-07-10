@@ -2069,7 +2069,12 @@ async function absorberPendingFirebase(){
         }
 
         console.log('[PENDING] Zone absorbée:', bidKey, '/', uidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
-        cheminsTraites.push(uidKey === 'legacy' ? ('bid_' + bidKey) : ('bid_' + bidKey + '/uid_' + uidKey));
+        // FIX : bidKey (ex: "bid_1") et uidKey (ex: "uid_656") contiennent DÉJÀ leur
+        // préfixe puisqu'ils viennent directement de Object.keys() sur les nœuds Firebase.
+        // Le code précédent rajoutait "bid_"/"uid_" par-dessus, créant un chemin inexistant
+        // ("bid_bid_1/uid_uid_656") : la suppression ne supprimait donc jamais rien, et le
+        // badge "vendeur en attente" restait affiché même après une absorption réussie.
+        cheminsTraites.push(uidKey === 'legacy' ? bidKey : (bidKey + '/' + uidKey));
       }
     }
 
