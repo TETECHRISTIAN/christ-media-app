@@ -8812,6 +8812,17 @@ function getNotifs(){
     });
   }
 
+  // ── AVANCES INTER-BOUTIQUES EN COURS ──
+  {
+    const bidActuel = getBid();
+    const soldesIB = getSoldesInterBoutiques().filter(s=>s.bidDebiteur==bidActuel||s.bidCrediteur==bidActuel);
+    soldesIB.forEach(s=>{
+      const estDebiteur = s.bidDebiteur==bidActuel;
+      const autre=(S.boutiques||[]).find(b=>b.id==(estDebiteur?s.bidCrediteur:s.bidDebiteur));
+      notifs.push({icon:'🔄',msg: estDebiteur?`Avance à rembourser à ${autre?autre.nom:'?'}`:`Avance en attente de ${autre?autre.nom:'?'}`,sub:F(s.montant),type:'compte',urgent:estDebiteur&&s.montant>50000,action:"nav(document.querySelector('[data-page=comptes]'),'comptes')"});
+    });
+  }
+
   // ── SALAIRES À VERSER ──
   if(S.employes&&S.employes.length>0){
     const nonPayes=S.employes.filter(e=>{
@@ -9113,6 +9124,36 @@ function getComptesBoutique(bid){
   const defaultBid = (S.boutiques||[])[0]?.id || 1;
   return (S.comptes||[]).filter(c => c.bid==bid || (!c.bid && bid==defaultBid));
 }
+// ─── AVANCES INTER-BOUTIQUES ───
+// Calcule, pour chaque paire de boutiques, le solde net des avances non remboursées.
+function getSoldesInterBoutiques(){
+  const transferts = (S.transferts||[]).filter(t=>t.avance && !t.rembourse);
+  const paires = {};
+  transferts.forEach(t=>{
+    const de = S.comptes.find(c=>c.id==t.de);
+    const vers = S.comptes.find(c=>c.id==t.vers);
+    if(!de||!vers||de.bid==vers.bid)return;
+    const [b1,b2] = [de.bid,vers.bid].sort((a,b)=>a-b);
+    const key = b1+'_'+b2;
+    if(!paires[key])paires[key]={bid1:b1,bid2:b2,solde:0};
+    if(de.bid==b1) paires[key].solde += t.mt;
+    else paires[key].solde -= t.mt;
+  });
+  return Object.values(paires).filter(p=>p.solde!==0).map(p=>{
+    const bDebiteur = p.solde>0 ? p.bid2 : p.bid1;
+    const bCrediteur = p.solde>0 ? p.bid1 : p.bid2;
+    return {bidDebiteur:bDebiteur, bidCrediteur:bCrediteur, montant:Math.abs(p.solde)};
+  });
+}
+function getAvancesEnCours(bid){
+  bid = bid || getBid();
+  return (S.transferts||[]).filter(t=>{
+    if(!t.avance || t.rembourse)return false;
+    const de=S.comptes.find(c=>c.id==t.de);
+    const vers=S.comptes.find(c=>c.id==t.vers);
+    return de&&vers&&de.bid!=vers.bid&&(de.bid==bid||vers.bid==bid);
+  });
+}
 function rComptes(){
   if(!S.comptes)S.comptes=[];
   if(!S.transferts)S.transferts=[];
@@ -9188,6 +9229,24 @@ function rComptes(){
       </div>`:''}
     </div>
 
+    ${(()=>{
+      const soldes = getSoldesInterBoutiques();
+      if(soldes.length===0)return '';
+      const boutiques = S.boutiques||[];
+      return `
+    <p class="st">🔄 Avances inter-boutiques en cours</p>
+    <div class="g3" style="margin-bottom:20px">
+      ${soldes.map(s=>{
+        const bD=boutiques.find(b=>b.id==s.bidDebiteur), bC=boutiques.find(b=>b.id==s.bidCrediteur);
+        return `<div class="card" style="border-left:3px solid var(--red)">
+          <div class="ct">${bD?bD.emoji+' '+bD.nom:'?'} doit à ${bC?bC.emoji+' '+bC.nom:'?'}</div>
+          <div class="kpi-val" style="color:var(--red);font-size:22px">${F(s.montant)}</div>
+          <button class="btn btn-sm btn-success" style="margin-top:8px" onclick="rembourserAvanceRapide(${s.bidDebiteur},${s.bidCrediteur},${s.montant})">💸 Rembourser</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+    })()}
+
     <p class="st">✅ Comptes actifs — ${boutique.nom} <span style="font-size:11px;font-weight:400;color:var(--text3)">(solde effectif : ${F(soldeEffectif)})</span></p>
     <div class="g3" style="margin-bottom:20px">
       ${comptesActifs.map(c=>renderCarteCompte(c)).join('')}
@@ -9205,21 +9264,26 @@ function rComptes(){
     </div>`:''}
     <p class="st">Historique des transferts</p>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th><th>De</th><th>Vers</th><th>Montant</th><th>Notes</th><th></th></tr></thead>
-      <tbody>${transfertsB.length===0?'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Aucun transfert</td></tr>':
+      <thead><tr><th>Date</th><th>De</th><th>Vers</th><th>Montant</th><th>Notes</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${transfertsB.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucun transfert</td></tr>':
         transfertsB.slice().reverse().map(t=>{
           const de=S.comptes.find(c=>c.id==t.de);
           const vers=S.comptes.find(c=>c.id==t.vers);
           const deB=(S.boutiques||[]).find(b=>b.id==(de?.bid));
           const versB=(S.boutiques||[]).find(b=>b.id==(vers?.bid));
           const interBoutique = de&&vers&&de.bid!=vers.bid;
+          const statut = !interBoutique ? '<span style="color:var(--text3);font-size:11px">—</span>'
+            : t.avance ? (t.rembourse ? '<span style="color:var(--green);font-size:11px;font-weight:600">✅ Remboursée</span>' : '<span style="color:var(--red);font-size:11px;font-weight:600">🔄 Avance en cours</span>')
+            : '<span style="color:var(--text3);font-size:11px">Définitif</span>';
+          const btnMarquer = (interBoutique && t.avance && !t.rembourse) ? `<button class="btn-icon btn-sm" onclick="marquerAvanceRembourse(${t.id})" title="Marquer comme remboursée" style="color:var(--green)">✔</button>` : '';
           return`<tr${interBoutique?' style="background:var(--navy-bg)"':''}>
             <td>${fmtD(t.date)}</td>
             <td class="tdm">${de?`${deB&&interBoutique?deB.emoji+' ':''}${de.nom}`:'?'}</td>
             <td class="tdm">${vers?`${versB&&interBoutique?versB.emoji+' ':''}${vers.nom}`:'?'}</td>
             <td style="font-weight:600">${F(t.mt)}</td>
             <td style="color:var(--text3)">${t.notes||'—'}</td>
-            <td><div class="td-actions"><button class="btn-icon btn-sm" onclick="delTransfert(${t.id})" style="color:var(--red)">✕</button></div></td>
+            <td>${statut}</td>
+            <td><div class="td-actions">${btnMarquer}<button class="btn-icon btn-sm" onclick="delTransfert(${t.id})" style="color:var(--red)">✕</button></div></td>
           </tr>`;}).join('')}
       </tbody></table></div>`;
 }
@@ -9371,6 +9435,13 @@ function ouvrirTransfertInterBoutique(){
     </div>
     <div class="fg"><label class="fl">Montant (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="mt-mt" placeholder="0" min="1"></div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="mt-notes" placeholder="Ex: Financement paiement fournisseur Christ Déco..."></div>
+    <div class="fg" style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="mt-avance" checked style="width:16px;height:16px">
+        <span>🔄 Enregistrer comme <strong>avance</strong> (dette à rembourser entre boutiques)</span>
+      </label>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Décochez uniquement s'il s'agit d'un transfert définitif (sans remboursement attendu).</div>
+    </div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" onclick="saveTransfert()">Transférer</button></div>`);
 }
@@ -9387,8 +9458,60 @@ function saveTransfert(){
   de.solde-=mt;
   vers.solde+=mt;
   if(!S.transferts)S.transferts=[];
-  S.transferts.push({id:genId(),date:D(),de:deId,vers:versId,mt,notes:document.getElementById('mt-notes').value,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+  const interBoutique = de.bid!=vers.bid;
+  const avanceEl = document.getElementById('mt-avance');
+  const avance = interBoutique && avanceEl ? avanceEl.checked : false;
+  S.transferts.push({id:genId(),date:D(),de:deId,vers:versId,mt,notes:document.getElementById('mt-notes').value,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),avance,rembourse:false});
   saveData();closeModal();toast(`✅ ${F(mt)} transféré de ${de.nom} vers ${vers.nom}`);rComptes();
+}
+function marquerAvanceRembourse(tid){
+  const t=(S.transferts||[]).find(x=>x.id==tid);
+  if(!t)return;
+  if(!confirm('Marquer cette avance comme totalement remboursée ?\n(Cette action ne déplace pas d\'argent — utilisez "Rembourser" si le remboursement n\'a pas encore été fait physiquement)'))return;
+  t.rembourse=true;
+  saveData();toast('✅ Avance marquée comme remboursée');rComptes();
+}
+function rembourserAvanceRapide(bidDebiteur,bidCrediteur,montant){
+  // Ouvre un transfert pré-rempli dans le sens du remboursement (débiteur → créditeur)
+  const comptesDebiteur = getComptesBoutique(bidDebiteur);
+  const comptesCrediteur = getComptesBoutique(bidCrediteur);
+  if(comptesDebiteur.length===0||comptesCrediteur.length===0)return toast('❌ Comptes manquants pour l\'un des deux boutiques');
+  const boutiques = S.boutiques||[];
+  const bD=boutiques.find(b=>b.id==bidDebiteur), bC=boutiques.find(b=>b.id==bidCrediteur);
+  modal(`<div class="mft">💸 Rembourser l'avance</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:16px;font-size:13px">
+      <div>${bD?bD.emoji+' '+bD.nom:'?'} doit rembourser <strong>${F(montant)}</strong> à ${bC?bC.emoji+' '+bC.nom:'?'}</div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Compte source (${bD?bD.nom:''})</label>
+        <select class="fs" id="mt-de">${comptesDebiteur.map(c=>`<option value="${c.id}">${c.nom} (${F(c.solde)})</option>`).join('')}</select>
+      </div>
+      <div class="transfert-arrow">→</div>
+      <div class="fg"><label class="fl">Compte destination (${bC?bC.nom:''})</label>
+        <select class="fs" id="mt-vers">${comptesCrediteur.map(c=>`<option value="${c.id}">${c.nom} (${F(c.solde)})</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Montant (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="mt-mt" value="${montant}" min="1"></div>
+    <div class="fg"><label class="fl">Notes</label><input class="fi" id="mt-notes" value="Remboursement avance inter-boutiques"></div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveRemboursementAvance()">Rembourser</button></div>`);
+}
+function saveRemboursementAvance(){
+  const deId=+document.getElementById('mt-de').value;
+  const versId=+document.getElementById('mt-vers').value;
+  const mt=+document.getElementById('mt-mt').value||0;
+  if(deId===versId)return toast('❌ Comptes identiques');
+  if(mt<=0)return toast('❌ Montant invalide');
+  const de=S.comptes.find(c=>c.id==deId);
+  const vers=S.comptes.find(c=>c.id==versId);
+  if(!de||!vers)return;
+  if(de.solde<mt)return toast(`❌ Solde insuffisant : ${F(de.solde)} disponibles`);
+  de.solde-=mt;
+  vers.solde+=mt;
+  if(!S.transferts)S.transferts=[];
+  // Un remboursement est enregistré comme une avance dans le sens inverse : elle annule mécaniquement le solde net.
+  S.transferts.push({id:genId(),date:D(),de:deId,vers:versId,mt,notes:document.getElementById('mt-notes').value,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),avance:true,rembourse:false});
+  saveData();closeModal();toast(`✅ Remboursement de ${F(mt)} enregistré`);rComptes();
 }
 function deplacerCompte(cid){
   const c=S.comptes.find(x=>x.id==cid);if(!c)return;
