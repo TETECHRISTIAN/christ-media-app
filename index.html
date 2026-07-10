@@ -22602,6 +22602,11 @@ async function masterSave(){
   _dernierMasterSaveJour = new Date().toISOString().slice(0,10);
   // Notifier le SW local pour renouveler le cache
   swEnvoyerVersion();
+  // FIX : rafraîchir la page affichée sur CET appareil (l'admin qui vient de faire le
+  // Master Save). Avant ce fix, le stock/les ventes absorbées étaient bien à jour en
+  // mémoire et sur disque, mais l'écran restait figé sur les anciennes valeurs tant
+  // qu'on ne rechargeait pas la page manuellement.
+  rafraichirPageCourante();
   if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
 }
 
@@ -22661,9 +22666,12 @@ function activerListenerMasterSave(){
     swEnvoyerVersion();
 
     // Recharger l'interface
+    // FIX : nav() vérifie peutAcceder(page) et peut échouer silencieusement si la page
+    // courante n'est pas autorisée pour le rôle (ex: 'stock' pour un vendeur), laissant
+    // l'écran figé sur les anciennes valeurs. rafraichirPageCourante() ré-affiche la
+    // page actuelle sans ce contrôle de permission — c'est juste un rafraîchissement.
     setTimeout(() => {
-      const el = document.querySelector('.ni.active');
-      nav(el, currentPage);
+      rafraichirPageCourante();
     }, 500);
   });
 }
