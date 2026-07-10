@@ -1918,7 +1918,12 @@ async function envoyerPendingFirebase(){
   const bid = S.session?.boutique_id;
   if(!bid) return false;
 
-  const path = 'christmedia/pending/bid_' + bid;
+  // FIX : chaque vendeur/appareil écrit dans sa PROPRE sous-clé (uid), pas dans une
+  // clé unique partagée par boutique. Avant ce fix, 2 vendeurs de la même boutique
+  // (ou le même vendeur sur 2 appareils) s'écrasaient mutuellement avec .set(),
+  // faisant disparaître des ventes non encore absorbées par l'admin.
+  const uidKey = S.session?.uid != null ? String(S.session.uid) : 'anon';
+  const path = 'christmedia/pending/bid_' + bid + '/uid_' + uidKey;
   const payload = { ts: Date.now(), bid: bid, nom: S.session?.nom || 'Vendeur' };
   PENDING_COLLECTIONS.forEach(col => {
     if(Array.isArray(S[col])){
@@ -1950,6 +1955,7 @@ async function absorberPendingFirebase(){
   if(S.session?.role !== 'admin') return false;
 
   let totalAbsorbes = 0;
+  const cheminsTraites = []; // FIX : on ne supprime que ce qu'on a réellement lu/fusionné
   try {
     const snap = await db.ref('christmedia/pending').once('value');
     const pending = snap.val();
@@ -1957,91 +1963,114 @@ async function absorberPendingFirebase(){
 
     const bids = Object.keys(pending);
     for(const bidKey of bids){
-      const zone = pending[bidKey];
-      if(!zone || !zone.ts) continue;
+      const bidZone = pending[bidKey];
+      if(!bidZone) continue;
 
-      // Fusionner chaque collection de la zone dans S
-      PENDING_COLLECTIONS.forEach(col => {
-        if(!Array.isArray(zone[col]) || zone[col].length === 0) return;
-        if(!Array.isArray(S[col])) S[col] = [];
+      // FIX : structure imbriquée par uid ('bid_X/uid_Y'). On détecte l'ancien format
+      // (zone.ts présent directement = ancienne structure plate) pour rester compatible
+      // avec une zone pending déjà en place au moment de la mise à jour.
+      const sousZones = (bidZone.ts) ? {legacy: bidZone} : bidZone;
 
-        const existingIds = new Set(S[col].map(x => String(x.id)));
-        let nb = 0;
-        zone[col].forEach(item => {
-          if(!item || item.id == null) return;
-          const key = String(item.id);
-          if(!existingIds.has(key)){
-            S[col].push(item);
-            existingIds.add(key);
-            nb++;
-            // Créditer le compte si c'est une vente Payée nouvellement absorbée
-            if(col === 'ventes' && item.statut === 'Payé' && item.cid && S.comptes){
-              const cpt = S.comptes.find(x => x.id == item.cid);
-              if(cpt){ cpt.solde = (cpt.solde||0) + (item.mt||0);
-                console.log('[PENDING→COMPTE] +' + item.mt + ' sur ' + cpt.nom); }
-              // Acomptes
-              (item.acomptes||[]).forEach(a => {
-                if(!a.cid) return;
-                const ca = S.comptes.find(x => x.id == a.cid);
-                if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
-              });
-              // Tranches
-              (item.tranches||[]).filter(t => t.cid && t.statut === 'Payé').forEach(t => {
-                const ct = S.comptes.find(x => x.id == t.cid);
-                if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
-              });
-            }
-            if(col === 'ventes_services' && item.cid && S.comptes){
-              const cpt = S.comptes.find(x => x.id == item.cid);
-              if(cpt){
-                const montant = item.statut === 'Payé' ? (item.mt||0) : (item.avance||0);
-                if(montant > 0){ cpt.solde = (cpt.solde||0) + montant;
-                  console.log('[PENDING→COMPTE] svc +' + montant + ' sur ' + cpt.nom); }
+      for(const uidKey of Object.keys(sousZones)){
+        const zone = sousZones[uidKey];
+        if(!zone || !zone.ts) continue;
+
+        // Fusionner chaque collection de la zone dans S
+        PENDING_COLLECTIONS.forEach(col => {
+          if(!Array.isArray(zone[col]) || zone[col].length === 0) return;
+          if(!Array.isArray(S[col])) S[col] = [];
+
+          const existingIds = new Set(S[col].map(x => String(x.id)));
+          let nb = 0;
+          zone[col].forEach(item => {
+            if(!item || item.id == null) return;
+            const key = String(item.id);
+            if(!existingIds.has(key)){
+              S[col].push(item);
+              existingIds.add(key);
+              nb++;
+              // FIX : déduire le stock (qv) pour toute vente nouvellement absorbée,
+              // exactement comme le fait la vente locale (a.qv+=l.qte). Avant ce fix,
+              // seule la ligne de vente était fusionnée : le stock de l'admin n'était
+              // jamais décrémenté pour les ventes faites par les vendeurs.
+              if(col === 'ventes' && !item._deleted){
+                const lignesV = item.lignes || [{aid:item.aid, qte:item.qte||1}];
+                lignesV.forEach(l => {
+                  if(l.aid == null) return;
+                  const art = (S.stock||[]).find(x => x.id == l.aid);
+                  if(art) art.qv = (art.qv||0) + (l.qte||1);
+                });
+              }
+              // Créditer le compte si c'est une vente Payée nouvellement absorbée
+              if(col === 'ventes' && item.statut === 'Payé' && item.cid && S.comptes){
+                const cpt = S.comptes.find(x => x.id == item.cid);
+                if(cpt){ cpt.solde = (cpt.solde||0) + (item.mt||0);
+                  console.log('[PENDING→COMPTE] +' + item.mt + ' sur ' + cpt.nom); }
+                // Acomptes
+                (item.acomptes||[]).forEach(a => {
+                  if(!a.cid) return;
+                  const ca = S.comptes.find(x => x.id == a.cid);
+                  if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
+                });
+                // Tranches
+                (item.tranches||[]).filter(t => t.cid && t.statut === 'Payé').forEach(t => {
+                  const ct = S.comptes.find(x => x.id == t.cid);
+                  if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
+                });
+              }
+              if(col === 'ventes_services' && item.cid && S.comptes){
+                const cpt = S.comptes.find(x => x.id == item.cid);
+                if(cpt){
+                  const montant = item.statut === 'Payé' ? (item.mt||0) : (item.avance||0);
+                  if(montant > 0){ cpt.solde = (cpt.solde||0) + montant;
+                    console.log('[PENDING→COMPTE] svc +' + montant + ' sur ' + cpt.nom); }
+                }
+              }
+            } else {
+              // Mettre à jour si l'item pending est plus récent
+              const idx = S[col].findIndex(x => String(x.id) === key);
+              if(idx !== -1){
+                const existingTs = S[col][idx].ts || 0;
+                const pendingTs  = item.ts || 0;
+                if(pendingTs > existingTs) S[col][idx] = item;
               }
             }
-          } else {
-            // Mettre à jour si l'item pending est plus récent
-            const idx = S[col].findIndex(x => String(x.id) === key);
-            if(idx !== -1){
-              const existingTs = S[col][idx].ts || 0;
-              const pendingTs  = item.ts || 0;
-              if(pendingTs > existingTs) S[col][idx] = item;
+          });
+          if(nb > 0) totalAbsorbes += nb;
+        });
+
+        // Synchroniser historiqueDetteAjouts des fournisseurs à partir des achats absorbés
+        // Si un achat "À payer" est nouveau, s'assurer qu'il est tracé dans l'historique du fournisseur
+        if(Array.isArray(zone.achats)){
+          zone.achats.forEach(achat => {
+            if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
+            const f = (S.fournisseurs||[]).find(x => x.id == achat.fid);
+            if(!f) return;
+            if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
+            // Vérifier si cet achat est déjà dans l'historique
+            const dejaDans = f.historiqueDetteAjouts.some(h => String(h.id) === String(achat.id));
+            if(!dejaDans){
+              const art = (S.stock||[]).find(x => x.id == achat.aid);
+              const artNom = art ? art.nom : (achat.aid || 'Article');
+              const avantDette = f.dette || 0;
+              f.dette = avantDette + achat.mt;
+              f.historiqueDetteAjouts.push({
+                id: achat.id,
+                date: achat.date,
+                mt: achat.mt,
+                avant: avantDette,
+                apres: f.dette,
+                notes: `Achat — ${artNom}${achat.notes ? ' · ' + achat.notes : ''}`,
+                ts: achat.ts || Date.now()
+              });
+              console.log('[PENDING] HistoDette mis à jour pour', f.nom, '— achat', achat.date, '+', achat.mt);
             }
-          }
-        });
-        if(nb > 0) totalAbsorbes += nb;
-      });
+          });
+        }
 
-      // Synchroniser historiqueDetteAjouts des fournisseurs à partir des achats absorbés
-      // Si un achat "À payer" est nouveau, s'assurer qu'il est tracé dans l'historique du fournisseur
-      if(Array.isArray(zone.achats)){
-        zone.achats.forEach(achat => {
-          if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
-          const f = (S.fournisseurs||[]).find(x => x.id == achat.fid);
-          if(!f) return;
-          if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
-          // Vérifier si cet achat est déjà dans l'historique
-          const dejaDans = f.historiqueDetteAjouts.some(h => String(h.id) === String(achat.id));
-          if(!dejaDans){
-            const art = (S.stock||[]).find(x => x.id == achat.aid);
-            const artNom = art ? art.nom : (achat.aid || 'Article');
-            const avantDette = f.dette || 0;
-            f.dette = avantDette + achat.mt;
-            f.historiqueDetteAjouts.push({
-              id: achat.id,
-              date: achat.date,
-              mt: achat.mt,
-              avant: avantDette,
-              apres: f.dette,
-              notes: `Achat — ${artNom}${achat.notes ? ' · ' + achat.notes : ''}`,
-              ts: achat.ts || Date.now()
-            });
-            console.log('[PENDING] HistoDette mis à jour pour', f.nom, '— achat', achat.date, '+', achat.mt);
-          }
-        });
+        console.log('[PENDING] Zone absorbée:', bidKey, '/', uidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
+        cheminsTraites.push(uidKey === 'legacy' ? ('bid_' + bidKey) : ('bid_' + bidKey + '/uid_' + uidKey));
       }
-
-      console.log('[PENDING] Zone absorbée:', bidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
     }
 
     if(totalAbsorbes > 0){
@@ -2050,9 +2079,17 @@ async function absorberPendingFirebase(){
       toast('📥 ' + totalAbsorbes + ' enregistrement(s) récupérés depuis les vendeurs', 4000);
     }
 
-    // Nettoyer la zone pending après absorption
-    await db.ref('christmedia/pending').remove();
-    console.log('[PENDING] Zone d\'attente nettoyée après absorption');
+    // FIX : nettoyer uniquement les chemins qu'on vient d'absorber, pas toute la zone.
+    // Avant ce fix, un vendeur écrivant PENDANT l'absorption (entre la lecture et le
+    // nettoyage) voyait sa donnée effacée sans jamais être fusionnée. Maintenant, si un
+    // autre bid/uid arrive juste après notre lecture, il reste intact pour la prochaine
+    // absorption au lieu d'être perdu.
+    if(cheminsTraites.length > 0){
+      const suppressions = {};
+      cheminsTraites.forEach(p => { suppressions[p] = null; });
+      await db.ref('christmedia/pending').update(suppressions);
+      console.log('[PENDING] Chemins nettoyés après absorption:', cheminsTraites);
+    }
     return totalAbsorbes > 0;
 
   } catch(e) {
@@ -2819,6 +2856,11 @@ window.addEventListener('online', async()=>{
     const _peutRepublier = (_roleReconnect === 'admin');
     if(!_peutRepublier){
       console.log('[SYNC] Reconnexion vendeur — lecture seule, pas de republication globale');
+      // FIX : la reconnexion ne renvoyait jamais les ventes faites hors-ligne vers la
+      // zone pending. Un vendeur resté longtemps hors ligne (ou coupé pendant que
+      // l'admin était occupé) gardait ses ventes uniquement en local jusqu'à sa
+      // prochaine vente — donc invisibles pour l'admin entre-temps.
+      envoyerPendingFirebase();
       setSyncStatus('online','Synchronisé ✓');
       activerListenerVentesOnly();
       activerListenerMasterSave();
