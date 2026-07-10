@@ -3796,6 +3796,20 @@ function rDash(){
     </div>
     ${al.length?`<div class="alert alert-r">⚠️ ${al.length} article(s) en stock bas : ${al.slice(0,3).map(a=>`<strong>${a.nom}</strong> (${sa(a)} restants)`).join(' · ')}${al.length>3?` +${al.length-3} autres`:''}</div>`:''}
     ${(()=>{const nL=ventesB.filter(v=>v.livraison==='Non livré');if(!nL.length)return '';const ret=nL.filter(v=>Math.floor((Date.now()-new Date(v.date).getTime())/864e5)>=2);return`<div class="alert" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-light);cursor:pointer" onclick="window.venteLivrFilter='Non livré';nav(document.querySelector('[data-page=vente]'),'vente')">📦 ${nL.length} vente(s) non livrée(s)${ret.length?` · <strong>${ret.length} en retard (+2j)</strong>`:''} — Voir →</div>`;})()}
+    ${(()=>{
+      const comptesVente = getComptesVentePrincipaux();
+      if(comptesVente.length===0)return '';
+      const total = getSoldeTotalComptesVente();
+      const detail = comptesVente.map(c=>{
+        const b=(S.boutiques||[]).find(x=>x.id==c.bid);
+        return `${b?b.emoji+' '+b.nom:c.nom} : <strong>${F(c.solde)}</strong>`;
+      }).join(' &nbsp;+&nbsp; ');
+      return `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--navy);cursor:pointer" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes')">
+        <div class="ct">🏦 Total comptes Ventes — toutes boutiques</div>
+        <div class="mv" style="color:${total>=0?'var(--green)':'var(--red)'}">${F(total)}</div>
+        <div class="ms">${detail}</div>
+      </div>`;
+    })()}
     <p class="st">Vue d'ensemble <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">${curM}</span></p>
     <div class="g4">
       <div class="card"><div class="ct">Solde net</div><div class="mv" style="color:${solde>=0?'var(--green)':'var(--red)'}">${F(solde)}</div><span class="badge ${solde>=0?'bg':'br'}">${solde>=0?'Bénéfice':'Déficit'}</span></div>
@@ -9153,6 +9167,13 @@ function getAvancesEnCours(bid){
     const vers=S.comptes.find(c=>c.id==t.vers);
     return de&&vers&&de.bid!=vers.bid&&(de.bid==bid||vers.bid==bid);
   });
+}
+// Comptes "Vente X" — un par boutique, utilisés par défaut pour la quasi-totalité des transactions.
+function getComptesVentePrincipaux(){
+  return (S.comptes||[]).filter(c=>/^vente\s+/i.test((c.nom||'').trim()));
+}
+function getSoldeTotalComptesVente(){
+  return getComptesVentePrincipaux().reduce((s,c)=>s+(c.solde||0),0);
 }
 function rComptes(){
   if(!S.comptes)S.comptes=[];
