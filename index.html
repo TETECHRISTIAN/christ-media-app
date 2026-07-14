@@ -3990,6 +3990,7 @@ function rVente(){
     const q=window.venteSearch.toLowerCase();
     stockFiltre=stockFiltre.filter(a=>a.nom.toLowerCase().includes(q)||a.code.toLowerCase().includes(q));
   }
+  stockFiltre=stockFiltre.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{sensitivity:'base'}));
 
   document.getElementById('content').innerHTML=`
     <!-- PANIER COMPACT -->
