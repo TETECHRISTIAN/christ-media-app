@@ -9199,13 +9199,34 @@ function enregistrerHistoriqueSoldeVente(){
 }
 function voirHistoriqueSoldeVente(){
   enregistrerHistoriqueSoldeVente();
-  const periode = window._histSVPeriode || 90;
-  renderHistoriqueSoldeVente(periode);
+  if(!window._histSV) window._histSV = {mode:'periode', periode:90, deb:'', fin:''};
+  renderHistoriqueSoldeVente();
 }
-function renderHistoriqueSoldeVente(periode){
-  window._histSVPeriode = periode;
+function histSVSetPeriode(periode){
+  window._histSV = {mode:'periode', periode, deb:'', fin:''};
+  renderHistoriqueSoldeVente();
+}
+function histSVAppliquerDates(){
+  const deb = (document.getElementById('histSV-deb')||{}).value||'';
+  const fin = (document.getElementById('histSV-fin')||{}).value||'';
+  if(!deb&&!fin){toast('⚠️ Choisis au moins une date');return;}
+  if(deb&&fin&&deb>fin){toast('⚠️ La date de début doit précéder la date de fin');return;}
+  window._histSV = {mode:'custom', periode:90, deb, fin};
+  renderHistoriqueSoldeVente();
+}
+function histSVReinitDates(){
+  window._histSV = {mode:'periode', periode:90, deb:'', fin:''};
+  renderHistoriqueSoldeVente();
+}
+function renderHistoriqueSoldeVente(){
+  const st = window._histSV || (window._histSV = {mode:'periode', periode:90, deb:'', fin:''});
   const hist = (S.historiqueSoldeVente||[]).slice();
-  const limite = periode==='tout' ? hist : hist.slice(-periode);
+  let limite;
+  if(st.mode==='custom'){
+    limite = hist.filter(h=>(!st.deb||h.date>=st.deb)&&(!st.fin||h.date<=st.fin));
+  }else{
+    limite = st.periode==='tout' ? hist : hist.slice(-st.periode);
+  }
   const boutiques = S.boutiques||[];
   const max = Math.max(1,...limite.map(h=>h.total));
   const min = Math.min(0,...limite.map(h=>h.total));
@@ -9237,12 +9258,24 @@ function renderHistoriqueSoldeVente(periode){
   modal(`
     <h3 style="margin:0 0 4px">📈 Historique — Total comptes Ventes, toutes boutiques</h3>
     <p style="font-size:12px;color:var(--text3);margin:0 0 16px">Le suivi commence à partir d'aujourd'hui ; un point est ajouté chaque jour où le solde évolue.</p>
-    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-      ${[['30','30 jours'],['90','90 jours'],['365','1 an'],['tout','Tout']].map(([v,l])=>`
-        <button class="btn btn-sm ${String(periode)===v?'btn-primary':''}" onclick="renderHistoriqueSoldeVente(${v==='tout'?"'tout'":v})">${l}</button>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      ${[[30,'30 jours'],[90,'90 jours'],[365,'1 an'],['tout','Tout']].map(([v,l])=>`
+        <button class="btn btn-sm ${st.mode==='periode'&&st.periode===v?'btn-primary':''}" onclick="histSVSetPeriode(${v==='tout'?"'tout'":v})">${l}</button>
       `).join('')}
     </div>
-    ${limite.length===0?`<p style="text-align:center;color:var(--text3);padding:20px">Aucune donnée pour l'instant. Revenez plus tard, un point sera ajouté dès qu'une vente ou dépense modifie le solde.</p>`:`
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:var(--surface2);border-radius:var(--rs);padding:10px;margin-bottom:14px">
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Du</label>
+        <input type="date" id="histSV-deb" class="fs" value="${st.mode==='custom'?st.deb:''}" style="padding:6px 8px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Au</label>
+        <input type="date" id="histSV-fin" class="fs" value="${st.mode==='custom'?st.fin:''}" style="padding:6px 8px">
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="histSVAppliquerDates()">🔍 Filtrer</button>
+      ${st.mode==='custom'?`<button class="btn btn-sm" onclick="histSVReinitDates()">✕ Réinitialiser</button>`:''}
+    </div>
+    ${limite.length===0?`<p style="text-align:center;color:var(--text3);padding:20px">Aucune donnée pour cette période.</p>`:`
     <div style="display:flex;align-items:flex-end;gap:2px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px">${barres}</div>
     <div class="tbl-wrap" style="max-height:340px;overflow-y:auto">
       <table>
