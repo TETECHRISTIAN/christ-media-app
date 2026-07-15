@@ -17957,6 +17957,86 @@ function rLive(){
   renderLiveFeed();
 }
 
+function renderVenteFeedItem(v, boutiques, recentId){
+  const boutique = boutiques.find(b => b.id == (v.bid||1));
+  const bCouleur = boutique?.couleur || '#0f1f3d';
+  const bEmoji = boutique?.emoji || '🏪';
+  const bNom = boutique?.nom || 'Boutique';
+  const lignes = v._type==='service' ? [{nom: v.nom_service||v.nom_article||'Service', qte:1}] : (v.lignes || [{aid:v.aid, qte:v.qte||1, pu:v.pu||v.mt, nom:'Article'}]);
+  const articlesNoms = v._type==='service'
+    ? ('⭐ '+(v.nom_service||v.nom_article||'Service'))
+    : lignes.map(l => {
+        const a = S.stock.find(x=>x.id==l.aid);
+        return (a?a.nom:(l.nom||'Article')) + (l.qte>1?' ×'+l.qte:'');
+      }).join(', ');
+  const heure = v.heure || (v.date&&v.date.length>10 ? v.date.slice(11,16) : '—');
+  const estPaye = v.statut === 'Payé';
+  const isRecent = v.id === recentId;
+  return `
+  <div style="background:var(--surface);border:1.5px solid ${isRecent?bCouleur:'var(--border)'};border-radius:10px;padding:12px 14px;transition:border-color .3s;${isRecent?'box-shadow:0 2px 12px rgba(0,0,0,.08)':''}">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <!-- Vendeur avatar -->
+      <div style="font-size:24px;flex-shrink:0;margin-top:2px">${v.caissier_emoji||'👤'}</div>
+      <!-- Infos -->
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-weight:700;font-size:13px">${v.caissier_nom||'Vendeur'}</span>
+          <span style="background:${bCouleur}22;color:${bCouleur};border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">${bEmoji} ${bNom}</span>
+          ${v.client?`<span style="color:var(--text3);font-size:11px">· ${v.client}</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${articlesNoms}">
+          📦 ${articlesNoms}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+          <span style="font-weight:800;font-size:15px;color:${estPaye?'var(--green)':'var(--amber)'}">${F(v.mt)}</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${estPaye?'var(--green-bg)':'var(--amber-bg)'};color:${estPaye?'var(--green)':'var(--amber)'};font-weight:600">${v.statut}</span>
+          ${v.mode?`<span style="font-size:10px;color:var(--text3)">${v.mode}</span>`:''}
+        </div>
+      </div>
+      <!-- Heure -->
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:${bCouleur};font-family:'DM Mono',monospace">${heure}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${isRecent?'<span style="color:var(--green);font-weight:600">● Nouveau</span>':v.date}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _venteFeedMatch(v, needle){
+  if(!needle) return true;
+  const articlesNoms = v._type==='service'
+    ? (v.nom_service||v.nom_article||'Service')
+    : (v.lignes || [{aid:v.aid, nom:'Article'}]).map(l => {
+        const a = S.stock.find(x=>x.id==l.aid);
+        return a?a.nom:(l.nom||'Article');
+      }).join(', ');
+  const hay = (articlesNoms + ' ' + (v.caissier_nom||'') + ' ' + (v.client||'')).toLowerCase();
+  return hay.includes(needle);
+}
+
+function filterLiveFeedArticles(){
+  const inputEl = document.getElementById('live-article-filter');
+  const needle = (inputEl?.value||'').trim().toLowerCase();
+  const data = window._liveFeedData || {ventesAuj:[], boutiques:[]};
+  const filtered = data.ventesAuj.filter(v => _venteFeedMatch(v, needle));
+  const wrap = document.getElementById('live-feed-wrap');
+  const countEl = document.getElementById('live-feed-count');
+  if(countEl){
+    countEl.textContent = needle
+      ? `${filtered.length} / ${data.ventesAuj.length} opération${data.ventesAuj.length>1?'s':''}`
+      : `${data.ventesAuj.length} opération${data.ventesAuj.length>1?'s':''} aujourd'hui`;
+  }
+  if(!wrap) return;
+  if(filtered.length === 0){
+    wrap.innerHTML = `<div class="empty"><p>Aucun article trouvé pour "${inputEl?.value||''}"</p><small>Essayez un autre terme de recherche</small></div>`;
+    return;
+  }
+  const recentId = data.ventesAuj[0]?.id;
+  wrap.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto;padding-right:4px" id="live-feed">
+    ${filtered.map(v => renderVenteFeedItem(v, data.boutiques, recentId)).join('')}
+  </div>`;
+}
+
 function renderLiveFeed(){
   const now = new Date();
   // Utiliser la date sélectionnée ou aujourd'hui
@@ -17995,6 +18075,9 @@ function renderLiveFeed(){
 
   const caTotal = statsBoutiques.reduce((s,b)=>s+b.ca, 0);
   const nbTotal = ventesAuj.filter(v=>v.statut==='Payé').length;
+
+  // Exposer les données du fil pour le filtre article (sans re-render complet)
+  window._liveFeedData = {ventesAuj, boutiques};
 
   // Compteurs par vendeur (aujourd'hui, ventes + services)
   const vendeursMap = {};
@@ -18067,59 +18150,24 @@ function renderLiveFeed(){
     <div class="g2">
       <!-- Feed des ventes -->
       <div>
-        <p class="st" style="display:flex;align-items:center;gap:8px">
+        <p class="st" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           🛒 Fil des ventes
-          <span style="font-size:11px;color:var(--text3);font-weight:400">${ventesAuj.length} opération${ventesAuj.length>1?'s':''} aujourd'hui</span>
+          <span id="live-feed-count" style="font-size:11px;color:var(--text3);font-weight:400">${ventesAuj.length} opération${ventesAuj.length>1?'s':''} aujourd'hui</span>
         </p>
 
+        <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:6px 10px;margin-bottom:10px">
+          <span style="font-size:13px;color:var(--text3)">🔎</span>
+          <input type="text" id="live-article-filter" placeholder="Filtrer par article, vendeur ou client..." oninput="filterLiveFeedArticles()" style="border:none;background:none;font-family:inherit;font-size:13px;color:var(--text);outline:none;flex:1;min-width:0">
+          <button onclick="const el=document.getElementById('live-article-filter');el.value='';el.focus();filterLiveFeedArticles()" title="Effacer le filtre" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--text3);padding:2px 4px">✕</button>
+        </div>
+
+        <div id="live-feed-wrap">
         ${ventesAuj.length === 0
           ? `<div class="empty"><p>Aucune vente aujourd'hui</p><small>Le fil se mettra à jour automatiquement</small></div>`
           : `<div style="display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto;padding-right:4px" id="live-feed">
-            ${ventesAuj.map(v => {
-              const boutique = boutiques.find(b => b.id == (v.bid||1));
-              const bCouleur = boutique?.couleur || '#0f1f3d';
-              const bEmoji = boutique?.emoji || '🏪';
-              const bNom = boutique?.nom || 'Boutique';
-              const lignes = v._type==='service' ? [{nom: v.nom_service||v.nom_article||'Service', qte:1}] : (v.lignes || [{aid:v.aid, qte:v.qte||1, pu:v.pu||v.mt, nom:'Article'}]);
-              const articlesNoms = v._type==='service'
-                ? ('⭐ '+(v.nom_service||v.nom_article||'Service'))
-                : lignes.map(l => {
-                    const a = S.stock.find(x=>x.id==l.aid);
-                    return (a?a.nom:(l.nom||'Article')) + (l.qte>1?' ×'+l.qte:'');
-                  }).join(', ');
-              const heure = v.heure || (v.date&&v.date.length>10 ? v.date.slice(11,16) : '—');
-              const estPaye = v.statut === 'Payé';
-              const isRecent = v.id === ventesAuj[0]?.id;
-              return `
-              <div style="background:var(--surface);border:1.5px solid ${isRecent?bCouleur:'var(--border)'};border-radius:10px;padding:12px 14px;transition:border-color .3s;${isRecent?'box-shadow:0 2px 12px rgba(0,0,0,.08)':''}">
-                <div style="display:flex;align-items:flex-start;gap:10px">
-                  <!-- Vendeur avatar -->
-                  <div style="font-size:24px;flex-shrink:0;margin-top:2px">${v.caissier_emoji||'👤'}</div>
-                  <!-- Infos -->
-                  <div style="flex:1;min-width:0">
-                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-                      <span style="font-weight:700;font-size:13px">${v.caissier_nom||'Vendeur'}</span>
-                      <span style="background:${bCouleur}22;color:${bCouleur};border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">${bEmoji} ${bNom}</span>
-                      ${v.client?`<span style="color:var(--text3);font-size:11px">· ${v.client}</span>`:''}
-                    </div>
-                    <div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${articlesNoms}">
-                      📦 ${articlesNoms}
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
-                      <span style="font-weight:800;font-size:15px;color:${estPaye?'var(--green)':'var(--amber)'}">${F(v.mt)}</span>
-                      <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${estPaye?'var(--green-bg)':'var(--amber-bg)'};color:${estPaye?'var(--green)':'var(--amber)'};font-weight:600">${v.statut}</span>
-                      ${v.mode?`<span style="font-size:10px;color:var(--text3)">${v.mode}</span>`:''}
-                    </div>
-                  </div>
-                  <!-- Heure -->
-                  <div style="text-align:right;flex-shrink:0">
-                    <div style="font-size:14px;font-weight:700;color:${bCouleur};font-family:'DM Mono',monospace">${heure}</div>
-                    <div style="font-size:10px;color:var(--text3);margin-top:2px">${isRecent?'<span style="color:var(--green);font-weight:600">● Nouveau</span>':v.date}</div>
-                  </div>
-                </div>
-              </div>`;
-            }).join('')}
+            ${ventesAuj.map(v => renderVenteFeedItem(v, boutiques, ventesAuj[0]?.id)).join('')}
           </div>`}
+        </div>
       </div>
 
       <!-- Classement vendeurs du jour -->
