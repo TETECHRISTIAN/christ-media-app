@@ -12594,6 +12594,43 @@ function rFlux(){
       <div class="card" style="border-left:3px solid var(--teal)"><div class="ct">Solde comptes</div><div class="mv" style="color:var(--teal)">${F(totalComptes)}</div></div>
     </div>
 
+    <p class="st">🏦 Simulateur de capacité d'emprunt</p>
+    <div class="card" id="loan-sim-card" style="padding:20px;margin-bottom:20px">
+      ${(()=>{
+        const chargesFixes=(S.modeles||[]).filter(m=>m.type==='depense').reduce((s,m)=>s+(+m.montant||0),0);
+        const nMoisReel=Math.min(3,mois.length);
+        const entreesReel=entrees.slice(-nMoisReel);
+        const sortiesReel=sorties.slice(-nMoisReel);
+        const moyEntrees=entreesReel.reduce((s,v)=>s+v,0)/nMoisReel;
+        const moySorties=sortiesReel.reduce((s,v)=>s+v,0)/nMoisReel;
+        const moyNet=moyEntrees-moySorties;
+        const margeDispo=moyNet-chargesFixes;
+        window._loanSimBase={chargesFixes,moyNet,margeDispo};
+        return `
+        <div class="g3" style="margin-bottom:16px">
+          <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+            <div class="ct">Flux net mensuel moyen (réel, ${nMoisReel} derniers mois)</div>
+            <div class="mv" style="color:${moyNet>=0?'var(--green)':'var(--red)'}">${F(moyNet)}</div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+            <div class="ct">Charges fixes mensuelles (modèles dépense)</div>
+            <div class="mv" style="color:var(--red)">${F(chargesFixes)}</div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+            <div class="ct">Marge disponible avant tout prêt</div>
+            <div class="mv" style="color:${margeDispo>=0?'var(--green)':'var(--red)'}">${F(margeDispo)}</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:14px">⚠️ "Charges fixes" additionne tous les modèles de type dépense — vérifiez qu'ils sont bien tous mensuels (certains peuvent être ponctuels).</p>
+        <div class="g3" style="margin-bottom:14px">
+          <div class="fg"><label class="fl">Montant du prêt</label><input class="fi" type="number" id="loan-amt" value="500000" oninput="updateLoanSim()"></div>
+          <div class="fg"><label class="fl">Taux annuel flat (%)</label><input class="fi" type="number" id="loan-rate" value="15" oninput="updateLoanSim()"></div>
+          <div class="fg"><label class="fl">Durée (mois)</label><input class="fi" type="number" id="loan-dur" value="12" oninput="updateLoanSim()"></div>
+        </div>
+        <div id="loan-sim-result"></div>`;
+      })()}
+    </div>
+
     <p class="st">Flux entrées / sorties — 6 derniers mois</p>
     <div class="card" style="padding:20px">
       <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12px">
@@ -12644,11 +12681,50 @@ function rFlux(){
       <thead><tr><th>Date</th><th>Type</th><th>Libellé</th><th>Compte</th><th>Montant</th></tr></thead>
       <tbody>${renderHist(historique)}</tbody>
     </table></div>`;
+  updateLoanSim();
 }
 
 function filtrerFlux(type){
   window._fluxFiltre=type;
   rFlux();
+}
+
+function updateLoanSim(){
+  const elAmt=document.getElementById('loan-amt');
+  const elRate=document.getElementById('loan-rate');
+  const elDur=document.getElementById('loan-dur');
+  const elRes=document.getElementById('loan-sim-result');
+  if(!elAmt||!elRate||!elDur||!elRes)return;
+  const montant=+elAmt.value||0;
+  const taux=+elRate.value||0;
+  const duree=Math.max(1,+elDur.value||1);
+  const base=window._loanSimBase||{chargesFixes:0,moyNet:0,margeDispo:0};
+  const interet=montant*(taux/100);
+  const total=montant+interet;
+  const mensualite=total/duree;
+  const margeApres=base.margeDispo-mensualite;
+  let statut,couleur,icone;
+  if(margeApres>=0 && margeApres>=mensualite*0.3){statut='Soutenable';couleur='var(--green)';icone='✅';}
+  else if(margeApres>=0){statut='Serré — marge de sécurité faible';couleur='var(--amber)';icone='⚠️';}
+  else{statut='Risqué — dépasse votre marge actuelle';couleur='var(--red)';icone='🚨';}
+  elRes.innerHTML=`
+    <div class="g3" style="margin-bottom:10px">
+      <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+        <div class="ct">Intérêt total</div>
+        <div class="mv" style="color:var(--text)">${F(interet)}</div>
+      </div>
+      <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+        <div class="ct">Mensualité</div>
+        <div class="mv" style="color:var(--navy)">${F(mensualite)}</div>
+      </div>
+      <div style="padding:10px;border-radius:10px;background:var(--surface2)">
+        <div class="ct">Marge restante après mensualité</div>
+        <div class="mv" style="color:${margeApres>=0?'var(--green)':'var(--red)'}">${F(margeApres)}</div>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-radius:10px;background:${couleur};color:#fff;font-weight:700;display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">${icone}</span> ${statut}
+    </div>`;
 }
 
 function rLimites(){
