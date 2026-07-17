@@ -5670,9 +5670,16 @@ function updateFour(id){
   saveData();closeModal();toast('✅ Fournisseur modifié');rFour();
 }
 function delFour(id){
-  if(!confirm('Supprimer ce fournisseur ?'))return;
+  const f=gf(id);if(!f)return;
+  const achatsF=(S.achats||[]).filter(a=>a.fid==id && !a._deleted);
+  let msg=`Supprimer le fournisseur "${f.nom}" ?`;
+  if((f.dette||0)>0) msg+=`\n\n⚠️ Ce fournisseur a encore une dette de ${F(f.dette)} — elle sera perdue (non payée) si vous supprimez.`;
+  if(achatsF.length>0) msg+=`\n\n⚠️ ${achatsF.length} achat(s) sont liés à ce fournisseur — ils resteront dans l'historique mais n'afficheront plus de nom de fournisseur.`;
+  if(!confirm(msg))return;
   S.fournisseurs=S.fournisseurs.filter(f=>f.id!=id);
-  saveData();toast('🗑️ Fournisseur supprimé');rFour();
+  saveData();toast('🗑️ Fournisseur supprimé');
+  if(currentPage==='dettes') rDettes();
+  else if(currentPage==='fournisseurs') rFour();
 }
 
 // ─── FUSION DOUBLONS FOURNISSEURS ───
@@ -11502,6 +11509,7 @@ function rDettes(){
             <button class="btn btn-sm btn-success" onclick="reglerDette(${f.id})">💳 Régler</button>
             <button class="btn btn-sm" style="font-size:10px;color:var(--navy);border-color:var(--navy)" onclick="voirHistoDette(${f.id})">📜 Relevé${((f.historiquePaiementsFour&&f.historiquePaiementsFour.length)||(f.historiqueDetteAjouts&&f.historiqueDetteAjouts.length))?` (${((f.historiquePaiementsFour||[]).length)+(( f.historiqueDetteAjouts||[]).length)})`:''}</button>
             <button class="btn btn-sm" onclick="convertirEnEmprunt('fourDirect',${f.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button>
+            <button class="btn-icon btn-sm" onclick="delFour(${f.id})" style="color:var(--red)" title="Supprimer ce fournisseur">✕</button>
           </td>
         </tr>`).join('')}
       </tbody></table></div>`:``}
