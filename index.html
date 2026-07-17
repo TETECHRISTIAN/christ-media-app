@@ -11642,6 +11642,10 @@ function addDettePerso(){
         ${selectComptes('dp-cid', premierCompteId())}
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;font-size:12px;color:var(--text2)">
+      <input type="checkbox" id="dp-historique" style="width:16px;height:16px">
+      <label for="dp-historique">📌 Enregistrement historique — l'argent a déjà changé de main dans le passé, ne pas re-débiter/créditer le compte aujourd'hui</label>
+    </div>
 
     <!-- Section microfinance (visible si emprunter) -->
     <div id="mf-section" style="border:1px solid var(--border2);border-radius:var(--rs);padding:12px;margin-top:8px;background:var(--surface2)">
@@ -11766,10 +11770,13 @@ function saveDettePerso(){
     notes:document.getElementById('dp-notes').value,
     statut:'En cours'
   });
-  if(typeDette==='emprunter') crediterCompte(cid,mt);
-  else debiterCompte(cid,mt);
+  const estHistorique=document.getElementById('dp-historique')?.checked;
+  if(!estHistorique){
+    if(typeDette==='emprunter') crediterCompte(cid,mt);
+    else debiterCompte(cid,mt);
+  }
   saveData();closeModal();
-  toast(`✅ ${typeDette==='emprunter'?'Emprunt':'Prêt'} de ${F(mt)} enregistré${echeancier?' — tableau d’amortissement généré':''}`);
+  toast(`✅ ${typeDette==='emprunter'?'Emprunt':'Prêt'} de ${F(mt)} enregistré${estHistorique?' (historique, compte non affecté)':''}${echeancier?' — tableau d’amortissement généré':''}`);
   rDettes();
 }
 
