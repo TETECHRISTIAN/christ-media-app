@@ -6482,6 +6482,68 @@ function saveReglementDette(fid){
   if(currentPage==='dettes') rDettes(); else rTresorerie();
 }
 
+// ─── RÉCONCILIATION ACHATS ↔ SOLDE FOURNISSEUR ───
+// Problème : "Régler" (reglerDette) réduit le solde global f.dette mais ne touche jamais
+// aux lignes d'achats individuelles (S.achats statut='À payer'). Résultat : après un
+// paiement groupé, de vieux achats restent affichés comme "Dû" indéfiniment sur la page
+// Achats/Dettes, même si la dette réelle du fournisseur a bien été réglée.
+// Cette fonction ne déplace AUCUN argent (déjà fait via reglerDette) — elle solde
+// uniquement l'affichage, du plus ancien achat au plus récent (FIFO), jusqu'à ce que le
+// total encore "À payer" corresponde exactement au vrai solde f.dette.
+function resteAchat(a){
+  const paye = a.tranches ? a.tranches.reduce((s,t)=>s+(+t.mt||0),0) : 0;
+  return Math.max(0, (+a.mt||0) - paye);
+}
+function reconcilierDette(fid){
+  const f=S.fournisseurs&&S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const achatsF=S.achats.filter(a=>a.fid==fid && a.statut==='À payer' && !a._deleted);
+  if(achatsF.length===0) return toast('ℹ️ Aucun achat "À payer" pour ce fournisseur');
+
+  achatsF.sort((a,b)=>{
+    const da=(a.date||'')+' '+(a.heure||''), db=(b.date||'')+' '+(b.heure||'');
+    if(da!==db) return da<db?-1:1;
+    return (a.ts||0)-(b.ts||0);
+  });
+
+  const totalOuvert=achatsF.reduce((s,a)=>s+resteAchat(a),0);
+  const realDette=f.dette||0;
+  let toClose=totalOuvert-realDette;
+  if(toClose<=0) return toast('✅ Déjà cohérent — aucun ajustement nécessaire');
+
+  let nbSoldes=0, montantReconcilie=0;
+  for(const a of achatsF){
+    if(toClose<=0) break;
+    const reste=resteAchat(a);
+    if(reste<=0) continue;
+    const montant=Math.min(reste,toClose);
+    if(!a.tranches)a.tranches=[];
+    a.tranches.push({date:D(),mt:montant,mode:'Réconciliation',reconciliation:true});
+    montantReconcilie+=montant;
+    toClose-=montant;
+    if(resteAchat(a)<=0){
+      a.statut='Payé'; a.solde=true; nbSoldes++;
+      a.notes=(a.notes?a.notes+' · ':'')+'Réconcilié (payé via règlement groupé)';
+      if(S.dettesAchats){ const _da=S.dettesAchats.find(d=>d.id==a.id); if(_da){_da._deleted=true;_da.ts=Date.now();} }
+    }
+    a.ts=Date.now();
+  }
+  saveData();
+  toast(`🔄 Réconciliation "${f.nom}" : ${nbSoldes} achat(s) soldé(s) · ${F(montantReconcilie)} régularisé(s)`);
+  if(currentPage==='dettes') rDettes();
+}
+function reconcilierToutesLesDettes(){
+  const fours=(S.fournisseurs||[]).filter(f=>{
+    const achatsF=S.achats.filter(a=>a.fid==f.id && a.statut==='À payer' && !a._deleted);
+    const totalOuvert=achatsF.reduce((s,a)=>s+resteAchat(a),0);
+    return totalOuvert > (f.dette||0);
+  });
+  if(fours.length===0) return toast('✅ Tout est déjà cohérent — aucune réconciliation nécessaire');
+  if(!confirm(`Réconcilier ${fours.length} fournisseur(s) ? Cette action solde les vieilles lignes d'achats déjà payées via règlement groupé, sans déplacer d'argent.`)) return;
+  fours.forEach(f=>reconcilierDette(f.id));
+  toast(`🔄 ${fours.length} fournisseur(s) réconcilié(s)`);
+  if(currentPage==='dettes') rDettes();
+}
+
 // ─── FACTURE PDF ───
 let factureNum=1000;
 function printFacture(vid){
@@ -11368,6 +11430,7 @@ function rDettes(){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <p class="st" style="margin:0">📦 Dettes fournisseurs</p>
       <div style="display:flex;gap:4px;margin-left:auto">
+        <button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber);font-size:11px" onclick="reconcilierToutesLesDettes()">🔄 Tout réconcilier</button>
         <button class="btn btn-sm" onclick="dettesFourVue='groupe';rDettes()" style="${dettesFourVue!=='detail'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">👥 Par fournisseur</button>
         <button class="btn btn-sm" onclick="dettesFourVue='detail';rDettes()" style="${dettesFourVue==='detail'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">📋 Par achat</button>
       </div>
@@ -11390,9 +11453,9 @@ function rDettes(){
             <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm btn-success" onclick="configurerTranchesAchat(${a.id})">💳 Payer</button><button class="btn btn-sm" onclick="convertirEnEmprunt('achat',${a.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">📅 Planifier</button></td>
           </tr>`;}).join('')}
       </tbody></table></div>`:`<div class="tbl-wrap"><table>
-      <thead><tr><th>Fournisseur</th><th>Nb achats</th><th>Total dû</th><th>Déjà payé</th><th>Reste</th><th>%</th><th></th></tr></thead>
+      <thead><tr><th>Fournisseur</th><th>Nb achats</th><th>Total dû</th><th>Déjà payé</th><th>Reste (achats)</th><th>Vrai solde</th><th>%</th><th></th></tr></thead>
       <tbody>${(()=>{
-        if(dettesF.length===0) return '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucune dette fournisseur</td></tr>';
+        if(dettesF.length===0) return '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--text3)">✅ Aucune dette fournisseur</td></tr>';
         const groupes={};
         dettesF.forEach(a=>{
           const f=gf(a.fid);const key=a.fid||'_sans';
@@ -11404,14 +11467,19 @@ function rDettes(){
           const reste=Math.max(0,g.total-g.paye);
           const pct=g.total>0?Math.min(100,Math.round((g.paye/g.total)*100)):0;
           const ids=g.achats.map(a=>a.id).join(',');
+          const realF=g.fid?gf(g.fid):null;
+          const realDette=realF?(realF.dette||0):null;
+          const ecart=realDette!=null?(reste-realDette):0;
           return `<tr>
             <td class="tdm" style="font-weight:700">${g.nom}<div style="font-size:10px;color:var(--text3);margin-top:2px">${g.achats.length} achat(s)</div></td>
             <td style="color:var(--text3);font-size:12px">${g.achats.length}</td>
             <td style="color:var(--purple);font-weight:600">${F(g.total)}</td>
             <td style="color:var(--green)">${F(g.paye)}</td>
             <td style="color:var(--red);font-weight:700">${F(reste)}</td>
+            <td style="font-weight:700">${realDette!=null?F(realDette):'—'}${ecart>0?`<div style="font-size:10px;color:var(--amber);margin-top:2px">écart : ${F(ecart)}</div>`:''}</td>
             <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:var(--green);height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap">
+              ${ecart>0?`<button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)" onclick="reconcilierDette(${g.fid})">🔄 Réconcilier</button>`:''}
               <button class="btn btn-sm btn-success" onclick="payerGroupeFournisseur('${ids}','${g.nom}')">💳 Tout payer</button>
               <button class="btn btn-sm" onclick="dettesFourVue='detail';rDettes()" style="font-size:11px">📋 Détail</button>
             </td>
