@@ -6585,7 +6585,7 @@ function printFacture(vid){
         <div class="f-num-title">FACTURE</div>
         <div class="f-num-ref">N° ${numFac}</div>
         <div class="f-num-ref">Date : ${fmtD(v.date)}${heure?' à '+heure:''}</div>
-        <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
+        <div><span class="f-statut">${(()=>{const ac=(v.acomptes||[]).reduce((s,a)=>s+a.mt,0);const partiel=v.statut!=='Payé'&&ac>0;return (v.statut==='Payé'?'✅ Payé':partiel?'⏳ Paiement partiel':'⏳ '+v.statut);})()}</span></div>
       </div>
     </div>
 
@@ -8433,7 +8433,7 @@ function delVenteService(id){
 function partagerWhatsAppService(id){
   const v=(S.ventes_services||[]).find(x=>x.id==id);if(!v)return;
   const nomShop=S.parametres?.nom||'Christ Media';
-  const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':'⏳ Non payé'}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
+  const texte=`🧾 *REÇU SERVICE - ${nomShop}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}${v.heure?' à '+v.heure:''}\n\n📋 *${v.nom_service}*${v.qte>1?' x'+v.qte:''}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode||'—'}\nStatut: ${v.statut==='Payé'?'✅ Payé':(v.avance>0?'⏳ Paiement partiel':'⏳ Non payé')}${v.avance>0&&v.statut!=='Payé'?'\nAvance: '+F(v.avance)+' | Reste: '+F(v.reste!=null?v.reste:v.mt-v.avance):''}\n\nMerci pour votre confiance ! 🙏`;
   window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`,'_blank');
 }
 
@@ -8588,7 +8588,7 @@ function _genererFactureService(id){
         <div class="f-num-title">FACTURE</div>
         <div class="f-num-ref"><strong>N°</strong> ${numFac}</div>
         <div class="f-num-ref"><strong>Date :</strong> ${fmtD(v.date)}${v.heure?' à '+v.heure:''}</div>
-        <div><span class="f-statut">${v.statut==='Payé'?'✅':'⏳'} ${v.statut}</span></div>
+        <div><span class="f-statut">${(()=>{const partiel=v.statut!=='Payé'&&v.avance>0;return (v.statut==='Payé'?'✅ Payé':partiel?'⏳ Paiement partiel':'⏳ '+v.statut);})()}</span></div>
       </div>
     </div>
     <div class="f-parties">
@@ -10244,7 +10244,7 @@ function partagerWhatsApp(id, type){
     const v=S.ventes.find(v=>v.id==id);if(!v)return;
     const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu,mt:v.mt}];
     const detail=lignes.map(l=>{const a=ga(l.aid);return`- ${a?a.nom:'Article'} x${l.qte} = ${F(l.mt)}`;}).join(String.fromCharCode(10));
-    texte=`🧾 *REÇU - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}\n\n${detail}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode}\nStatut: ${v.statut}\n\nMerci pour votre confiance ! 🙏`;
+    texte=`🧾 *REÇU - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}\n\n${detail}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode}\nStatut: ${(()=>{const ac=(v.acomptes||[]).reduce((s,a)=>s+a.mt,0);return v.statut==='Payé'?'Payé':(ac>0?'Paiement partiel':v.statut);})()}\n\nMerci pour votre confiance ! 🙏`;
   }else if(type==='devis'){
     const d=S.devis.find(d=>d.id==id);if(!d)return;
     const detail=(d.lignes||[]).map(l=>`- ${l.nom} x${l.qte} = ${F(l.mt)}`).join('\n');
