@@ -1,4 +1,4 @@
-const CACHE_NAME = 'christ-media-v3';
+const CACHE_NAME = 'christ-media-v4';
 const BASE = '/christ-media-app/';
 const URLS_TO_CACHE = [
   BASE,
@@ -64,8 +64,10 @@ self.addEventListener('fetch', event => {
   // Ne pas intercepter les requêtes Firebase / Google APIs
   if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) return;
 
+  const isHTML = event.request.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname === BASE;
+
   event.respondWith(
-    fetch(event.request)
+    fetch(isHTML ? new Request(event.request, { cache: 'no-store' }) : event.request)
       .then(response => {
         // Ne mettre en cache que les réponses HTTP(S) valides et non-opaques
         if (
