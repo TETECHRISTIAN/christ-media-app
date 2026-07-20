@@ -9411,6 +9411,7 @@ function rComptes(){
       +   '<button class="btn btn-sm btn-success" onclick="event.stopPropagation();ouvrirTransfert('+c.id+')">\u2194 Transfert</button>'
       +   '<button class="btn btn-sm" onclick="event.stopPropagation();ajusterSolde('+c.id+')">\u26A1 Ajuster</button>'
       +   btnDeplac
+      +   '<button class="btn btn-sm" onclick="event.stopPropagation();delCompte('+c.id+')" style="background:var(--red-bg,#fee2e2);color:var(--red)">\uD83D\uDDD1\uFE0F Supprimer</button>'
       + '</div>'
       + '</div>';
   }
@@ -9575,8 +9576,13 @@ function updateCompte(id){
   saveData();closeModal();toast('✅ Compte modifié');rComptes();
 }
 function delCompte(id){
-  if(S.comptes.length<=1)return toast('⚠️ Au moins un compte requis');
-  if(!confirm('Supprimer ce compte ?'))return;
+  const c=S.comptes.find(c=>c.id==id);if(!c)return;
+  const comptesMemeBoutique=S.comptes.filter(x=>x.bid==c.bid);
+  if(comptesMemeBoutique.length<=1)return toast('⚠️ Au moins un compte requis par boutique');
+  const msg = c.solde!==0
+    ? `Supprimer le compte "${c.nom}" ? Son solde actuel (${F(c.solde)}) sera définitivement perdu.`
+    : `Supprimer le compte "${c.nom}" ?`;
+  if(!confirm(msg))return;
   S.comptes=S.comptes.filter(c=>c.id!=id);
   saveData();closeModal();toast('🗑️ Compte supprimé');rComptes();
 }
