@@ -1493,6 +1493,10 @@ body.dark th{background:var(--surface3)}
       <div class="shortcut-row"><span class="shortcut-desc">Rapport de caisse</span><div class="shortcut-keys"><span class="kbd">R</span></div></div>
       <div class="shortcut-row"><span class="shortcut-desc">Planification</span><div class="shortcut-keys"><span class="kbd">P</span></div></div>
       <div class="shortcut-row"><span class="shortcut-desc">Calculatrice</span><div class="shortcut-keys"><span class="kbd">X</span></div></div>
+      <div class="shortcut-row"><span class="shortcut-desc">🔴 Ventes Live</span><div class="shortcut-keys"><span class="kbd">L</span></div></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Trésorerie</span><div class="shortcut-keys"><span class="kbd">T</span></div></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Fournisseurs</span><div class="shortcut-keys"><span class="kbd">F</span></div></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Achats</span><div class="shortcut-keys"><span class="kbd">A</span></div></div>
     </div>
     <div class="shortcuts-section">
       <div class="shortcuts-section-title">Actions globales</div>
@@ -3856,7 +3860,7 @@ function rDash(){
     </div>
     ${getDailyCoachQuote()}
     <p class="st" style="color:var(--text3);font-size:11px;font-weight:400;margin-top:24px">
-      Raccourcis : <span class="kbd">N</span> Vente &nbsp; <span class="kbd">Q</span> Caisse rapide &nbsp; <span class="kbd">S</span> Stock &nbsp; <span class="kbd">C</span> Clients &nbsp; <span class="kbd">R</span> Caisse &nbsp; <span class="kbd">Ctrl+K</span> Recherche &nbsp; <span class="kbd">?</span> Aide
+      Raccourcis : <span class="kbd">N</span> Vente &nbsp; <span class="kbd">Q</span> Caisse rapide &nbsp; <span class="kbd">L</span> Live &nbsp; <span class="kbd">S</span> Stock &nbsp; <span class="kbd">T</span> Trésorerie &nbsp; <span class="kbd">F</span> Fournisseurs &nbsp; <span class="kbd">A</span> Achats &nbsp; <span class="kbd">C</span> Clients &nbsp; <span class="kbd">R</span> Caisse &nbsp; <span class="kbd">Ctrl+K</span> Recherche &nbsp; <span class="kbd">?</span> Aide
     </p>`;
 }
 
@@ -9115,6 +9119,18 @@ document.addEventListener('keydown', e => {
       break;
     case 'x': case 'X':
       if(!modalOpen) nav(document.querySelector('[data-page=calculatrice]'), 'calculatrice');
+      break;
+    case 'l': case 'L':
+      if(!modalOpen) nav(document.querySelector('[data-page=live]'), 'live');
+      break;
+    case 't': case 'T':
+      if(!modalOpen) nav(document.querySelector('[data-page=tresorerie]'), 'tresorerie');
+      break;
+    case 'f': case 'F':
+      if(!modalOpen) nav(document.querySelector('[data-page=fournisseurs]'), 'fournisseurs');
+      break;
+    case 'a': case 'A':
+      if(!modalOpen) nav(document.querySelector('[data-page=achats]'), 'achats');
       break;
   }
 });
