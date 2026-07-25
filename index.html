@@ -758,6 +758,7 @@ body.dark th{background:var(--surface3)}
 .crm-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
 .proj-bar{height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px}
 .proj-bar-fill{height:100%;background:var(--green);transition:width .2s}
+.mat-badge-retard{background:var(--red-bg);color:var(--red);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px}
 .compte-card.actif{border-color:var(--navy);background:var(--navy-bg)}
 .compte-solde{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:8px 0 4px}
 .transfert-arrow{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text3)}
@@ -1184,6 +1185,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 6h14" stroke="currentColor" stroke-width="1" opacity=".5"/><path d="M4.5 10l2 2L11.5 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Projets
     </div>
+    <div class="ni admin-only superviseur-ok" data-page="materiel" onclick="nav(this,'materiel')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8" rx="1.3" stroke="currentColor" stroke-width="1.3"/><path d="M6 5V4a1.3 1.3 0 011.3-1.3h1.4A1.3 1.3 0 0110 4v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="9" r="1.8" stroke="currentColor" stroke-width="1.3"/></svg>
+      Parc Matériel
+    </div>
     <div class="ni admin-only superviseur-ok" data-page="coach" onclick="nav(this,'coach')">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 9v3M6.5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Coach Financier
@@ -1478,6 +1483,10 @@ body.dark th{background:var(--surface3)}
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 9l2 2L11.5 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Projets
     </div>
+    <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=materiel]'),'materiel')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8" rx="1.3" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="9" r="1.8" stroke="currentColor" stroke-width="1.3"/></svg>
+      Parc Matériel
+    </div>
     <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=planning]'),'planning')">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
       Planification
@@ -1643,6 +1652,17 @@ let _projFiltreType = 'Tous';
 let _projDragId = null;
 window._projTaches = [];
 
+const MAT_CATEGORIES = ['Caméra','Objectif','Éclairage','Transmission vidéo','Son','Informatique','Mobilier/Déco','Autre'];
+const MAT_CAT_EMOJI = {
+  'Caméra':'📷','Objectif':'🔎','Éclairage':'💡','Transmission vidéo':'📡','Son':'🎙️','Informatique':'💻','Mobilier/Déco':'🪑','Autre':'📦'
+};
+const MAT_STATUTS = ['Disponible','Sorti','En maintenance','En panne','Vendu / Perdu'];
+const MAT_STATUT_COULEUR = {
+  'Disponible':'#166534','Sorti':'#c9a13b','En maintenance':'#7ec8e3','En panne':'#991b1b','Vendu / Perdu':'#6b7280'
+};
+let _matFiltreCat = 'Toutes';
+let _matDragId = null;
+
 // ─── DATA ───
 const defaultData={
   stock:[
@@ -1732,6 +1752,7 @@ const defaultData={
   crm_opportunites:[],
   projets:[],
   couts_atterrissage:[],
+  materiel:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -1743,7 +1764,7 @@ const defaultData={
     theme_color:'default',
     custom_primary:'#0f1f3d',
     notif_stock:true,
-    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres','crm','projets'],
+    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres','crm','projets','materiel'],
     compte_auto:true
   },
   utilisateurs:[
@@ -1897,7 +1918,7 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites','projets','couts_atterrissage'
+  'crm_opportunites','projets','couts_atterrissage','materiel'
 ];
 
 async function saveToFirebase(data){
@@ -2580,7 +2601,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets})[currentPage]();
+    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel})[currentPage]();
   }catch(e){}
 }
 
@@ -3023,7 +3044,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -3109,7 +3130,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3144,7 +3165,8 @@ const actionsMap={
   bilan_jour:()=>`<input type="date" id="bj-date" value="${window._bilanJourDate||D()}" onchange="window._bilanJourDate=this.value;rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
   cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>',
   crm:()=>'<button class="btn" onclick="_crmFiltreType=\'Tous\';rCRM()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalOpportunite()">+ Nouvelle opportunité</button>',
-  projets:()=>'<button class="btn" onclick="_projFiltreType=\'Tous\';rProjets()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalProjet()">+ Nouveau projet</button>'  };
+  projets:()=>'<button class="btn" onclick="_projFiltreType=\'Tous\';rProjets()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalProjet()">+ Nouveau projet</button>',
+  materiel:()=>'<button class="btn" onclick="_matFiltreCat=\'Toutes\';rMateriel()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalMateriel()">+ Nouvel équipement</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -3162,7 +3184,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -3189,6 +3211,7 @@ const QB_PAGES = [
   {page:'fournisseurs', emoji:'🚚', label:'Fournisseurs',  labelCourt:'Fourniss.'},
   {page:'crm',          emoji:'🤝', label:'Pipeline CRM',  labelCourt:'CRM'},
   {page:'projets',      emoji:'🎬', label:'Projets',       labelCourt:'Projets'},
+  {page:'materiel',     emoji:'📷', label:'Parc Matériel', labelCourt:'Matériel'},
   {page:'depenses',     emoji:'💸', label:'Dépenses',      labelCourt:'Dépenses'},
   {page:'tresorerie',   emoji:'💰', label:'Trésorerie',    labelCourt:'Tréso.'},
   {page:'comptes',      emoji:'🏦', label:'Comptes',       labelCourt:'Comptes'},
@@ -3445,6 +3468,7 @@ function getMNSvg(page){
     __caisse_rapide__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M5 8l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     crm:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><path d="M9 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><circle cx="6" cy="5" r="2"/><circle cx="14" cy="5" r="2"/><path d="M2 17c0-2.5 2-4 4.5-4S11 14.5 11 17" stroke-linecap="round"/><path d="M11 17c0-2 1.5-3.5 3.5-3.5S18 15 18 17" stroke-linecap="round"/></svg>',
     projets:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="16" height="13" rx="1.5"/><path d="M2 8h16" stroke-width="1"/><path d="M6 12l2.5 2.5L14 9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    materiel:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="14" height="9" rx="1.5"/><path d="M7 6V4.5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0113 4.5V6" stroke-linecap="round"/><circle cx="10" cy="10.5" r="2.2"/></svg>',
   };
   return svgs[page]||'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M10 7v3l2 2" stroke-linecap="round"/></svg>';
 }
@@ -10651,7 +10675,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -10669,7 +10693,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel'],
     label: '👁️ Superviseur',
     couleur: '#7ec8e3'
   },
@@ -23710,6 +23734,9 @@ function ouvrirModalProjet(id,prefill){
       <div class="fg"><label class="fl">Date de livraison</label><input class="fi" type="date" id="proj-livraison" value="${p?(p.date_livraison||''):''}"></div>
     </div>
     <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="proj-notes" rows="2" placeholder="Détails, matériel prévu, lieu...">${p?(p.notes||''):(pf.notes||'')}</textarea></div>
+    ${p&&(S.materiel||[]).some(m=>!m._deleted&&m.sortiePour&&m.sortiePour.projetId==p.id)?`<div style="background:var(--navy-bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:10px;font-size:11px">
+      📷 Matériel sorti pour ce projet : ${(S.materiel||[]).filter(m=>!m._deleted&&m.sortiePour&&m.sortiePour.projetId==p.id).map(m=>m.nom).join(', ')}
+    </div>`:''}
     <div class="fg">
       <label class="fl">Checklist de production</label>
       <div id="proj-taches"></div>
@@ -23770,6 +23797,239 @@ function creerProjetDepuisOpp(id){
     budget: o.valeur,
     notes: `Issu de l'opportunité CRM : ${o.titre}`
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── MODULE PARC MATÉRIEL — ÉQUIPEMENT DE PRODUCTION ───
+// Caméras, objectifs, kits de transmission (DJI, etc.), éclairage, son...
+// Suivi de disponibilité, sorties/retours liés aux projets, maintenance.
+// (Constantes MAT_CATEGORIES, MAT_STATUTS, _matFiltreCat, etc.
+// déclarées en haut du fichier avec les autres constantes globales.)
+// ══════════════════════════════════════════════════════════════════
+
+function _matListe(){
+  if(!S.materiel) S.materiel=[];
+  return S.materiel.filter(m=>!m._deleted);
+}
+
+function rMateriel(){
+  const mats = _matListe();
+  const matsFiltres = _matFiltreCat==='Toutes' ? mats : mats.filter(m=>m.categorie===_matFiltreCat);
+  const today = D();
+  const disponibles = mats.filter(m=>m.statut==='Disponible');
+  const sortis = mats.filter(m=>m.statut==='Sorti');
+  const horsService = mats.filter(m=>m.statut==='En maintenance'||m.statut==='En panne');
+  const enRetard = sortis.filter(m=>m.sortiePour&&m.sortiePour.retourPrevu&&m.sortiePour.retourPrevu<today);
+  const valeurParc = mats.filter(m=>m.statut!=='Vendu / Perdu').reduce((s,m)=>s+(+m.valeur_achat||0),0);
+
+  document.getElementById('content').innerHTML = `
+    <div class="g4" style="margin-bottom:16px">
+      <div class="card"><div class="ct">Équipements</div><div class="mv">${N(mats.length)}</div></div>
+      <div class="card"><div class="ct">Disponibles</div><div class="mv" style="color:var(--green)">${N(disponibles.length)}</div></div>
+      <div class="card"><div class="ct">Sortis</div><div class="mv" style="color:${enRetard.length>0?'var(--red)':'var(--navy)'}">${N(sortis.length)}${enRetard.length>0?' ⚠️':''}</div></div>
+      <div class="card"><div class="ct">Valeur du parc</div><div class="mv">${F(valeurParc)}</div></div>
+    </div>
+
+    ${enRetard.length>0?`<div class="alert alert-r" style="margin-bottom:12px">⚠️ ${enRetard.length} équipement${enRetard.length>1?'s':''} en retard de retour : ${enRetard.map(m=>m.nom).join(', ')}</div>`:''}
+    ${horsService.length>0?`<div class="alert alert-a" style="margin-bottom:12px">🔧 ${horsService.length} équipement${horsService.length>1?'s':''} hors service (maintenance/panne)</div>`:''}
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <button onclick="_matFiltreCat='Toutes';rMateriel()" class="btn btn-sm" style="${_matFiltreCat==='Toutes'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">Toutes (${mats.length})</button>
+      ${MAT_CATEGORIES.map(c=>`<button onclick="_matFiltreCat='${c}';rMateriel()" class="btn btn-sm" style="${_matFiltreCat===c?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${MAT_CAT_EMOJI[c]} ${c} (${mats.filter(m=>m.categorie===c).length})</button>`).join('')}
+    </div>
+
+    <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px">
+      ${MAT_STATUTS.map(statut=>{
+        const matsStatut = matsFiltres.filter(m=>m.statut===statut).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        return `
+        <div class="crm-col" ondragover="event.preventDefault();this.classList.add('crm-col-over')" ondragleave="this.classList.remove('crm-col-over')" ondrop="dropMateriel(event,'${statut}')" style="min-width:220px;flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px">
+          <div style="font-size:12px;font-weight:700;color:${MAT_STATUT_COULEUR[statut]};display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${MAT_STATUT_COULEUR[statut]};display:inline-block"></span>
+            ${statut} (${matsStatut.length})
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-height:40px">
+            ${matsStatut.length===0?'<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px 0">—</div>':
+              matsStatut.map(m=>{
+                const enRetardM = m.sortiePour&&m.sortiePour.retourPrevu&&m.sortiePour.retourPrevu<today;
+                return `
+              <div class="card crm-card" draggable="true" ondragstart="dragMateriel(event,${m.id})" onclick="ouvrirModalMateriel(${m.id})" style="cursor:grab;padding:10px;border-left:3px solid ${MAT_STATUT_COULEUR[statut]}">
+                <div style="font-size:12px;font-weight:700">${MAT_CAT_EMOJI[m.categorie]||'📦'} ${(m.nom||'').replace(/</g,'&lt;')}</div>
+                ${m.reference?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${m.reference.replace(/</g,'&lt;')}</div>`:''}
+                ${statut==='Sorti'&&m.sortiePour?`<div style="font-size:11px;color:var(--text2);margin-top:4px">📍 ${(m.sortiePour.projetTitre||m.sortiePour.responsable||'—').replace(/</g,'&lt;')}</div>
+                  <div style="font-size:10px;margin-top:2px">${enRetardM?'<span class="mat-badge-retard">RETARD — attendu '+fmtD(m.sortiePour.retourPrevu)+'</span>':(m.sortiePour.retourPrevu?'Retour prévu : '+fmtD(m.sortiePour.retourPrevu):'')}</div>`:''}
+                <div style="display:flex;justify-content:flex-end;margin-top:6px">
+                  <span style="font-size:11px;color:var(--text3)">${F(m.valeur_achat||0)}</span>
+                </div>
+              </div>`;}).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function dragMateriel(event,id){
+  _matDragId = id;
+  try{event.dataTransfer.effectAllowed='move';}catch(e){}
+}
+
+function dropMateriel(event,statut){
+  event.preventDefault();
+  if(event.currentTarget&&event.currentTarget.classList) event.currentTarget.classList.remove('crm-col-over');
+  if(_matDragId==null) return;
+  const m = S.materiel.find(m=>m.id==_matDragId);
+  _matDragId = null;
+  if(!m) return;
+  if(m.statut===statut) return;
+  if(statut==='Sorti'){
+    // Une sortie nécessite des détails (projet/responsable/retour prévu)
+    ouvrirModalSortieMateriel(m.id);
+    return;
+  }
+  const ancienStatut = m.statut;
+  m.statut = statut;
+  m.ts = Date.now();
+  if(!m.historique) m.historique=[];
+  if(ancienStatut==='Sorti' && statut==='Disponible'){
+    m.historique.push({date:D(),action:`Retourné (était sorti pour ${m.sortiePour?.projetTitre||m.sortiePour?.responsable||'—'})`});
+    m.sortiePour = null;
+  } else {
+    m.historique.push({date:D(),action:`${ancienStatut} → ${statut}`});
+  }
+  saveData();
+  toast(`📷 "${m.nom}" → ${statut}`);
+  rMateriel();
+}
+
+function ouvrirModalMateriel(id){
+  const m = id ? S.materiel.find(m=>m.id==id) : null;
+  const projetsActifs = (S.projets||[]).filter(p=>!p._deleted && p.etape!=='Terminé');
+  modal(`<div class="mft">${m?'📷 Modifier l\u2019équipement':'📷 Nouvel équipement'}</div>
+    <div class="fg"><label class="fl">Nom</label><input class="fi" id="mat-nom" placeholder="Ex : Kit DJI SDR Transmission" value="${m?(m.nom||'').replace(/"/g,'&quot;'):''}"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Catégorie</label>
+        <select class="fs" id="mat-cat">${MAT_CATEGORIES.map(c=>`<option value="${c}" ${m&&m.categorie===c?'selected':''}>${MAT_CAT_EMOJI[c]} ${c}</option>`).join('')}</select>
+      </div>
+      <div class="fg"><label class="fl">Référence / N° série</label><input class="fi" id="mat-ref" placeholder="Marque, modèle..." value="${m?(m.reference||'').replace(/"/g,'&quot;'):''}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Valeur d'achat (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="mat-valeur" value="${m?(m.valeur_achat||0):0}"></div>
+      <div class="fg"><label class="fl">Date d'achat</label><input class="fi" type="date" id="mat-date-achat" value="${m?(m.date_achat||''):D()}"></div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="mat-notes" rows="2" placeholder="État, accessoires inclus, particularités...">${m?(m.notes||''):''}</textarea></div>
+    ${m&&m.statut==='Sorti'&&m.sortiePour?`<div style="background:var(--navy-bg);border-radius:var(--rs);padding:8px 10px;margin-bottom:10px;font-size:11px">
+      📤 Sorti pour <b>${(m.sortiePour.projetTitre||m.sortiePour.responsable||'—').replace(/</g,'&lt;')}</b> depuis le ${fmtD(m.sortiePour.dateSortie)}${m.sortiePour.retourPrevu?' — retour prévu le '+fmtD(m.sortiePour.retourPrevu):''}
+    </div>`:''}
+    ${m&&m.historique&&m.historique.length?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.7">${m.historique.slice(-5).map(h=>`• ${fmtD(h.date)} — ${h.action}`).join('<br>')}</div>`:''}
+    <div class="mff" style="flex-wrap:wrap">
+      ${m?`<button class="btn" style="color:var(--red)" onclick="supprimerMateriel(${m.id})">🗑️ Supprimer</button>`:''}
+      ${m&&m.statut==='Disponible'?`<button class="btn" style="background:var(--navy-bg);color:var(--navy)" onclick="ouvrirModalSortieMateriel(${m.id})">📤 Sortir</button>`:''}
+      ${m&&m.statut==='Sorti'?`<button class="btn btn-success" onclick="retournerMateriel(${m.id})">📥 Marquer retourné</button>`:''}
+      ${m&&(m.statut==='Disponible'||m.statut==='Sorti')?`<button class="btn" onclick="changerStatutMateriel(${m.id},'En panne')">⚠️ Signaler en panne</button>`:''}
+      ${m&&m.statut!=='En maintenance'&&m.statut!=='Vendu / Perdu'?`<button class="btn" onclick="changerStatutMateriel(${m.id},'En maintenance')">🔧 Maintenance</button>`:''}
+      ${m&&(m.statut==='En maintenance'||m.statut==='En panne')?`<button class="btn btn-success" onclick="changerStatutMateriel(${m.id},'Disponible')">✅ Remettre en service</button>`:''}
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveMateriel(${m?m.id:'null'})">${m?'Enregistrer':'Créer'}</button>
+    </div>`);
+}
+
+function saveMateriel(id){
+  const nom = document.getElementById('mat-nom').value.trim();
+  if(!nom) return toast('❌ Nom requis');
+  const categorie = document.getElementById('mat-cat').value;
+  const reference = document.getElementById('mat-ref').value.trim();
+  const valeur_achat = +document.getElementById('mat-valeur').value || 0;
+  const date_achat = document.getElementById('mat-date-achat').value;
+  const notes = document.getElementById('mat-notes').value.trim();
+  if(!S.materiel) S.materiel=[];
+  if(id){
+    const m = S.materiel.find(m=>m.id==id);
+    if(!m) return;
+    Object.assign(m,{nom,categorie,reference,valeur_achat,date_achat,notes,ts:Date.now()});
+  } else {
+    S.materiel.push({id:genId(),nom,categorie,reference,valeur_achat,date_achat,notes,statut:'Disponible',sortiePour:null,historique:[{date:D(),action:'Ajouté au parc'}],ts:Date.now()});
+  }
+  saveData();closeModal();toast(id?'✅ Équipement mis à jour':'✅ Équipement ajouté');rMateriel();
+}
+
+function supprimerMateriel(id){
+  if(!confirm('Supprimer cet équipement du parc ?')) return;
+  const m = S.materiel.find(m=>m.id==id);
+  if(!m) return;
+  m._deleted = true;
+  m.ts = Date.now();
+  saveData();closeModal();toast('🗑️ Équipement supprimé');rMateriel();
+}
+
+function changerStatutMateriel(id,statut){
+  const m = S.materiel.find(m=>m.id==id);
+  if(!m) return;
+  const ancienStatut = m.statut;
+  m.statut = statut;
+  m.ts = Date.now();
+  if(!m.historique) m.historique=[];
+  if(ancienStatut==='Sorti' && statut!=='Sorti') m.sortiePour = null;
+  m.historique.push({date:D(),action:`${ancienStatut} → ${statut}`});
+  saveData();closeModal();toast(`📷 "${m.nom}" → ${statut}`);rMateriel();
+}
+
+function ouvrirModalSortieMateriel(id){
+  const m = S.materiel.find(m=>m.id==id);
+  if(!m) return;
+  const projetsActifs = (S.projets||[]).filter(p=>!p._deleted && p.etape!=='Terminé');
+  modal(`<div class="mft">📤 Sortir « ${(m.nom||'').replace(/</g,'&lt;')} »</div>
+    <div class="fg"><label class="fl">Pour quel projet ?</label>
+      <select class="fs" id="mat-sortie-projet" onchange="document.getElementById('mat-sortie-autre-wrap').style.display=this.value==='__autre__'?'block':'none'">
+        <option value="">— Aucun / usage libre —</option>
+        ${projetsActifs.map(p=>`<option value="${p.id}">${(p.titre||'').replace(/</g,'&lt;')} (${p.client||'—'})</option>`).join('')}
+        <option value="__autre__">Autre (préciser)...</option>
+      </select>
+    </div>
+    <div id="mat-sortie-autre-wrap" style="display:none" class="fg"><label class="fl">Précision</label><input class="fi" id="mat-sortie-autre" placeholder="Ex : Prêt à un collègue, tournage externe..."></div>
+    <div class="fg"><label class="fl">Responsable / emprunteur</label><input class="fi" id="mat-sortie-resp" placeholder="Nom de la personne"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date de sortie</label><input class="fi" type="date" id="mat-sortie-date" value="${D()}"></div>
+      <div class="fg"><label class="fl">Retour prévu le</label><input class="fi" type="date" id="mat-sortie-retour"></div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="mat-sortie-notes" rows="2" placeholder="État au départ, accessoires emportés..."></textarea></div>
+    <div class="mff">
+      <button class="btn" onclick="ouvrirModalMateriel(${id})">← Retour</button>
+      <button class="btn btn-primary" onclick="saveSortieMateriel(${id})">📤 Confirmer la sortie</button>
+    </div>`);
+}
+
+function saveSortieMateriel(id){
+  const m = S.materiel.find(m=>m.id==id);
+  if(!m) return;
+  const projetVal = document.getElementById('mat-sortie-projet').value;
+  const autre = document.getElementById('mat-sortie-autre')?.value?.trim()||'';
+  const responsable = document.getElementById('mat-sortie-resp').value.trim();
+  const dateSortie = document.getElementById('mat-sortie-date').value || D();
+  const retourPrevu = document.getElementById('mat-sortie-retour').value || '';
+  const notes = document.getElementById('mat-sortie-notes').value.trim();
+  let projetId = null, projetTitre = '';
+  if(projetVal && projetVal!=='__autre__'){
+    const p = S.projets.find(p=>p.id==projetVal);
+    if(p){ projetId = p.id; projetTitre = p.titre; }
+  } else if(projetVal==='__autre__'){
+    projetTitre = autre;
+  }
+  m.statut = 'Sorti';
+  m.sortiePour = {projetId, projetTitre, responsable, dateSortie, retourPrevu, notes};
+  m.ts = Date.now();
+  if(!m.historique) m.historique=[];
+  m.historique.push({date:D(),action:`Sorti pour ${projetTitre||responsable||'usage libre'}`});
+  saveData();closeModal();toast(`📤 "${m.nom}" sorti`);rMateriel();
+}
+
+function retournerMateriel(id){
+  const m = S.materiel.find(m=>m.id==id);
+  if(!m) return;
+  if(!m.historique) m.historique=[];
+  m.historique.push({date:D(),action:`Retourné (était sorti pour ${m.sortiePour?.projetTitre||m.sortiePour?.responsable||'—'})`});
+  m.statut = 'Disponible';
+  m.sortiePour = null;
+  m.ts = Date.now();
+  saveData();closeModal();toast(`📥 "${m.nom}" retourné`);rMateriel();
 }
 </script>
 
