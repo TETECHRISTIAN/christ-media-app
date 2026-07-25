@@ -1617,6 +1617,32 @@ const genId=()=>{
 };
 const genVersion=()=>{ S.version=Date.now(); }; // timestamp indépendant du compteur d'IDs
 
+// ─── CONSTANTES GLOBALES MODULES CRM & PROJETS ───
+// Déclarées ici (tout en haut) plutôt qu'à côté de leurs fonctions plus bas,
+// pour être garanties initialisées avant tout rendu de page (évite les
+// erreurs "Cannot access before initialization" si l'app redémarre
+// directement sur la page 'crm' ou 'projets').
+const CRM_ETAPES = ['Nouveau','Qualifié','Devis envoyé','Négociation','Gagné','Perdu'];
+const CRM_ETAPE_COULEUR = {
+  'Nouveau':'#7ec8e3','Qualifié':'#8ea2d6','Devis envoyé':'#c9a13b',
+  'Négociation':'#e08a3c','Gagné':'#166534','Perdu':'#991b1b'
+};
+const CRM_TYPES = ['Shooting / Événementiel','Partenariat Orémus','Créateur TikTok','Boutique','Autre'];
+const CRM_TYPE_EMOJI = {
+  'Shooting / Événementiel':'🎥','Partenariat Orémus':'🤝','Créateur TikTok':'📱','Boutique':'🏪','Autre':'📌'
+};
+let _crmFiltreType = 'Tous';
+let _crmDragId = null;
+
+const PROJ_ETAPES = ['Pré-production','Tournage','Montage','Livraison','Terminé'];
+const PROJ_ETAPE_COULEUR = {
+  'Pré-production':'#7ec8e3','Tournage':'#e08a3c','Montage':'#8ea2d6',
+  'Livraison':'#c9a13b','Terminé':'#166534'
+};
+let _projFiltreType = 'Tous';
+let _projDragId = null;
+window._projTaches = [];
+
 // ─── DATA ───
 const defaultData={
   stock:[
@@ -23283,20 +23309,10 @@ function afficherDiag(){
 // ─── MODULE CRM — PIPELINE D'OPPORTUNITÉS ───
 // Suivi des prospects : shootings/événementiel, partenariats (Orémus),
 // candidatures réseau créateurs TikTok, prospects boutique.
+// (Les constantes CRM_ETAPES, CRM_TYPES, _crmFiltreType, etc. sont
+// déclarées en haut du fichier avec les autres constantes globales,
+// pour être disponibles dès le chargement de la page.)
 // ══════════════════════════════════════════════════════════════════
-const CRM_ETAPES = ['Nouveau','Qualifié','Devis envoyé','Négociation','Gagné','Perdu'];
-const CRM_ETAPE_COULEUR = {
-  'Nouveau':'#7ec8e3','Qualifié':'#8ea2d6','Devis envoyé':'#c9a13b',
-  'Négociation':'#e08a3c','Gagné':'#166534','Perdu':'#991b1b'
-};
-const CRM_TYPES = ['Shooting / Événementiel','Partenariat Orémus','Créateur TikTok','Boutique','Autre'];
-const CRM_TYPE_EMOJI = {
-  'Shooting / Événementiel':'🎥','Partenariat Orémus':'🤝','Créateur TikTok':'📱','Boutique':'🏪','Autre':'📌'
-};
-
-let _crmFiltreType = 'Tous';
-let _crmDragId = null;
-
 function _crmOpps(){
   if(!S.crm_opportunites) S.crm_opportunites=[];
   return S.crm_opportunites.filter(o=>!o._deleted);
@@ -23462,17 +23478,9 @@ function convertirOppEnDevis(id){
 // ─── MODULE PROJETS — SUIVI DE PRODUCTION (KANBAN) ───
 // Chaque contrat (shooting, partenariat, prestation) devient un projet
 // avec ses étapes de production et sa checklist de tâches.
+// (Constantes PROJ_ETAPES, _projFiltreType, etc. déclarées en haut du
+// fichier avec les autres constantes globales.)
 // ══════════════════════════════════════════════════════════════════
-const PROJ_ETAPES = ['Pré-production','Tournage','Montage','Livraison','Terminé'];
-const PROJ_ETAPE_COULEUR = {
-  'Pré-production':'#7ec8e3','Tournage':'#e08a3c','Montage':'#8ea2d6',
-  'Livraison':'#c9a13b','Terminé':'#166534'
-};
-
-let _projFiltreType = 'Tous';
-let _projDragId = null;
-window._projTaches = [];
-
 function _projListe(){
   if(!S.projets) S.projets=[];
   return S.projets.filter(p=>!p._deleted);
