@@ -756,6 +756,8 @@ body.dark th{background:var(--surface3)}
 .crm-col.crm-col-over{background:var(--navy-bg) !important}
 .crm-card{transition:transform .15s,box-shadow .15s}
 .crm-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
+.proj-bar{height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px}
+.proj-bar-fill{height:100%;background:var(--green);transition:width .2s}
 .compte-card.actif{border-color:var(--navy);background:var(--navy-bg)}
 .compte-solde{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:8px 0 4px}
 .transfert-arrow{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text3)}
@@ -1178,6 +1180,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.2" stroke="currentColor" stroke-width="1.4"/><circle cx="11" cy="5" r="2.2" stroke="currentColor" stroke-width="1.4"/><path d="M1 14c0-2.3 1.8-3.8 4-3.8s4 1.5 4 3.8M8 14c0-1.8 1.5-3.2 3.5-3.2s3.5 1.4 3.5 3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Pipeline CRM
     </div>
+    <div class="ni admin-only superviseur-ok" data-page="projets" onclick="nav(this,'projets')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 6h14" stroke="currentColor" stroke-width="1" opacity=".5"/><path d="M4.5 10l2 2L11.5 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Projets
+    </div>
     <div class="ni admin-only superviseur-ok" data-page="coach" onclick="nav(this,'coach')">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 9v3M6.5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Coach Financier
@@ -1468,6 +1474,10 @@ body.dark th{background:var(--surface3)}
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><circle cx="11" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 14c0-2.5 1.8-4 4-4s4 1.5 4 4M8 14c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Pipeline CRM
     </div>
+    <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=projets]'),'projets')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 9l2 2L11.5 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Projets
+    </div>
     <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=planning]'),'planning')">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
       Planification
@@ -1694,6 +1704,7 @@ const defaultData={
   depots:[{id:1,nom:'Boutique principale',emoji:'🏪',actif:true},{id:2,nom:'Entrepôt',emoji:'📦',actif:true}],
   transferts_stock:[],
   crm_opportunites:[],
+  projets:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -1705,7 +1716,7 @@ const defaultData={
     theme_color:'default',
     custom_primary:'#0f1f3d',
     notif_stock:true,
-    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres','crm'],
+    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres','crm','projets'],
     compte_auto:true
   },
   utilisateurs:[
@@ -1859,7 +1870,7 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites'
+  'crm_opportunites','projets'
 ];
 
 async function saveToFirebase(data){
@@ -2542,7 +2553,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM})[currentPage]();
+    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets})[currentPage]();
   }catch(e){}
 }
 
@@ -2985,7 +2996,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -3071,7 +3082,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3105,7 +3116,8 @@ const actionsMap={
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${window._bilanJourDate||D()}" onchange="window._bilanJourDate=this.value;rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
   cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>',
-  crm:()=>'<button class="btn" onclick="_crmFiltreType=\'Tous\';rCRM()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalOpportunite()">+ Nouvelle opportunité</button>'  };
+  crm:()=>'<button class="btn" onclick="_crmFiltreType=\'Tous\';rCRM()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalOpportunite()">+ Nouvelle opportunité</button>',
+  projets:()=>'<button class="btn" onclick="_projFiltreType=\'Tous\';rProjets()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalProjet()">+ Nouveau projet</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -3123,7 +3135,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -3149,6 +3161,7 @@ const QB_PAGES = [
   {page:'clients',      emoji:'👥', label:'Clients',       labelCourt:'Clients'},
   {page:'fournisseurs', emoji:'🚚', label:'Fournisseurs',  labelCourt:'Fourniss.'},
   {page:'crm',          emoji:'🤝', label:'Pipeline CRM',  labelCourt:'CRM'},
+  {page:'projets',      emoji:'🎬', label:'Projets',       labelCourt:'Projets'},
   {page:'depenses',     emoji:'💸', label:'Dépenses',      labelCourt:'Dépenses'},
   {page:'tresorerie',   emoji:'💰', label:'Trésorerie',    labelCourt:'Tréso.'},
   {page:'comptes',      emoji:'🏦', label:'Comptes',       labelCourt:'Comptes'},
@@ -3404,6 +3417,7 @@ function getMNSvg(page){
     parametres:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4" stroke-linecap="round"/></svg>',
     __caisse_rapide__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M5 8l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     crm:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><path d="M9 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><circle cx="6" cy="5" r="2"/><circle cx="14" cy="5" r="2"/><path d="M2 17c0-2.5 2-4 4.5-4S11 14.5 11 17" stroke-linecap="round"/><path d="M11 17c0-2 1.5-3.5 3.5-3.5S18 15 18 17" stroke-linecap="round"/></svg>',
+    projets:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="16" height="13" rx="1.5"/><path d="M2 8h16" stroke-width="1"/><path d="M6 12l2.5 2.5L14 9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
   return svgs[page]||'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M10 7v3l2 2" stroke-linecap="round"/></svg>';
 }
@@ -10610,7 +10624,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -10628,7 +10642,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets'],
     label: '👁️ Superviseur',
     couleur: '#7ec8e3'
   },
@@ -23390,6 +23404,7 @@ function ouvrirModalOpportunite(id){
     <div class="mff">
       ${o?`<button class="btn" style="color:var(--red)" onclick="supprimerOpportunite(${o.id})">🗑️ Supprimer</button>`:''}
       ${o&&o.etape==='Gagné'?`<button class="btn btn-success" onclick="convertirOppEnDevis(${o.id})">📄 Convertir en devis</button>`:''}
+      ${o&&o.etape==='Gagné'?`<button class="btn" style="background:var(--navy-bg);color:var(--navy)" onclick="creerProjetDepuisOpp(${o.id})">🎬 Créer un projet</button>`:''}
       <button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-primary" onclick="saveOpportunite(${o?o.id:'null'})">${o?'Enregistrer':'Créer'}</button>
     </div>`);
@@ -23441,6 +23456,213 @@ function convertirOppEnDevis(id){
     if(notesEl) notesEl.value = `Issu de l'opportunité CRM : ${o.titre}`;
     toast('📄 Ajoute les articles/prestations puis crée le devis');
   },100);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── MODULE PROJETS — SUIVI DE PRODUCTION (KANBAN) ───
+// Chaque contrat (shooting, partenariat, prestation) devient un projet
+// avec ses étapes de production et sa checklist de tâches.
+// ══════════════════════════════════════════════════════════════════
+const PROJ_ETAPES = ['Pré-production','Tournage','Montage','Livraison','Terminé'];
+const PROJ_ETAPE_COULEUR = {
+  'Pré-production':'#7ec8e3','Tournage':'#e08a3c','Montage':'#8ea2d6',
+  'Livraison':'#c9a13b','Terminé':'#166534'
+};
+
+let _projFiltreType = 'Tous';
+let _projDragId = null;
+window._projTaches = [];
+
+function _projListe(){
+  if(!S.projets) S.projets=[];
+  return S.projets.filter(p=>!p._deleted);
+}
+
+function rProjets(){
+  const projets = _projListe();
+  const projetsFiltres = _projFiltreType==='Tous' ? projets : projets.filter(p=>p.type===_projFiltreType);
+  const today = D();
+  const actifs = projets.filter(p=>p.etape!=='Terminé');
+  const enRetard = actifs.filter(p=>p.date_livraison && p.date_livraison<today);
+  const budgetActif = actifs.reduce((s,p)=>s+(+p.budget||0),0);
+  const totalTaches = actifs.reduce((s,p)=>s+((p.taches||[]).length),0);
+  const tachesFaites = actifs.reduce((s,p)=>s+((p.taches||[]).filter(t=>t.fait).length),0);
+
+  document.getElementById('content').innerHTML = `
+    <div class="g4" style="margin-bottom:16px">
+      <div class="card"><div class="ct">Projets actifs</div><div class="mv">${N(actifs.length)}</div></div>
+      <div class="card"><div class="ct">En retard</div><div class="mv" style="color:${enRetard.length>0?'var(--red)':'var(--green)'}">${N(enRetard.length)}</div></div>
+      <div class="card"><div class="ct">Budget en cours</div><div class="mv">${F(budgetActif)}</div></div>
+      <div class="card"><div class="ct">Tâches complétées</div><div class="mv">${totalTaches?Math.round(tachesFaites/totalTaches*100):0}%</div></div>
+    </div>
+
+    ${enRetard.length>0?`<div class="alert alert-r" style="margin-bottom:12px">⚠️ ${enRetard.length} projet${enRetard.length>1?'s':''} en retard de livraison : ${enRetard.map(p=>p.titre).join(', ')}</div>`:''}
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <button onclick="_projFiltreType='Tous';rProjets()" class="btn btn-sm" style="${_projFiltreType==='Tous'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">Tous (${projets.length})</button>
+      ${CRM_TYPES.map(t=>`<button onclick="_projFiltreType='${t}';rProjets()" class="btn btn-sm" style="${_projFiltreType===t?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${CRM_TYPE_EMOJI[t]} ${t} (${projets.filter(p=>p.type===t).length})</button>`).join('')}
+    </div>
+
+    <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px">
+      ${PROJ_ETAPES.map(etape=>{
+        const projEtape = projetsFiltres.filter(p=>p.etape===etape).sort((a,b)=>(a.date_livraison||'9999').localeCompare(b.date_livraison||'9999'));
+        return `
+        <div class="crm-col" ondragover="event.preventDefault();this.classList.add('crm-col-over')" ondragleave="this.classList.remove('crm-col-over')" ondrop="dropProjet(event,'${etape}')" style="min-width:230px;flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px">
+          <div style="font-size:12px;font-weight:700;color:${PROJ_ETAPE_COULEUR[etape]};display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${PROJ_ETAPE_COULEUR[etape]};display:inline-block"></span>
+            ${etape} (${projEtape.length})
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-height:40px">
+            ${projEtape.length===0?'<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px 0">—</div>':
+              projEtape.map(p=>{
+                const taches = p.taches||[];
+                const faites = taches.filter(t=>t.fait).length;
+                const pct = taches.length?Math.round(faites/taches.length*100):0;
+                const enRetardP = p.date_livraison && p.date_livraison<today && p.etape!=='Terminé';
+                return `
+              <div class="card crm-card" draggable="true" ondragstart="dragProjet(event,${p.id})" onclick="ouvrirModalProjet(${p.id})" style="cursor:grab;padding:10px;border-left:3px solid ${PROJ_ETAPE_COULEUR[etape]}">
+                <div style="font-size:12px;font-weight:700">${CRM_TYPE_EMOJI[p.type]||'📌'} ${(p.titre||'').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px">${(p.client||'—').replace(/</g,'&lt;')}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+                  <span style="font-size:11px;color:${enRetardP?'var(--red)':'var(--text3)'};font-weight:${enRetardP?'700':'400'}">${p.date_livraison?fmtD(p.date_livraison):'—'}${enRetardP?' ⚠️':''}</span>
+                  <span style="font-size:12px;font-weight:600">${F(p.budget||0)}</span>
+                </div>
+                ${taches.length?`<div class="proj-bar"><div class="proj-bar-fill" style="width:${pct}%"></div></div><div style="font-size:10px;color:var(--text3);margin-top:3px">${faites}/${taches.length} tâches</div>`:''}
+              </div>`;}).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function dragProjet(event,id){
+  _projDragId = id;
+  try{event.dataTransfer.effectAllowed='move';}catch(e){}
+}
+
+function dropProjet(event,etape){
+  event.preventDefault();
+  if(event.currentTarget&&event.currentTarget.classList) event.currentTarget.classList.remove('crm-col-over');
+  if(_projDragId==null) return;
+  const p = S.projets.find(p=>p.id==_projDragId);
+  if(!p){ _projDragId=null; return; }
+  const ancienneEtape = p.etape;
+  _projDragId = null;
+  if(ancienneEtape===etape) return;
+  p.etape = etape;
+  p.ts = Date.now();
+  saveData();
+  toast(`🎬 "${p.titre}" déplacé vers ${etape}`);
+  rProjets();
+}
+
+function renderTachesProjet(){
+  const el=document.getElementById('proj-taches');if(!el)return;
+  const total=window._projTaches.length;
+  const faites=window._projTaches.filter(t=>t.fait).length;
+  el.innerHTML = `
+    ${total?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${faites}/${total} tâche${total>1?'s':''} terminée${faites>1?'s':''}</div>`:''}
+    ${window._projTaches.map((t,i)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+        <input type="checkbox" ${t.fait?'checked':''} onchange="window._projTaches[${i}].fait=this.checked;renderTachesProjet()">
+        <span style="flex:1;font-size:12px;${t.fait?'text-decoration:line-through;color:var(--text3)':''}">${(t.titre||'').replace(/</g,'&lt;')}</span>
+        <button class="del-btn" onclick="window._projTaches.splice(${i},1);renderTachesProjet()">✕</button>
+      </div>`).join('')}`;
+}
+
+function ajouterTacheProjet(){
+  const input=document.getElementById('proj-nouvelle-tache');
+  const val=input.value.trim();
+  if(!val)return;
+  window._projTaches.push({id:Date.now()+Math.random(),titre:val,fait:false});
+  input.value='';
+  renderTachesProjet();
+  input.focus();
+}
+
+function ouvrirModalProjet(id,prefill){
+  const p = id ? S.projets.find(p=>p.id==id) : null;
+  window._projTaches = p ? JSON.parse(JSON.stringify(p.taches||[])) : [];
+  const pf = prefill || {};
+  modal(`<div class="mft">${p?'🎬 Modifier le projet':'🎬 Nouveau projet'}</div>
+    <div class="fg"><label class="fl">Titre</label><input class="fi" id="proj-titre" placeholder="Ex : Shooting mariage Kodjo & Ama" value="${p?(p.titre||'').replace(/"/g,'&quot;'):(pf.titre||'').replace(/"/g,'&quot;')}"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Client</label><input class="fi" id="proj-client" placeholder="Nom du client" value="${p?(p.client||'').replace(/"/g,'&quot;'):(pf.client||'').replace(/"/g,'&quot;')}"></div>
+      <div class="fg"><label class="fl">Type</label>
+        <select class="fs" id="proj-type">${CRM_TYPES.map(t=>`<option value="${t}" ${(p?p.type===t:pf.type===t)?'selected':''}>${CRM_TYPE_EMOJI[t]} ${t}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Étape</label>
+        <select class="fs" id="proj-etape">${PROJ_ETAPES.map(e=>`<option value="${e}" ${p?(p.etape===e?'selected':''):(e==='Pré-production'?'selected':'')}>${e}</option>`).join('')}</select>
+      </div>
+      <div class="fg"><label class="fl">Budget (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="proj-budget" value="${p?(p.budget||0):(pf.budget||0)}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date de début</label><input class="fi" type="date" id="proj-debut" value="${p?(p.date_debut||''):D()}"></div>
+      <div class="fg"><label class="fl">Date de livraison</label><input class="fi" type="date" id="proj-livraison" value="${p?(p.date_livraison||''):''}"></div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="proj-notes" rows="2" placeholder="Détails, matériel prévu, lieu...">${p?(p.notes||''):(pf.notes||'')}</textarea></div>
+    <div class="fg">
+      <label class="fl">Checklist de production</label>
+      <div id="proj-taches"></div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input class="fi" id="proj-nouvelle-tache" placeholder="Ajouter une tâche (ex : Confirmer le lieu)" onkeydown="if(event.key==='Enter'){event.preventDefault();ajouterTacheProjet()}">
+        <button class="btn btn-sm" onclick="ajouterTacheProjet()">+</button>
+      </div>
+    </div>
+    <div class="mff">
+      ${p?`<button class="btn" style="color:var(--red)" onclick="supprimerProjet(${p.id})">🗑️ Supprimer</button>`:''}
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveProjet(${p?p.id:'null'})">${p?'Enregistrer':'Créer'}</button>
+    </div>`);
+  renderTachesProjet();
+}
+
+function saveProjet(id){
+  const titre = document.getElementById('proj-titre').value.trim();
+  if(!titre) return toast('❌ Titre requis');
+  const client = document.getElementById('proj-client').value.trim();
+  const type = document.getElementById('proj-type').value;
+  const etape = document.getElementById('proj-etape').value;
+  const budget = +document.getElementById('proj-budget').value || 0;
+  const date_debut = document.getElementById('proj-debut').value;
+  const date_livraison = document.getElementById('proj-livraison').value;
+  const notes = document.getElementById('proj-notes').value.trim();
+  const taches = window._projTaches||[];
+  if(!S.projets) S.projets=[];
+  if(id){
+    const p = S.projets.find(p=>p.id==id);
+    if(!p) return;
+    Object.assign(p,{titre,client,type,etape,budget,date_debut,date_livraison,notes,taches,ts:Date.now()});
+  } else {
+    S.projets.push({id:genId(),titre,client,type,etape,budget,date_debut,date_livraison,notes,taches,ts:Date.now()});
+  }
+  window._projTaches=[];
+  saveData();closeModal();toast(id?'✅ Projet mis à jour':'✅ Projet créé');rProjets();
+}
+
+function supprimerProjet(id){
+  if(!confirm('Supprimer ce projet ?')) return;
+  const p = S.projets.find(p=>p.id==id);
+  if(!p) return;
+  p._deleted = true;
+  p.ts = Date.now();
+  saveData();closeModal();toast('🗑️ Projet supprimé');rProjets();
+}
+
+// Créer un projet directement depuis une opportunité CRM gagnée
+function creerProjetDepuisOpp(id){
+  const o = S.crm_opportunites.find(o=>o.id==id);
+  if(!o) return;
+  closeModal();
+  ouvrirModalProjet(null, {
+    titre: o.titre,
+    client: o.client,
+    type: o.type,
+    budget: o.valeur,
+    notes: `Issu de l'opportunité CRM : ${o.titre}`
+  });
 }
 </script>
 
