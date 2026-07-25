@@ -7909,8 +7909,21 @@ async function traiterPhoto(aid, input){
     rStock();
   }catch(e){
     console.warn('traiterPhoto error:',e);
-    toast('❌ Erreur upload — essaie à nouveau');
-    closeModal();
+    // Repli : on sauvegarde la photo en local (base64) même si Cloudinary échoue,
+    // pour ne jamais perdre la photo choisie par l'utilisateur.
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      a.photo=ev.target.result;
+      saveData();
+      toast('⚠️ Sync Cloudinary indisponible — photo enregistrée en local');
+      closeModal();
+      rStock();
+    };
+    reader.onerror=()=>{
+      toast('❌ Erreur upload — essaie à nouveau');
+      closeModal();
+    };
+    reader.readAsDataURL(file);
   }
 }
 
