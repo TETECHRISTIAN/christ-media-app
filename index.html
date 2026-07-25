@@ -21136,6 +21136,7 @@ function initAméliorations(){
   checkAgendaRetard();
   initAutocomplete();
   initRappelMasterSave();
+  initAutoMasterSave();
   initDeconnexionAuto();
   initDriveQuotidien();
 }
@@ -23020,6 +23021,13 @@ async function priseDeService(){
     saveLocal(S);
   }
 
+  // Étape 1bis : absorber les ventes/achats en attente des vendeurs (zone pending)
+  // FIX : avant ce correctif, "Prise de service" ne récupérait pas les ventes des
+  // vendeurs restées dans la zone d'attente — seul Master Save le faisait. Résultat :
+  // le stock semblait ne pas bouger tant qu'on ne cliquait pas sur Master Save.
+  if(btn) btn.innerHTML = '📥 Récupération vendeurs...';
+  await absorberPendingFirebase();
+
   // Étape 2 : générer nouvelle version et pousser vers Firebase
   genVersion();
   S.version = Date.now();
@@ -23049,21 +23057,21 @@ async function priseDeService(){
   if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
 }
 
-async function masterSave(){
-  if(S.session?.role !== 'admin'){ toast('⛔ Réservé à l\'admin'); return; }
-  if(!fbReady || !db){ toast('⚠️ Firebase non disponible'); return; }
-  if(!navigator.onLine){ toast('⚠️ Connexion internet requise pour Master Save'); return; }
+async function masterSave(auto){
+  if(S.session?.role !== 'admin'){ if(!auto) toast('⛔ Réservé à l\'admin'); return; }
+  if(!fbReady || !db){ if(!auto) toast('⚠️ Firebase non disponible'); return; }
+  if(!navigator.onLine){ if(!auto) toast('⚠️ Connexion internet requise pour Master Save'); return; }
 
   const btn = document.getElementById('master-save-btn');
   const origHtml = btn ? btn.innerHTML : '';
-  if(btn){ btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/></svg> Envoi...'; btn.style.opacity='0.7'; }
+  if(btn && !auto){ btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/></svg> Envoi...'; btn.style.opacity='0.7'; }
 
   // Étape 0 : absorber les données en attente des vendeurs avant de publier
   if(navigator.onLine){
     const btnLabel = btn ? btn.innerHTML : '';
-    if(btn) btn.innerHTML = '📥 Récupération vendeurs...';
+    if(btn && !auto) btn.innerHTML = '📥 Récupération vendeurs...';
     await absorberPendingFirebase();
-    if(btn) btn.innerHTML = btnLabel;
+    if(btn && !auto) btn.innerHTML = btnLabel;
   }
 
   // Générer une version maître (timestamp)
@@ -23107,7 +23115,7 @@ async function masterSave(){
     await db.ref('christmedia/master_save_history').set(histArr.slice(0,30));
   } catch(e) { console.warn('Historique MS:', e); }
 
-  toast('⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
+  toast(auto ? '⚡ Synchro auto — ventes des vendeurs récupérées' : '⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
   // Réinitialiser le rappel du soir (Master Save vient d'être fait)
   _dernierMasterSaveJour = new Date().toISOString().slice(0,10);
   // Notifier le SW local pour renouveler le cache
@@ -23123,6 +23131,36 @@ async function masterSave(){
   // renouvelé) — le badge se met à jour tout de suite après un Master Save réussi.
   verifierPendingDisponible();
   if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── AUTO MASTER SAVE PÉRIODIQUE ───
+// Sur l'appareil admin, vérifie régulièrement s'il y a des ventes de
+// vendeurs en attente (zone pending) et lance un Master Save silencieux
+// si besoin, pour que le stock affiché reste à jour sans action manuelle.
+// ══════════════════════════════════════════════════════════════════
+let _autoMasterSaveTimer = null;
+const AUTO_MASTER_SAVE_INTERVAL_MIN = 5; // toutes les 5 minutes
+
+function initAutoMasterSave(){
+  if(S.session?.role !== 'admin') return; // seulement pour l'admin
+  if(_autoMasterSaveTimer) clearInterval(_autoMasterSaveTimer);
+  _autoMasterSaveTimer = setInterval(_verifierAutoMasterSave, AUTO_MASTER_SAVE_INTERVAL_MIN * 60 * 1000);
+}
+
+async function _verifierAutoMasterSave(){
+  try{
+    if(S.session?.role !== 'admin') return;
+    if(!fbReady || !db || !navigator.onLine) return;
+    if(_justDidMasterSave) return; // un Master Save (manuel ou auto) vient déjà d'avoir lieu
+    const snap = await db.ref('christmedia/pending').once('value');
+    const pending = snap.val();
+    if(!pending || Object.keys(pending).length === 0) return; // rien en attente, inutile de synchroniser
+    console.log('[AUTO MASTER SAVE] Ventes vendeurs en attente détectées — synchro automatique');
+    await masterSave(true);
+  }catch(e){
+    console.warn('[AUTO MASTER SAVE] Erreur:', e);
+  }
 }
 
 // ─── LISTENER MASTER SAVE (tous les appareils) ───
