@@ -750,6 +750,12 @@ body.dark th{background:var(--surface3)}
 .compte-card.drag-over{border:2px dashed var(--navy);background:var(--navy-bg);transform:scale(1.02)}
 .compte-card.dragging{opacity:.4;transform:scale(.97)}
 .compte-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1);transform:translateY(-1px)}
+
+/* ─── CRM PIPELINE (KANBAN) ─── */
+.crm-col{transition:background .15s}
+.crm-col.crm-col-over{background:var(--navy-bg) !important}
+.crm-card{transition:transform .15s,box-shadow .15s}
+.crm-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
 .compte-card.actif{border-color:var(--navy);background:var(--navy-bg)}
 .compte-solde{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:8px 0 4px}
 .transfert-arrow{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text3)}
@@ -1168,6 +1174,10 @@ body.dark th{background:var(--surface3)}
       Opérations suivantes
     </div>
     <div class="nav-sec admin-only">Direction</div>
+    <div class="ni admin-only superviseur-ok" data-page="crm" onclick="nav(this,'crm')">
+      <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.2" stroke="currentColor" stroke-width="1.4"/><circle cx="11" cy="5" r="2.2" stroke="currentColor" stroke-width="1.4"/><path d="M1 14c0-2.3 1.8-3.8 4-3.8s4 1.5 4 3.8M8 14c0-1.8 1.5-3.2 3.5-3.2s3.5 1.4 3.5 3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Pipeline CRM
+    </div>
     <div class="ni admin-only superviseur-ok" data-page="coach" onclick="nav(this,'coach')">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 9v3M6.5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Coach Financier
@@ -1454,6 +1464,10 @@ body.dark th{background:var(--surface3)}
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 1h10v14H3z" stroke="currentColor" stroke-width="1.5"/></svg>
       Devis clients
     </div>
+    <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=crm]'),'crm')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><circle cx="11" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 14c0-2.5 1.8-4 4-4s4 1.5 4 4M8 14c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Pipeline CRM
+    </div>
     <div class="mn-dd-item admin-only superviseur-ok" onclick="nav(document.querySelector('[data-page=planning]'),'planning')">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
       Planification
@@ -1679,6 +1693,7 @@ const defaultData={
   boutique_active:1,
   depots:[{id:1,nom:'Boutique principale',emoji:'🏪',actif:true},{id:2,nom:'Entrepôt',emoji:'📦',actif:true}],
   transferts_stock:[],
+  crm_opportunites:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -1690,7 +1705,7 @@ const defaultData={
     theme_color:'default',
     custom_primary:'#0f1f3d',
     notif_stock:true,
-    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres'],
+    menu_visible:['dashboard','transactions','vente','services','achats','stock','clients','fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique','comptes','devis','planning','calculatrice','parametres','crm'],
     compte_auto:true
   },
   utilisateurs:[
@@ -1843,7 +1858,8 @@ const FB_COLLECTIONS=[
   'audit','journal_entries',
   'transferts_stock','fourni_evals',
   'boutiques',
-  'clotures_caisse'
+  'clotures_caisse',
+  'crm_opportunites'
 ];
 
 async function saveToFirebase(data){
@@ -2526,7 +2542,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach})[currentPage]();
+    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM})[currentPage]();
   }catch(e){}
 }
 
@@ -2969,7 +2985,7 @@ function switcherBoutique(bid){
       caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
       depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
       rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[currentPage]();
+      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM})[currentPage]();
   }catch(e){}
   const b = getBoutiqueActive();
   toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
@@ -3055,7 +3071,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3088,7 +3104,8 @@ const actionsMap={
   kpis:()=>'<select id="kpi-period" onchange="rKPIs()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="trim">Ce trimestre</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',
   fourni_avance:()=>'<button class="btn btn-primary" onclick="ouvrirModalEvalFourn()">⭐ Évaluer</button>',
   bilan_jour:()=>`<input type="date" id="bj-date" value="${window._bilanJourDate||D()}" onchange="window._bilanJourDate=this.value;rBilanJour()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)">`,
-  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>'  };
+  cloture_caisse:()=>'<button class="btn" onclick="imprimerCloture()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="ouvrirModalCloture()">✅ Clôturer</button>',comparaison:()=>'',rapport_mensuel:()=>'<button class="btn" onclick="imprimerRapportMensuel()">🖨️ Imprimer</button>',obj_article:()=>'',rev_article:()=>'<select id="rev-art-period" onchange="window._revArtPeriode=this.value;rRevArticle()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="mois">Ce mois</option><option value="semaine">Cette semaine</option><option value="annee">Cette année</option><option value="tout">Tout</option></select>',hist_clotures:()=>'<button class="btn" onclick="exporterHistClotures()">📊 Exporter</button>',relances:()=>'<button class="btn btn-success" onclick="relancerTousDebiteurs()">📱 Relancer tous débiteurs</button>',calc_commande:()=>'<button class="btn btn-success" onclick="genererCommandeAuto()">✅ Générer commande auto</button>',
+  crm:()=>'<button class="btn" onclick="_crmFiltreType=\'Tous\';rCRM()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalOpportunite()">+ Nouvelle opportunité</button>'  };
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -3106,7 +3123,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -3131,6 +3148,7 @@ const QB_PAGES = [
   {page:'stock',        emoji:'🗄️',  label:'Stock',         labelCourt:'Stock'},
   {page:'clients',      emoji:'👥', label:'Clients',       labelCourt:'Clients'},
   {page:'fournisseurs', emoji:'🚚', label:'Fournisseurs',  labelCourt:'Fourniss.'},
+  {page:'crm',          emoji:'🤝', label:'Pipeline CRM',  labelCourt:'CRM'},
   {page:'depenses',     emoji:'💸', label:'Dépenses',      labelCourt:'Dépenses'},
   {page:'tresorerie',   emoji:'💰', label:'Trésorerie',    labelCourt:'Tréso.'},
   {page:'comptes',      emoji:'🏦', label:'Comptes',       labelCourt:'Comptes'},
@@ -3385,6 +3403,7 @@ function getMNSvg(page){
     coach:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="2" width="14" height="12" rx="2"/><path d="M7 18l3-4 3 4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     parametres:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4" stroke-linecap="round"/></svg>',
     __caisse_rapide__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M5 8l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    crm:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><path d="M9 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><circle cx="6" cy="5" r="2"/><circle cx="14" cy="5" r="2"/><path d="M2 17c0-2.5 2-4 4.5-4S11 14.5 11 17" stroke-linecap="round"/><path d="M11 17c0-2 1.5-3.5 3.5-3.5S18 15 18 17" stroke-linecap="round"/></svg>',
   };
   return svgs[page]||'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M10 7v3l2 2" stroke-linecap="round"/></svg>';
 }
@@ -10591,7 +10610,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -10609,7 +10628,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm'],
     label: '👁️ Superviseur',
     couleur: '#7ec8e3'
   },
@@ -23244,6 +23263,184 @@ function afficherDiag(){
   ];
   p.innerHTML = lines.map(l=>'<div>'+l.replace(/</g,'&lt;')+'</div>').join('');
   p.style.display = p.style.display==='none' ? 'block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ─── MODULE CRM — PIPELINE D'OPPORTUNITÉS ───
+// Suivi des prospects : shootings/événementiel, partenariats (Orémus),
+// candidatures réseau créateurs TikTok, prospects boutique.
+// ══════════════════════════════════════════════════════════════════
+const CRM_ETAPES = ['Nouveau','Qualifié','Devis envoyé','Négociation','Gagné','Perdu'];
+const CRM_ETAPE_COULEUR = {
+  'Nouveau':'#7ec8e3','Qualifié':'#8ea2d6','Devis envoyé':'#c9a13b',
+  'Négociation':'#e08a3c','Gagné':'#166534','Perdu':'#991b1b'
+};
+const CRM_TYPES = ['Shooting / Événementiel','Partenariat Orémus','Créateur TikTok','Boutique','Autre'];
+const CRM_TYPE_EMOJI = {
+  'Shooting / Événementiel':'🎥','Partenariat Orémus':'🤝','Créateur TikTok':'📱','Boutique':'🏪','Autre':'📌'
+};
+
+let _crmFiltreType = 'Tous';
+let _crmDragId = null;
+
+function _crmOpps(){
+  if(!S.crm_opportunites) S.crm_opportunites=[];
+  return S.crm_opportunites.filter(o=>!o._deleted);
+}
+
+function rCRM(){
+  const opps = _crmOpps();
+  const oppsFiltrees = _crmFiltreType==='Tous' ? opps : opps.filter(o=>o.type===_crmFiltreType);
+  const actives = opps.filter(o=>o.etape!=='Gagné' && o.etape!=='Perdu');
+  const gagnees = opps.filter(o=>o.etape==='Gagné');
+  const perdues = opps.filter(o=>o.etape==='Perdu');
+  const valeurPipeline = actives.reduce((s,o)=>s+(+o.valeur||0),0);
+  const valeurPonderee = actives.reduce((s,o)=>s+((+o.valeur||0)*(+o.probabilite||0)/100),0);
+  const totalClotures = gagnees.length+perdues.length;
+  const tauxConversion = totalClotures>0 ? Math.round(gagnees.length/totalClotures*100) : 0;
+
+  document.getElementById('content').innerHTML = `
+    <div class="g4" style="margin-bottom:16px">
+      <div class="card"><div class="ct">Opportunités actives</div><div class="mv">${N(actives.length)}</div></div>
+      <div class="card"><div class="ct">Valeur pipeline</div><div class="mv">${F(valeurPipeline)}</div></div>
+      <div class="card"><div class="ct">Valeur pondérée</div><div class="mv" style="color:var(--navy)">${F(valeurPonderee)}</div></div>
+      <div class="card"><div class="ct">Taux de conversion</div><div class="mv" style="color:${tauxConversion>=50?'var(--green)':'var(--red)'}">${tauxConversion}%</div></div>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <button onclick="_crmFiltreType='Tous';rCRM()" class="btn btn-sm" style="${_crmFiltreType==='Tous'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">Tous (${opps.length})</button>
+      ${CRM_TYPES.map(t=>`<button onclick="_crmFiltreType='${t}';rCRM()" class="btn btn-sm" style="${_crmFiltreType===t?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${CRM_TYPE_EMOJI[t]} ${t} (${opps.filter(o=>o.type===t).length})</button>`).join('')}
+    </div>
+
+    <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px">
+      ${CRM_ETAPES.map(etape=>{
+        const oppsEtape = oppsFiltrees.filter(o=>o.etape===etape).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        const valeurEtape = oppsEtape.reduce((s,o)=>s+(+o.valeur||0),0);
+        return `
+        <div class="crm-col" ondragover="event.preventDefault();this.classList.add('crm-col-over')" ondragleave="this.classList.remove('crm-col-over')" ondrop="dropOpp(event,'${etape}')" style="min-width:230px;flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <div style="font-size:12px;font-weight:700;color:${CRM_ETAPE_COULEUR[etape]};display:flex;align-items:center;gap:6px">
+              <span style="width:8px;height:8px;border-radius:50%;background:${CRM_ETAPE_COULEUR[etape]};display:inline-block"></span>
+              ${etape} (${oppsEtape.length})
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${F(valeurEtape)}</div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-height:40px">
+            ${oppsEtape.length===0?'<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px 0">—</div>':
+              oppsEtape.map(o=>`
+              <div class="card crm-card" draggable="true" ondragstart="dragOpp(event,${o.id})" onclick="ouvrirModalOpportunite(${o.id})" style="cursor:grab;padding:10px;border-left:3px solid ${CRM_ETAPE_COULEUR[etape]}">
+                <div style="font-size:12px;font-weight:700">${CRM_TYPE_EMOJI[o.type]||'📌'} ${(o.titre||'').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px">${(o.client||'—').replace(/</g,'&lt;')}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+                  <span style="font-size:12px;font-weight:600">${F(o.valeur||0)}</span>
+                  <span style="font-size:10px;color:var(--text3)">${o.probabilite||0}%</span>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function dragOpp(event,id){
+  _crmDragId = id;
+  try{event.dataTransfer.effectAllowed='move';}catch(e){}
+}
+
+function dropOpp(event,etape){
+  event.preventDefault();
+  if(event.currentTarget&&event.currentTarget.classList) event.currentTarget.classList.remove('crm-col-over');
+  if(_crmDragId==null) return;
+  const o = S.crm_opportunites.find(o=>o.id==_crmDragId);
+  if(!o){ _crmDragId=null; return; }
+  const ancienneEtape = o.etape;
+  _crmDragId = null;
+  if(ancienneEtape===etape) return;
+  o.etape = etape;
+  o.ts = Date.now();
+  if(!o.historique) o.historique=[];
+  o.historique.push({date:D(),action:`${ancienneEtape} → ${etape}`});
+  saveData();
+  toast(`🤝 "${o.titre}" déplacé vers ${etape}`);
+  rCRM();
+}
+
+function ouvrirModalOpportunite(id){
+  const o = id ? S.crm_opportunites.find(o=>o.id==id) : null;
+  modal(`<div class="mft">${o?'🤝 Modifier l\u2019opportunité':'🤝 Nouvelle opportunité'}</div>
+    <div class="fg"><label class="fl">Titre</label><input class="fi" id="crm-titre" placeholder="Ex : Shooting mariage Kodjo & Ama" value="${o?(o.titre||'').replace(/"/g,'&quot;'):''}"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Client / Contact</label><input class="fi" id="crm-client" placeholder="Nom du client" value="${o?(o.client||'').replace(/"/g,'&quot;'):''}"></div>
+      <div class="fg"><label class="fl">Téléphone</label><input class="fi" id="crm-tel" placeholder="90 00 00 00" value="${o?(o.tel||''):''}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Type</label>
+        <select class="fs" id="crm-type">${CRM_TYPES.map(t=>`<option value="${t}" ${o&&o.type===t?'selected':''}>${CRM_TYPE_EMOJI[t]} ${t}</option>`).join('')}</select>
+      </div>
+      <div class="fg"><label class="fl">Étape</label>
+        <select class="fs" id="crm-etape">${CRM_ETAPES.map(e=>`<option value="${e}" ${o?(o.etape===e?'selected':''):(e==='Nouveau'?'selected':'')}>${e}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Valeur estimée (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="crm-valeur" value="${o?(o.valeur||0):0}"></div>
+      <div class="fg"><label class="fl">Probabilité (%)</label><input class="fi" type="number" min="0" max="100" id="crm-proba" value="${o?(o.probabilite!=null?o.probabilite:50):50}"></div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="crm-notes" rows="3" placeholder="Détails, échanges, prochaine relance...">${o?(o.notes||''):''}</textarea></div>
+    ${o&&o.historique&&o.historique.length?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.7">${o.historique.slice(-4).map(h=>`• ${fmtD(h.date)} — ${h.action}`).join('<br>')}</div>`:''}
+    <div class="mff">
+      ${o?`<button class="btn" style="color:var(--red)" onclick="supprimerOpportunite(${o.id})">🗑️ Supprimer</button>`:''}
+      ${o&&o.etape==='Gagné'?`<button class="btn btn-success" onclick="convertirOppEnDevis(${o.id})">📄 Convertir en devis</button>`:''}
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveOpportunite(${o?o.id:'null'})">${o?'Enregistrer':'Créer'}</button>
+    </div>`);
+}
+
+function saveOpportunite(id){
+  const titre = document.getElementById('crm-titre').value.trim();
+  if(!titre) return toast('❌ Titre requis');
+  const client = document.getElementById('crm-client').value.trim();
+  const tel = document.getElementById('crm-tel').value.trim();
+  const type = document.getElementById('crm-type').value;
+  const etape = document.getElementById('crm-etape').value;
+  const valeur = +document.getElementById('crm-valeur').value || 0;
+  const probabilite = Math.min(100,Math.max(0,+document.getElementById('crm-proba').value||0));
+  const notes = document.getElementById('crm-notes').value.trim();
+  if(!S.crm_opportunites) S.crm_opportunites=[];
+  if(id){
+    const o = S.crm_opportunites.find(o=>o.id==id);
+    if(!o) return;
+    if(o.etape!==etape){
+      if(!o.historique) o.historique=[];
+      o.historique.push({date:D(),action:`${o.etape} → ${etape}`});
+    }
+    Object.assign(o,{titre,client,tel,type,etape,valeur,probabilite,notes,ts:Date.now()});
+  } else {
+    S.crm_opportunites.push({id:genId(),titre,client,tel,type,etape,valeur,probabilite,notes,date:D(),ts:Date.now(),historique:[{date:D(),action:'Créée'}]});
+  }
+  saveData();closeModal();toast(id?'✅ Opportunité mise à jour':'✅ Opportunité créée');rCRM();
+}
+
+function supprimerOpportunite(id){
+  if(!confirm('Supprimer cette opportunité ?')) return;
+  const o = S.crm_opportunites.find(o=>o.id==id);
+  if(!o) return;
+  o._deleted = true;
+  o.ts = Date.now();
+  saveData();closeModal();toast('🗑️ Opportunité supprimée');rCRM();
+}
+
+function convertirOppEnDevis(id){
+  const o = S.crm_opportunites.find(o=>o.id==id);
+  if(!o) return;
+  closeModal();
+  addDevis();
+  setTimeout(()=>{
+    const clientEl=document.getElementById('dv-client');
+    const notesEl=document.getElementById('dv-notes');
+    if(clientEl) clientEl.value = o.client||o.titre;
+    if(notesEl) notesEl.value = `Issu de l'opportunité CRM : ${o.titre}`;
+    toast('📄 Ajoute les articles/prestations puis crée le devis');
+  },100);
 }
 </script>
 
