@@ -1731,6 +1731,7 @@ const defaultData={
   transferts_stock:[],
   crm_opportunites:[],
   projets:[],
+  couts_atterrissage:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -1896,7 +1897,7 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites','projets'
+  'crm_opportunites','projets','couts_atterrissage'
 ];
 
 async function saveToFirebase(data){
@@ -3131,7 +3132,7 @@ const actionsMap={
   caisse:()=>'<button class="btn" onclick="imprimerCaisse()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="partagerCaisseWA()">📱 WhatsApp</button>',
   stats:()=>'',
   promos:()=>'<button class="btn btn-primary" onclick="addPromo()">+ Nouvelle promo</button>',
-  commandes:()=>'<button class="btn" onclick="genCommandesAuto()">⚡ Générer auto</button> <button class="btn btn-primary" onclick="addCommande()">+ Commande</button>',
+  commandes:()=>'<button class="btn" onclick="genCommandesAuto()">⚡ Générer auto</button> <button class="btn" onclick="voirHistoriqueCoutsImport()">📦 Coûts import</button> <button class="btn btn-primary" onclick="addCommande()">+ Commande</button>',
   depots:()=>'<button class="btn" onclick="addDepot()">+ Dépôt</button> <button class="btn btn-primary" onclick="nouveauTransfert()">⇄ Transfert</button>',
   fidelite:()=>'<button class="btn" onclick="nav(document.querySelector(\"[data-page=parametres]\"),\"parametres\")">⚙️ Configurer</button>',
   audit:()=>'<button class="btn btn-danger btn-sm" onclick="effacerAudit()">🗑️ Effacer</button>',
@@ -19330,6 +19331,7 @@ function envoyerCommandeWA(id){
 // ── Marquer commande reçue → mettre à jour le stock ──
 function marquerReçue(id){
   const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
+  const totalLignes = (c.lignes||[]).reduce((s,l)=>s+(l.qte||1)*(l.pu||0),0);
   modal('<div class="mft">✅ Réception commande CMD-' + String(c.id).slice(-4).padStart(4,'0') + '</div>' +
     '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Confirmer la réception va mettre à jour le stock automatiquement.</div>' +
     '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px">' +
@@ -19343,6 +19345,19 @@ function marquerReçue(id){
     '</div>' +
     '<div class="fg"><label class="fl">Date de réception</label>' +
       '<input class="fi" type="date" id="cmd-reception" value="' + D() + '"></div>' +
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer;margin:10px 0;padding:8px 10px;background:var(--navy-bg);border-radius:var(--rs)">' +
+      '<input type="checkbox" id="cmd-import-toggle" onchange="document.getElementById(\'cmd-import-frais\').style.display=this.checked?\'block\':\'none\';previewFraisImport(' + id + ')">' +
+      '🌍 Commande importée — répartir des frais (fret, douane, transitaire...) sur le prix de revient' +
+    '</label>' +
+    '<div id="cmd-import-frais" style="display:none;background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px">' +
+      '<div class="fr">' +
+        '<div class="fg"><label class="fl">Fret / Transport (' + ((S.parametres&&S.parametres.devise)||'FCFA') + ')</label><input class="fi" type="number" id="cmd-frais-fret" value="0" oninput="previewFraisImport(' + id + ')"></div>' +
+        '<div class="fg"><label class="fl">Douane / Taxes</label><input class="fi" type="number" id="cmd-frais-douane" value="0" oninput="previewFraisImport(' + id + ')"></div>' +
+      '</div>' +
+      '<div class="fg"><label class="fl">Autres frais (transitaire, manutention...)</label><input class="fi" type="number" id="cmd-frais-autres" value="0" oninput="previewFraisImport(' + id + ')"></div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Total de la commande (hors frais) : ' + F(totalLignes) + '. Les frais sont répartis au prorata de la valeur de chaque article, puis moyennés avec le stock déjà en rayon (coût moyen pondéré).</div>' +
+      '<div id="cmd-preview-couts"></div>' +
+    '</div>' +
     '<div class="mff">' +
       '<button class="btn" onclick="closeModal()">Annuler</button>' +
       '<button class="btn btn-success" onclick="confirmerReception(' + id + ')">✅ Confirmer réception</button>' +
@@ -19350,23 +19365,107 @@ function marquerReçue(id){
   );
 }
 
+function previewFraisImport(id){
+  const c=(S.commandes||[]).find(c=>c.id==id); if(!c) return;
+  const el=document.getElementById('cmd-preview-couts'); if(!el) return;
+  const fret=+document.getElementById('cmd-frais-fret')?.value||0;
+  const douane=+document.getElementById('cmd-frais-douane')?.value||0;
+  const autres=+document.getElementById('cmd-frais-autres')?.value||0;
+  const totalFrais=fret+douane+autres;
+  const totalLignes=(c.lignes||[]).reduce((s,l)=>s+(l.qte||1)*(l.pu||0),0);
+  if(totalFrais<=0||totalLignes<=0){ el.innerHTML=''; return; }
+  el.innerHTML = '<table style="width:100%;font-size:11px;border-collapse:collapse">' +
+    '<thead><tr><th style="text-align:left;padding:3px 0">Article</th><th style="text-align:right">PA actuel</th><th style="text-align:right">Nouv. PA pondéré</th></tr></thead><tbody>' +
+    (c.lignes||[]).map(l=>{
+      const a=S.stock.find(a=>a.id==l.aid); if(!a) return '';
+      const valeurLigne=(l.qte||1)*(l.pu||0);
+      const partFrais = totalLignes>0 ? (valeurLigne/totalLignes)*totalFrais : 0;
+      const coutUnitImporte = (l.pu||0) + (partFrais/(l.qte||1));
+      const ancienneQte = sa(a);
+      const ancienCoutTotal = ancienneQte*(a.pa||0);
+      const nouveauCoutTotal = ancienCoutTotal + coutUnitImporte*(l.qte||1);
+      const nouveauPa = (ancienneQte+(l.qte||1))>0 ? Math.round(nouveauCoutTotal/(ancienneQte+(l.qte||1))) : Math.round(coutUnitImporte);
+      const margeRisque = nouveauPa >= (a.pv||0);
+      return '<tr><td style="padding:2px 0">'+a.nom+'</td><td style="text-align:right">'+F(a.pa||0)+'</td>' +
+        '<td style="text-align:right;font-weight:700;color:'+(margeRisque?'var(--red)':'var(--navy)')+'">'+F(nouveauPa)+(margeRisque?' ⚠️':'')+'</td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ = le nouveau prix de revient dépasse ou égale le prix de vente actuel — pense à ajuster le PV.</div>';
+}
+
 function confirmerReception(id){
   const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
   const dateReception = document.getElementById('cmd-reception')?.value || D();
-  // Mettre à jour le stock
+  const importToggle = document.getElementById('cmd-import-toggle')?.checked;
+  const fret = importToggle ? (+document.getElementById('cmd-frais-fret')?.value||0) : 0;
+  const douane = importToggle ? (+document.getElementById('cmd-frais-douane')?.value||0) : 0;
+  const autres = importToggle ? (+document.getElementById('cmd-frais-autres')?.value||0) : 0;
+  const totalFrais = fret+douane+autres;
+  const totalLignes = (c.lignes||[]).reduce((s,l)=>s+(l.qte||1)*(l.pu||0),0);
+  const detailArticles = [];
+
+  // Mettre à jour le stock (+ coût de revient pondéré si frais d'import)
   (c.lignes||[]).forEach(l => {
     const a = S.stock.find(a=>a.id==l.aid);
     if(a){
+      if(totalFrais>0 && totalLignes>0){
+        const ancienPa = a.pa||0;
+        const ancienneQte = sa(a);
+        const valeurLigne = (l.qte||1)*(l.pu||0);
+        const partFrais = (valeurLigne/totalLignes)*totalFrais;
+        const coutUnitImporte = (l.pu||0) + (partFrais/(l.qte||1));
+        const ancienCoutTotal = ancienneQte*ancienPa;
+        const nouveauCoutTotal = ancienCoutTotal + coutUnitImporte*(l.qte||1);
+        const nouveauPa = (ancienneQte+(l.qte||1))>0 ? Math.round(nouveauCoutTotal/(ancienneQte+(l.qte||1))) : Math.round(coutUnitImporte);
+        a.pa = nouveauPa;
+        detailArticles.push({aid:a.id,nom:a.nom,ancienPa,nouveauPa,qte:l.qte||1,partFrais:Math.round(partFrais)});
+      }
       a.ea = (a.ea||0) + (l.qte||1);
       addHistorique('Entrée', a, l.qte||1, 'Réception commande CMD-' + String(c.id).slice(-4).padStart(4,'0'));
     }
   });
+
   c.statut = 'Reçue';
   c.dateReception = dateReception;
+
+  if(totalFrais>0){
+    if(!S.couts_atterrissage) S.couts_atterrissage=[];
+    S.couts_atterrissage.push({
+      id:genId(), cmdId:c.id, date:dateReception,
+      fret, douane, autres, total:totalFrais,
+      articles:detailArticles, ts:Date.now()
+    });
+  }
+
   saveData();
   closeModal();
-  toast('✅ Stock mis à jour — commande marquée reçue !');
+  toast(totalFrais>0 ? ('✅ Stock mis à jour — ' + F(totalFrais) + ' de frais répartis sur ' + detailArticles.length + ' article(s)') : '✅ Stock mis à jour — commande marquée reçue !');
   rCommandes();
+}
+
+// ── Historique des coûts d'importation (landed cost) ──
+function voirHistoriqueCoutsImport(){
+  const historique = (S.couts_atterrissage||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const totalGlobal = historique.reduce((s,h)=>s+(h.total||0),0);
+  modal('<div class="mft">📦 Historique des coûts d\u2019importation</div>' +
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">Total des frais d\u2019importation répartis sur le stock : <b>' + F(totalGlobal) + '</b> (' + historique.length + ' réception' + (historique.length>1?'s':'') + ')</div>' +
+    (historique.length===0 ? '<div style="text-align:center;color:var(--text3);padding:20px 0;font-size:12px">Aucun coût d\u2019importation enregistré pour l\u2019instant.<br>Coche "Commande importée" lors de la réception d\u2019une commande fournisseur pour en ajouter.</div>' :
+    '<div style="max-height:360px;overflow-y:auto">' +
+    historique.map(h=>{
+      const cmd = (S.commandes||[]).find(c=>c.id==h.cmdId);
+      const numCmd = cmd ? 'CMD-' + String(cmd.id).slice(-4).padStart(4,'0') : ('CMD #'+h.cmdId);
+      return '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">' +
+          '<span>' + numCmd + ' — ' + fmtD(h.date) + '</span><span>' + F(h.total) + '</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin:4px 0">Fret : ' + F(h.fret||0) + ' · Douane : ' + F(h.douane||0) + ' · Autres : ' + F(h.autres||0) + '</div>' +
+        '<div style="font-size:10px;color:var(--text2)">' +
+          (h.articles||[]).map(a=>a.nom+' : '+F(a.ancienPa)+' → '+F(a.nouveauPa)).join(' · ') +
+        '</div>' +
+      '</div>';
+    }).join('') +
+    '</div>') +
+    '<div class="mff"><button class="btn" onclick="closeModal()">Fermer</button></div>'
+  );
 }
 
 function delCommande(id){
