@@ -1780,6 +1780,7 @@ const defaultData={
   materiel:[],
   contrats:[],
   approbations:[],
+  controles_qualite:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -1945,7 +1946,7 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations'
+  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite'
 ];
 
 async function saveToFirebase(data){
@@ -3180,7 +3181,7 @@ const actionsMap={
   caisse:()=>'<button class="btn" onclick="imprimerCaisse()">🖨️ Imprimer</button> <button class="btn btn-success" onclick="partagerCaisseWA()">📱 WhatsApp</button>',
   stats:()=>'',
   promos:()=>'<button class="btn btn-primary" onclick="addPromo()">+ Nouvelle promo</button>',
-  commandes:()=>'<button class="btn" onclick="genCommandesAuto()">⚡ Générer auto</button> <button class="btn" onclick="voirHistoriqueCoutsImport()">📦 Coûts import</button> <button class="btn btn-primary" onclick="addCommande()">+ Commande</button>',
+  commandes:()=>'<button class="btn" onclick="genCommandesAuto()">⚡ Générer auto</button> <button class="btn" onclick="voirHistoriqueCoutsImport()">📦 Coûts import</button> <button class="btn" onclick="voirHistoriqueControlesQualite()">🔍 Contrôles qualité</button> <button class="btn btn-primary" onclick="addCommande()">+ Commande</button>',
   depots:()=>'<button class="btn" onclick="addDepot()">+ Dépôt</button> <button class="btn btn-primary" onclick="nouveauTransfert()">⇄ Transfert</button>',
   fidelite:()=>'<button class="btn" onclick="nav(document.querySelector(\"[data-page=parametres]\"),\"parametres\")">⚙️ Configurer</button>',
   audit:()=>'<button class="btn btn-danger btn-sm" onclick="effacerAudit()">🗑️ Effacer</button>',
@@ -19392,7 +19393,7 @@ function marquerReçue(id){
   const totalLignes = (c.lignes||[]).reduce((s,l)=>s+(l.qte||1)*(l.pu||0),0);
   modal('<div class="mft">✅ Réception commande CMD-' + String(c.id).slice(-4).padStart(4,'0') + '</div>' +
     '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Confirmer la réception va mettre à jour le stock automatiquement.</div>' +
-    '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px">' +
+    '<div id="cmd-recap-simple" style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px">' +
       (c.lignes||[]).map(l => {
         const a = S.stock.find(a=>a.id==l.aid);
         return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">' +
@@ -19403,6 +19404,27 @@ function marquerReçue(id){
     '</div>' +
     '<div class="fg"><label class="fl">Date de réception</label>' +
       '<input class="fi" type="date" id="cmd-reception" value="' + D() + '"></div>' +
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer;margin:10px 0;padding:8px 10px;background:var(--surface2);border-radius:var(--rs)">' +
+      '<input type="checkbox" id="cmd-qualite-toggle" onchange="toggleControleQualite(' + id + ')">' +
+      '🔍 Contrôle qualité — vérifier chaque article avant mise en stock' +
+    '</label>' +
+    '<div id="cmd-qualite-lignes" style="display:none;background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px">' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Indique la quantité conforme reçue pour chaque article. Les unités non conformes ne seront pas ajoutées au stock.</div>' +
+      (c.lignes||[]).map((l,i) => {
+        const a = S.stock.find(a=>a.id==l.aid);
+        return '<div style="border-bottom:1px solid var(--border);padding:6px 0">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span style="flex:1;font-size:12px">' + (l.nom||a?.nom||'—') + '</span>' +
+            '<span style="font-size:10px;color:var(--text3)">commandé : ' + (l.qte||1) + '</span>' +
+            '<input type="number" min="0" max="' + (l.qte||1) + '" value="' + (l.qte||1) + '" id="cmd-qc-' + i + '" oninput="majQualiteLigne(' + id + ')" style="width:56px;font-size:12px;padding:3px 4px;border:1px solid var(--border2);border-radius:6px;text-align:center" title="Quantité conforme">' +
+          '</div>' +
+          '<div id="cmd-qc-motif-wrap-' + i + '" style="display:none;margin-top:4px">' +
+            '<input class="fi" id="cmd-qc-motif-' + i + '" style="font-size:11px" placeholder="Motif du rejet (endommagé, mauvaise référence, quantité manquante...)">' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+      '<div id="cmd-qc-recap" style="font-size:11px;font-weight:700;color:var(--green);margin-top:8px">✅ Tout est conforme</div>' +
+    '</div>' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer;margin:10px 0;padding:8px 10px;background:var(--navy-bg);border-radius:var(--rs)">' +
       '<input type="checkbox" id="cmd-import-toggle" onchange="document.getElementById(\'cmd-import-frais\').style.display=this.checked?\'block\':\'none\';previewFraisImport(' + id + ')">' +
       '🌍 Commande importée — répartir des frais (fret, douane, transitaire...) sur le prix de revient' +
@@ -19421,6 +19443,37 @@ function marquerReçue(id){
       '<button class="btn btn-success" onclick="confirmerReception(' + id + ')">✅ Confirmer réception</button>' +
     '</div>'
   );
+}
+
+// ── Contrôle qualité à la réception ──
+function toggleControleQualite(id){
+  const actif = document.getElementById('cmd-qualite-toggle')?.checked;
+  const recapSimple = document.getElementById('cmd-recap-simple');
+  const lignesQualite = document.getElementById('cmd-qualite-lignes');
+  if(recapSimple) recapSimple.style.display = actif ? 'none' : 'block';
+  if(lignesQualite) lignesQualite.style.display = actif ? 'block' : 'none';
+  if(actif) majQualiteLigne(id);
+}
+
+function majQualiteLigne(id){
+  const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
+  let totalRejete = 0;
+  (c.lignes||[]).forEach((l,i) => {
+    const input = document.getElementById('cmd-qc-'+i);
+    const motifWrap = document.getElementById('cmd-qc-motif-wrap-'+i);
+    if(!input) return;
+    let qc = +input.value || 0;
+    if(qc > (l.qte||1)) { qc = l.qte||1; input.value = qc; }
+    if(qc < 0) { qc = 0; input.value = 0; }
+    const rejet = (l.qte||1) - qc;
+    totalRejete += rejet;
+    if(motifWrap) motifWrap.style.display = rejet > 0 ? 'block' : 'none';
+  });
+  const recap = document.getElementById('cmd-qc-recap');
+  if(recap){
+    recap.textContent = totalRejete>0 ? ('⚠️ ' + totalRejete + ' unité(s) non conforme(s) — ne seront pas ajoutées au stock') : '✅ Tout est conforme';
+    recap.style.color = totalRejete>0 ? 'var(--red)' : 'var(--green)';
+  }
 }
 
 function previewFraisImport(id){
@@ -19453,32 +19506,56 @@ function previewFraisImport(id){
 function confirmerReception(id){
   const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
   const dateReception = document.getElementById('cmd-reception')?.value || D();
+  const controleActif = document.getElementById('cmd-qualite-toggle')?.checked;
   const importToggle = document.getElementById('cmd-import-toggle')?.checked;
   const fret = importToggle ? (+document.getElementById('cmd-frais-fret')?.value||0) : 0;
   const douane = importToggle ? (+document.getElementById('cmd-frais-douane')?.value||0) : 0;
   const autres = importToggle ? (+document.getElementById('cmd-frais-autres')?.value||0) : 0;
   const totalFrais = fret+douane+autres;
-  const totalLignes = (c.lignes||[]).reduce((s,l)=>s+(l.qte||1)*(l.pu||0),0);
   const detailArticles = [];
+  const rejetsQualite = [];
+
+  // Déterminer les quantités conformes par ligne (contrôle qualité)
+  const qtesConformes = (c.lignes||[]).map((l,i) => {
+    if(!controleActif) return l.qte||1;
+    const input = document.getElementById('cmd-qc-'+i);
+    let qc = input ? (+input.value||0) : (l.qte||1);
+    if(qc > (l.qte||1)) qc = l.qte||1;
+    if(qc < 0) qc = 0;
+    return qc;
+  });
+
+  // Base de répartition des frais d'import : uniquement les quantités réellement conformes
+  const totalLignesConformes = (c.lignes||[]).reduce((s,l,i)=>s+qtesConformes[i]*(l.pu||0),0);
 
   // Mettre à jour le stock (+ coût de revient pondéré si frais d'import)
-  (c.lignes||[]).forEach(l => {
+  (c.lignes||[]).forEach((l,i) => {
     const a = S.stock.find(a=>a.id==l.aid);
-    if(a){
-      if(totalFrais>0 && totalLignes>0){
+    const qteConforme = qtesConformes[i];
+    const qteRejetee = (l.qte||1) - qteConforme;
+    if(controleActif && qteRejetee > 0){
+      const motifEl = document.getElementById('cmd-qc-motif-'+i);
+      rejetsQualite.push({
+        aid: a?.id, nom: l.nom||a?.nom||'—',
+        qteCommandee: l.qte||1, qteConforme, qteRejetee,
+        motif: motifEl ? (motifEl.value||'').trim() : ''
+      });
+    }
+    if(a && qteConforme > 0){
+      if(totalFrais>0 && totalLignesConformes>0){
         const ancienPa = a.pa||0;
         const ancienneQte = sa(a);
-        const valeurLigne = (l.qte||1)*(l.pu||0);
-        const partFrais = (valeurLigne/totalLignes)*totalFrais;
-        const coutUnitImporte = (l.pu||0) + (partFrais/(l.qte||1));
+        const valeurLigne = qteConforme*(l.pu||0);
+        const partFrais = (valeurLigne/totalLignesConformes)*totalFrais;
+        const coutUnitImporte = (l.pu||0) + (partFrais/qteConforme);
         const ancienCoutTotal = ancienneQte*ancienPa;
-        const nouveauCoutTotal = ancienCoutTotal + coutUnitImporte*(l.qte||1);
-        const nouveauPa = (ancienneQte+(l.qte||1))>0 ? Math.round(nouveauCoutTotal/(ancienneQte+(l.qte||1))) : Math.round(coutUnitImporte);
+        const nouveauCoutTotal = ancienCoutTotal + coutUnitImporte*qteConforme;
+        const nouveauPa = (ancienneQte+qteConforme)>0 ? Math.round(nouveauCoutTotal/(ancienneQte+qteConforme)) : Math.round(coutUnitImporte);
         a.pa = nouveauPa;
-        detailArticles.push({aid:a.id,nom:a.nom,ancienPa,nouveauPa,qte:l.qte||1,partFrais:Math.round(partFrais)});
+        detailArticles.push({aid:a.id,nom:a.nom,ancienPa,nouveauPa,qte:qteConforme,partFrais:Math.round(partFrais)});
       }
-      a.ea = (a.ea||0) + (l.qte||1);
-      addHistorique('Entrée', a, l.qte||1, 'Réception commande CMD-' + String(c.id).slice(-4).padStart(4,'0'));
+      a.ea = (a.ea||0) + qteConforme;
+      addHistorique('Entrée', a, qteConforme, 'Réception commande CMD-' + String(c.id).slice(-4).padStart(4,'0') + (qteRejetee>0?' (contrôle qualité : '+qteRejetee+' rejetée(s))':''));
     }
   });
 
@@ -19494,10 +19571,65 @@ function confirmerReception(id){
     });
   }
 
+  let idControle = null;
+  if(rejetsQualite.length>0){
+    if(!S.controles_qualite) S.controles_qualite=[];
+    idControle = genId();
+    S.controles_qualite.push({
+      id:idControle, cmdId:c.id, fid:c.fid, date:dateReception,
+      articles:rejetsQualite,
+      totalRejete: rejetsQualite.reduce((s,r)=>s+r.qteRejetee,0),
+      ts:Date.now()
+    });
+  }
+
   saveData();
   closeModal();
-  toast(totalFrais>0 ? ('✅ Stock mis à jour — ' + F(totalFrais) + ' de frais répartis sur ' + detailArticles.length + ' article(s)') : '✅ Stock mis à jour — commande marquée reçue !');
-  rCommandes();
+
+  if(rejetsQualite.length>0){
+    const totalRej = rejetsQualite.reduce((s,r)=>s+r.qteRejetee,0);
+    const fourn = S.fournisseurs.find(f=>f.id==c.fid);
+    modal('<div class="mft">⚠️ Réception avec anomalies qualité</div>' +
+      '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">' + totalRej + ' unité(s) non conforme(s) n\u2019ont pas été ajoutées au stock :</div>' +
+      '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px">' +
+        rejetsQualite.map(r => '<div style="font-size:12px;padding:3px 0"><b>' + r.nom + '</b> — ' + r.qteRejetee + ' rejetée(s)' + (r.motif?' : '+r.motif:'') + '</div>').join('') +
+      '</div>' +
+      '<div class="mff">' +
+        (fourn ? '<button class="btn" style="background:var(--navy-bg);color:var(--navy)" onclick="ouvrirModalEvalFourn('+fourn.id+')">⭐ Évaluer ' + fourn.nom + '</button>' : '') +
+        '<button class="btn btn-primary" onclick="closeModal();rCommandes()">OK</button>' +
+      '</div>'
+    );
+  } else {
+    toast(totalFrais>0 ? ('✅ Stock mis à jour — ' + F(totalFrais) + ' de frais répartis sur ' + detailArticles.length + ' article(s)') : '✅ Stock mis à jour — commande marquée reçue !');
+    rCommandes();
+  }
+}
+
+// ── Historique des contrôles qualité ──
+function voirHistoriqueControlesQualite(){
+  const historique = (S.controles_qualite||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const totalRejete = historique.reduce((s,h)=>s+(h.totalRejete||0),0);
+  modal('<div class="mft">🔍 Historique des contrôles qualité</div>' +
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">' + totalRejete + ' unité(s) rejetée(s) au total sur ' + historique.length + ' réception(s) avec anomalie.</div>' +
+    (historique.length===0 ? '<div style="text-align:center;color:var(--text3);padding:20px 0;font-size:12px">Aucune anomalie qualité enregistrée pour l\u2019instant.<br>Coche "Contrôle qualité" lors de la réception d\u2019une commande pour vérifier les articles avant mise en stock.</div>' :
+    '<div style="max-height:360px;overflow-y:auto">' +
+    historique.map(h=>{
+      const cmd = (S.commandes||[]).find(c=>c.id==h.cmdId);
+      const fourn = S.fournisseurs.find(f=>f.id==h.fid);
+      const numCmd = cmd ? 'CMD-' + String(cmd.id).slice(-4).padStart(4,'0') : ('CMD #'+h.cmdId);
+      return '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">' +
+          '<span>' + numCmd + ' — ' + (fourn?fourn.nom:'—') + '</span><span style="color:var(--red)">' + h.totalRejete + ' rejetée(s)</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin:4px 0">' + fmtD(h.date) + '</div>' +
+        '<div style="font-size:11px;color:var(--text2)">' +
+          (h.articles||[]).map(a=>a.nom+' : '+a.qteRejetee+' rejetée(s)'+(a.motif?' ('+a.motif+')':'')).join('<br>') +
+        '</div>' +
+      '</div>';
+    }).join('') +
+    '</div>') +
+    '<div class="mff"><button class="btn" onclick="closeModal()">Fermer</button></div>'
+  );
 }
 
 // ── Historique des coûts d'importation (landed cost) ──
