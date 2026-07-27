@@ -574,6 +574,7 @@ body.theme-teal{--navy:#1a5c5c;--navy2:#207070;--navy-bg:#e8f5f5;--navy-light:#a
 #calc-float-toggle{position:fixed;bottom:90px;right:16px;z-index:499;width:46px;height:46px;border-radius:50%;background:var(--navy);border:none;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(15,31,61,.35);display:flex;align-items:center;justify-content:center;transition:all .2s}
 #calc-float-toggle:hover{background:var(--navy2);transform:scale(1.08)}
 #calc-float-toggle.hidden-toggle{display:none}
+#cf-btns-grid .cf-key:active{opacity:.65;transform:scale(.96)}
 @media(max-width:768px){#calc-float{bottom:110px;right:8px;width:270px}#calc-float-toggle{bottom:110px;right:8px}}
 
 /* ─── JOURNAL PRIVÉ ─── */
@@ -14250,43 +14251,96 @@ function modalExportExcel(){
 
 // ─── CALCULATRICE FLOTTANTE ───
 let cfExpr='',cfResult='0',cfJustEval=false,cfHistory=[];
+const CF_KEYS=[['C','±','%','÷'],['7','8','9','×'],['4','5','6','−'],['1','2','3','+'],['⌫','0',',','=']];
 function initCalcFloat(){
   const grid=document.getElementById('cf-btns-grid');
   if(!grid)return;
-  const keys=[['C','±','%','÷'],['7','8','9','×'],['4','5','6','−'],['1','2','3','+'],[' ','0',',','=']];
-  grid.innerHTML=keys.map(row=>row.map(k=>{
+  // Idempotent : si déjà construite, ne pas re-générer (mais on peut être rappelée sans risque)
+  grid.innerHTML=CF_KEYS.map(row=>row.map(k=>{
     const isOp=['÷','×','−','+','='].includes(k);
-    const isClear=k==='C';
+    const isClear=k==='C'||k==='⌫';
     const bg=isOp?'var(--navy)':isClear?'var(--red-bg)':'var(--surface)';
     const color=isOp?'#fff':isClear?'var(--red)':'var(--text)';
     const fw=isOp||isClear?'700':'500';
-    if(k===' ')return `<button disabled style="background:var(--surface2);border:none"></button>`;
-    return `<button onclick="cfKey('${k}')" style="padding:14px 0;font-size:16px;font-weight:${fw};background:${bg};color:${color};border:none;cursor:pointer;font-family:inherit;transition:opacity .1s;-webkit-tap-highlight-color:transparent" onmousedown="this.style.opacity='.7'" onmouseup="this.style.opacity='1'" onmouseleave="this.style.opacity='1'">${k}</button>`;
+    return `<button type="button" class="cf-key" data-cf-key="${k}" style="padding:14px 0;font-size:16px;font-weight:${fw};background:${bg};color:${color};border:none;cursor:pointer;font-family:inherit;transition:opacity .1s,transform .06s;-webkit-tap-highlight-color:transparent">${k}</button>`;
   }).join('')).join('');
-  makeDraggable(document.getElementById('calc-float'),document.getElementById('calc-float-header'));
+  // Délégation d'événements (plus fiable que des onclick individuels générés dynamiquement,
+  // et fonctionne même si un des boutons est régénéré) + feedback tactile via CSS :active
+  if(!grid.dataset.cfBound){
+    grid.dataset.cfBound='1';
+    grid.addEventListener('click',e=>{
+      const btn=e.target.closest('[data-cf-key]');
+      if(btn)cfKey(btn.dataset.cfKey);
+    });
+  }
+  const cfFloat=document.getElementById('calc-float'),cfHeader=document.getElementById('calc-float-header');
+  if(cfFloat&&cfHeader&&!cfFloat.dataset.dragBound){
+    cfFloat.dataset.dragBound='1';
+    makeDraggable(cfFloat,cfHeader);
+  }
+  // Copier le résultat dans le presse-papiers par un double-clic/double-tap sur l'écran
+  const disp=document.getElementById('cf-disp');
+  if(disp&&!disp.dataset.copyBound){
+    disp.dataset.copyBound='1';
+    disp.style.cursor='pointer';
+    disp.title='Double-cliquez pour copier';
+    disp.addEventListener('dblclick',()=>{
+      const val=cfResult.replace(/\s/g,'');
+      if(navigator.clipboard)navigator.clipboard.writeText(val).then(()=>toast('📋 Copié : '+cfResult)).catch(()=>{});
+    });
+  }
+}
+function cfApplySign(){
+  try{
+    if(cfExpr&&!cfJustEval){
+      const last=cfExpr.split(/([+×÷]|(?<=[0-9])−)/).pop();
+      cfExpr=cfExpr.slice(0,-last.length)+'('+'-'+last+')';
+      const tail=last.replace(',','.');
+      const v=parseFloat(tail);
+      if(!isNaN(v))cfResult=(-v).toLocaleString('fr-FR');
+    }else{
+      const v=parseFloat(cfResult.replace(/\s/g,'').replace(',','.'));
+      if(!isNaN(v)){const neg=-v;cfResult=neg.toLocaleString('fr-FR');cfExpr=String(neg);}
+    }
+  }catch{}
+}
+function cfApplyPercent(){
+  try{
+    const v=parseFloat(cfResult.replace(/\s/g,'').replace(',','.'));
+    if(!isNaN(v)){const pct=v/100;cfResult=parseFloat(pct.toFixed(10)).toLocaleString('fr-FR');cfExpr=String(pct);}
+  }catch{}
 }
 function cfKey(k){
   if(k==='C'){cfExpr='';cfResult='0';cfJustEval=false;}
+  else if(k==='⌫'){
+    if(cfJustEval){cfExpr='';cfResult='0';cfJustEval=false;}
+    else{
+      cfExpr=cfExpr.slice(0,-1)||'';
+      const last=cfExpr.split(/[+\-×÷]/).pop().replace(',','.');
+      try{cfResult=last?parseFloat(last).toLocaleString('fr-FR'):'0';}catch{cfResult='0';}
+    }
+  }
   else if(k==='='){
     try{
       const expr=cfExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/,/g,'.');
       if(!expr)return;
       const res=Function('"use strict";return ('+expr+')')();
+      if(!isFinite(res))throw new Error();
       const fmt=parseFloat(res.toFixed(10)).toLocaleString('fr-FR');
       cfHistory.unshift({expr:cfExpr,res:fmt});
       if(cfHistory.length>8)cfHistory.pop();
       cfExpr=String(parseFloat(res.toFixed(10)));
       cfResult=fmt;cfJustEval=true;
-    }catch{cfResult='Erreur';cfExpr='';}
+    }catch{cfResult='Erreur';cfExpr='';cfJustEval=false;}
   }
-  else if(k==='±'){try{const v=parseFloat(cfResult.replace(/\s/g,'').replace(',','.'));cfResult=parseFloat((-v).toFixed(10)).toLocaleString('fr-FR');cfExpr=String(-parseFloat(cfResult.replace(/\s/g,'').replace(',','.')));}catch{}}
-  else if(k==='%'){try{const v=parseFloat(cfResult.replace(/\s/g,'').replace(',','.'));cfResult=parseFloat((v/100).toFixed(10)).toLocaleString('fr-FR');}catch{}}
+  else if(k==='±'){cfApplySign();}
+  else if(k==='%'){cfApplyPercent();}
   else{
     if(cfJustEval&&['+','−','×','÷'].includes(k)){cfExpr+=k;cfJustEval=false;}
     else if(cfJustEval){cfExpr=k;cfJustEval=false;}
     else cfExpr+=k;
     const last=cfExpr.split(/[+\-×÷]/).pop().replace(',','.');
-    try{cfResult=parseFloat(last).toLocaleString('fr-FR');}catch{}
+    try{const v=parseFloat(last);if(!isNaN(v))cfResult=v.toLocaleString('fr-FR');}catch{}
   }
   const de=document.getElementById('cf-disp'),ee=document.getElementById('cf-expr'),hl=document.getElementById('cf-hist');
   if(de)de.textContent=cfResult;
@@ -14298,9 +14352,25 @@ let calcFloatVisible=false;
 function toggleCalcFloat(){
   calcFloatVisible=!calcFloatVisible;
   const w=document.getElementById('calc-float'),t=document.getElementById('calc-float-toggle');
+  // Filet de sécurité : si la grille n'a jamais été construite (init ratée au chargement), on la construit à l'ouverture
+  const grid=document.getElementById('cf-btns-grid');
+  if(calcFloatVisible&&grid&&!grid.children.length)initCalcFloat();
   if(calcFloatVisible){w.classList.remove('hidden-float');t.classList.add('hidden-toggle');}
   else{w.classList.add('hidden-float');t.classList.remove('hidden-toggle');}
 }
+// Clavier physique : actif uniquement quand la calculatrice flottante est ouverte
+(function(){
+  if(window._cfKbBound)return;
+  window._cfKbBound=true;
+  document.addEventListener('keydown',e=>{
+    if(!calcFloatVisible)return;
+    const active=document.activeElement;
+    if(active&&['INPUT','TEXTAREA'].includes(active.tagName))return; // ne pas gêner la saisie ailleurs
+    const m={'Enter':'=','Backspace':'⌫','Escape':'C','*':'×','/':'÷','-':'−','+':'+','.':',',',':','};
+    const k=m[e.key]||(/^[0-9]$/.test(e.key)?e.key:null);
+    if(k){e.preventDefault();cfKey(k);}
+  });
+})();
 function makeDraggable(el,handle){
   let ox=0,oy=0,sx=0,sy=0;
   function start(e){
@@ -21504,11 +21574,13 @@ initAméliorations();
 // Toujours afficher le login au démarrage
 afficherLoginScreen();
 // Init calculatrice flottante — après que le DOM soit complet
+// (triple filet de sécurité : le bouton ⚙️ dans toggleCalcFloat() reconstruit aussi la grille si besoin)
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded', initCalcFloat);
 } else {
   setTimeout(initCalcFloat, 50);
 }
+window.addEventListener('load', initCalcFloat);
 
 
 
@@ -24625,8 +24697,6 @@ function majBadgeApprobations(){
   <div style="background:var(--navy);padding:14px 16px 10px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end">
     <div id="cf-expr" style="font-size:12px;color:rgba(255,255,255,.4);min-height:16px;word-break:break-all;text-align:right">&nbsp;</div>
     <div id="cf-disp" style="font-size:32px;font-weight:700;color:#fff;letter-spacing:-1px;word-break:break-all;text-align:right">0</div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
   </div>
   <div id="cf-btns-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)"></div>
   <div style="padding:8px 12px;border-top:1px solid var(--border);max-height:100px;overflow-y:auto">
