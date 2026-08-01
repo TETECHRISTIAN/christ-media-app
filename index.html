@@ -1199,6 +1199,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><path d="M4 1h6l3 3v11H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 2.5v3h3" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 10c1-1 1.5-1.5 2.5-.5s1.5-1 2.5-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       Contrats
     </div>
+    <div class="ni admin-only superviseur-ok" data-page="apprentis" onclick="nav(this,'apprentis')">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 2L1 5.5 8 9l7-3.5L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4 7v3.5c0 1 1.8 2 4 2s4-1 4-2V7" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M14 6v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Apprentis & Formation
+    </div>
     <div class="ni admin-only superviseur-ok" data-page="coach" onclick="nav(this,'coach')">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 9v3M6.5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       Coach Financier
@@ -1689,6 +1693,19 @@ const APPRO_TYPE_EMOJI = {
   'Dépense exceptionnelle':'💸','Achat fournisseur':'🚚','Remise spéciale':'🏷️','Avance sur salaire':'👤','Autre':'📌'
 };
 
+// ─── MODULE APPRENTIS & FORMATION ───
+const APPR_FILIERES_AV = ['Prise de vue photo','Prise de vue vidéo','Montage / Retouche','Éclairage & prise de son','Direct / Streaming (OBS)','Motion design / Graphisme'];
+const APPR_FILIERES_BUR = ['Word','Excel','PowerPoint','Internet & e-mail','Saisie & mise en page','Initiation à l\u2019informatique'];
+const APPR_STATUTS = ['Inscrit','En formation','Suspendu','Terminé','Abandonné'];
+const APPR_STATUT_COULEUR = {
+  'Inscrit':'#7ec8e3','En formation':'#166534','Suspendu':'#c9a13b','Terminé':'#0f1f3d','Abandonné':'#991b1b'
+};
+const APPR_STATUT_EMOJI = {
+  'Inscrit':'📝','En formation':'🎓','Suspendu':'⏸️','Terminé':'✅','Abandonné':'❌'
+};
+let _apprFiltreStatut = 'Tous';
+let _apprSearch = '';
+
 // ─── DATA ───
 const defaultData={
   stock:[
@@ -1781,6 +1798,7 @@ const defaultData={
   materiel:[],
   contrats:[],
   approbations:[],
+  apprentis:[],
   controles_qualite:[],
   parametres:{
     nom:'Christ Media',
@@ -1947,7 +1965,7 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite'
+  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite','apprentis'
 ];
 
 async function saveToFirebase(data){
@@ -3159,7 +3177,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3197,7 +3215,9 @@ const actionsMap={
   projets:()=>'<button class="btn" onclick="_projFiltreType=\'Tous\';rProjets()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalProjet()">+ Nouveau projet</button>',
   materiel:()=>'<button class="btn" onclick="_matFiltreCat=\'Toutes\';rMateriel()">🔄 Tout voir</button> <button class="btn btn-primary" onclick="ouvrirModalMateriel()">+ Nouvel équipement</button>',
   contrats:()=>'<button class="btn btn-primary" onclick="ouvrirModalContrat()">+ Nouveau contrat</button>',
-  approbations:()=>'<button class="btn btn-primary" onclick="ouvrirModalDemandeApprobation()">+ Nouvelle demande</button>'  };
+  approbations:()=>'<button class="btn btn-primary" onclick="ouvrirModalDemandeApprobation()">+ Nouvelle demande</button>',
+  apprentis:()=>`<div class="search-bar"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input type="text" placeholder="Nom ou n° dossier..." oninput="_apprSearch=this.value;rApprentis()" value="${_apprSearch}"></div><button class="btn btn-primary" onclick="ouvrirModalApprenti()">+ Nouvel apprenti</button>`
+};
 
 let currentPage='dashboard';
 function nav(el,page){
@@ -3215,7 +3235,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -3245,6 +3265,7 @@ const QB_PAGES = [
   {page:'projets',      emoji:'🎬', label:'Projets',       labelCourt:'Projets'},
   {page:'materiel',     emoji:'📷', label:'Parc Matériel', labelCourt:'Matériel'},
   {page:'contrats',     emoji:'✍️', label:'Contrats',      labelCourt:'Contrats'},
+  {page:'apprentis',    emoji:'🎓', label:'Apprentis & Formation', labelCourt:'Apprentis'},
   {page:'approbations', emoji:'✅', label:'Approbations',  labelCourt:'Approb.'},
   {page:'depenses',     emoji:'💸', label:'Dépenses',      labelCourt:'Dépenses'},
   {page:'tresorerie',   emoji:'💰', label:'Trésorerie',    labelCourt:'Tréso.'},
@@ -10711,7 +10732,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -10729,7 +10750,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations'],
+            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
     label: '👁️ Superviseur',
     couleur: '#7ec8e3'
   },
@@ -24533,6 +24554,343 @@ function imprimerContrat(id){
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// ─── MODULE APPRENTIS & FORMATION ───
+// Registre de suivi des apprentis inscrits au pôle Formation :
+// fiche complète, filières suivies, paiements, avertissements et
+// statut du contrat, avec numéro de dossier auto-généré (CM-AAAA-NNN).
+// ══════════════════════════════════════════════════════════════════
+
+function _apprentisListe(){
+  if(!S.apprentis) S.apprentis=[];
+  return S.apprentis.filter(a=>!a._deleted);
+}
+
+function _genererNumeroDossier(){
+  const annee = new Date().getFullYear();
+  const prefixe = 'CM-'+annee+'-';
+  const existants = _apprentisListe().filter(a=>(a.dossier||'').startsWith(prefixe));
+  let maxSeq = 0;
+  existants.forEach(a=>{
+    const n = parseInt((a.dossier||'').slice(prefixe.length),10);
+    if(!isNaN(n) && n>maxSeq) maxSeq = n;
+  });
+  return prefixe + String(maxSeq+1).padStart(3,'0');
+}
+
+function _apprStatutPaiement(a){
+  const frais = +a.frais||0;
+  const paye = +a.montantPaye||0;
+  if(frais<=0) return {label:'—', cls:''};
+  if(paye>=frais) return {label:'Soldé', cls:'bg'};
+  if(paye>0) return {label:'Partiel', cls:'ba'};
+  return {label:'Impayé', cls:'br'};
+}
+
+function rApprentis(){
+  const tous = _apprentisListe();
+  const actifs = tous.filter(a=>a.statut==='Inscrit'||a.statut==='En formation'||a.statut==='Suspendu');
+  const enFormation = tous.filter(a=>a.statut==='En formation');
+  const fraisImpayes = actifs.reduce((s,a)=>s+Math.max((+a.frais||0)-(+a.montantPaye||0),0),0);
+  const avertissementsTotal = tous.reduce((s,a)=>s+((a.avertissements||[]).length),0);
+
+  const search = (_apprSearch||'').toLowerCase().trim();
+  let filtres = _apprFiltreStatut==='Tous' ? tous : tous.filter(a=>a.statut===_apprFiltreStatut);
+  if(search){
+    filtres = filtres.filter(a=>
+      ((a.nom||'')+' '+(a.prenom||'')).toLowerCase().includes(search) ||
+      (a.dossier||'').toLowerCase().includes(search) ||
+      (a.parentNom||'').toLowerCase().includes(search)
+    );
+  }
+  filtres = filtres.slice().sort((x,y)=>(y.ts||0)-(x.ts||0));
+
+  document.getElementById('content').innerHTML = `
+    <div class="g4" style="margin-bottom:16px">
+      <div class="card"><div class="ct">Apprentis actifs</div><div class="mv">${N(actifs.length)}</div></div>
+      <div class="card"><div class="ct">En formation</div><div class="mv" style="color:var(--green)">${N(enFormation.length)}</div></div>
+      <div class="card"><div class="ct">Frais impayés</div><div class="mv" style="color:${fraisImpayes>0?'var(--red)':'var(--text)'}">${F(fraisImpayes)}</div></div>
+      <div class="card"><div class="ct">Avertissements cumulés</div><div class="mv" style="color:${avertissementsTotal>0?'var(--amber)':'var(--text)'}">${N(avertissementsTotal)}</div></div>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <button onclick="_apprFiltreStatut='Tous';rApprentis()" class="btn btn-sm" style="${_apprFiltreStatut==='Tous'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">Tous (${tous.length})</button>
+      ${APPR_STATUTS.map(st=>`<button onclick="_apprFiltreStatut='${st}';rApprentis()" class="btn btn-sm" style="${_apprFiltreStatut===st?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${APPR_STATUT_EMOJI[st]} ${st} (${tous.filter(a=>a.statut===st).length})</button>`).join('')}
+    </div>
+
+    ${filtres.length===0?`
+    <div class="empty" style="padding:60px 20px">
+      <svg viewBox="0 0 40 40" fill="none"><path d="M20 4L6 12l14 8 14-8-14-8z" stroke="currentColor" stroke-width="1.5" opacity=".3"/><path d="M12 16v8c0 3 4 5 8 5s8-2 8-5v-8" stroke="currentColor" stroke-width="1.5" opacity=".4"/></svg>
+      <p>Aucun apprenti</p>
+      <small>Ajoute un apprenti dès qu'un parent remplit la Fiche de Renseignement</small>
+    </div>` : `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Dossier</th><th>Apprenant(e)</th><th>Filière(s)</th><th>Parent / Tél</th><th>Statut</th><th>Paiement</th><th>Contrat</th><th></th></tr></thead>
+        <tbody>
+          ${filtres.map(a=>{
+            const pay = _apprStatutPaiement(a);
+            const nbAvert = (a.avertissements||[]).length;
+            return `
+          <tr>
+            <td style="white-space:nowrap;font-weight:600">${(a.dossier||'—')}</td>
+            <td>${((a.nom||'')+' '+(a.prenom||'')).replace(/</g,'&lt;')}${nbAvert>0?` <span title="${nbAvert} avertissement(s)" style="color:var(--amber)">⚠️${nbAvert}</span>`:''}</td>
+            <td style="font-size:11px;color:var(--text2)">${(a.filieres||[]).slice(0,2).join(', ')}${(a.filieres||[]).length>2?' …':''}</td>
+            <td style="font-size:11px">${(a.parentNom||'—').replace(/</g,'&lt;')}${a.parentTel?'<br>'+a.parentTel:''}</td>
+            <td><span class="badge" style="background:${APPR_STATUT_COULEUR[a.statut]}22;color:${APPR_STATUT_COULEUR[a.statut]}">${APPR_STATUT_EMOJI[a.statut]||''} ${a.statut||'—'}</span></td>
+            <td>${pay.label==='—'?'—':`<span class="badge ${pay.cls}">${pay.label}</span>`}</td>
+            <td>${a.contratSigne?'<span class="badge bg">✅ Signé</span>':'<span class="badge ba">⏳ Non signé</span>'}</td>
+            <td style="white-space:nowrap">
+              <button class="btn-icon btn-sm" onclick="ouvrirModalApprenti(${a.id})" title="Modifier">✏️</button>
+              <button class="btn-icon btn-sm" onclick="ouvrirModalPaiementApprenti(${a.id})" title="Enregistrer un paiement">💰</button>
+              <button class="btn-icon btn-sm" onclick="ouvrirModalAvertissementApprenti(${a.id})" title="Ajouter un avertissement" style="color:var(--amber)">⚠️</button>
+              <button class="btn-icon btn-sm" onclick="imprimerFicheApprenti(${a.id})" title="Imprimer la fiche">🖨️</button>
+              <button class="btn-icon btn-sm del-btn" onclick="supprimerApprenti(${a.id})" title="Supprimer">🗑️</button>
+            </td>
+          </tr>`;}).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  `;
+}
+
+function _apprCheckboxGroup(idPrefix, options, selected){
+  return options.map((f,i)=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer"><input type="checkbox" id="${idPrefix}-${i}" value="${f.replace(/"/g,'&quot;')}" ${selected.includes(f)?'checked':''}> ${f}</label>`).join('');
+}
+
+function ouvrirModalApprenti(id){
+  const a = id ? S.apprentis.find(a=>a.id==id) : null;
+  const filieres = a ? (a.filieres||[]) : [];
+  const docs = a ? (a.documents||{}) : {};
+  modal(`<div class="mft">${a?'🎓 Modifier l\u2019apprenant(e)':'🎓 Nouvel apprenant(e)'}</div>
+    ${a?`<div class="fg" style="font-size:11px;color:var(--text3)">Dossier n° <b>${a.dossier}</b></div>`:''}
+    <div class="fr">
+      <div class="fg"><label class="fl">Nom</label><input class="fi" id="ap-nom" value="${a?(a.nom||'').replace(/"/g,'&quot;'):''}"></div>
+      <div class="fg"><label class="fl">Prénom(s)</label><input class="fi" id="ap-prenom" value="${a?(a.prenom||'').replace(/"/g,'&quot;'):''}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date de naissance</label><input class="fi" type="date" id="ap-naissance" value="${a?(a.dateNaissance||''):''}"></div>
+      <div class="fg"><label class="fl">Sexe</label><select class="fs" id="ap-sexe"><option value="">—</option><option value="M" ${a&&a.sexe==='M'?'selected':''}>Masculin</option><option value="F" ${a&&a.sexe==='F'?'selected':''}>Féminin</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Niveau scolaire / Classe</label><input class="fi" id="ap-niveau" value="${a?(a.niveauScolaire||'').replace(/"/g,'&quot;'):''}"></div>
+
+    <div class="fg" style="margin-top:6px;border-top:1px solid var(--border2);padding-top:10px"><b style="font-size:12px;color:var(--navy)">Parent / Tuteur</b></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Nom et prénom(s)</label><input class="fi" id="ap-parent-nom" value="${a?(a.parentNom||'').replace(/"/g,'&quot;'):''}"></div>
+      <div class="fg"><label class="fl">Lien de parenté</label><input class="fi" id="ap-parent-lien" value="${a?(a.parentLien||'').replace(/"/g,'&quot;'):''}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Téléphone</label><input class="fi" id="ap-parent-tel" value="${a?(a.parentTel||''):''}"></div>
+      <div class="fg"><label class="fl">Téléphone (secondaire)</label><input class="fi" id="ap-parent-tel2" value="${a?(a.parentTel2||''):''}"></div>
+    </div>
+    <div class="fg"><label class="fl">Adresse / Quartier</label><input class="fi" id="ap-adresse" value="${a?(a.adresse||'').replace(/"/g,'&quot;'):''}"></div>
+
+    <div class="fg" style="margin-top:6px;border-top:1px solid var(--border2);padding-top:10px"><b style="font-size:12px;color:var(--navy)">Formation</b></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Filière Audiovisuel</label><div style="max-height:130px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--rs);padding:6px 10px">${_apprCheckboxGroup('ap-av',APPR_FILIERES_AV,filieres)}</div></div>
+      <div class="fg"><label class="fl">Filière Bureautique</label><div style="max-height:130px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--rs);padding:6px 10px">${_apprCheckboxGroup('ap-bur',APPR_FILIERES_BUR,filieres)}</div></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date de début</label><input class="fi" type="date" id="ap-date-debut" value="${a?(a.dateDebut||''):D()}"></div>
+      <div class="fg"><label class="fl">Date de fin prévisionnelle</label><input class="fi" type="date" id="ap-date-fin" value="${a?(a.dateFin||''):''}"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Rythme</label><input class="fi" id="ap-rythme" placeholder="Ex : 3 jours / semaine" value="${a?(a.rythme||'').replace(/"/g,'&quot;'):''}"></div>
+      <div class="fg"><label class="fl">Créneau horaire</label><input class="fi" id="ap-creneau" placeholder="Ex : 14h-17h" value="${a?(a.creneauHoraire||'').replace(/"/g,'&quot;'):''}"></div>
+    </div>
+
+    <div class="fg" style="margin-top:6px;border-top:1px solid var(--border2);padding-top:10px"><b style="font-size:12px;color:var(--navy)">Frais & documents</b></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Frais de formation (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="ap-frais" value="${a?(a.frais||0):0}"></div>
+      <div class="fg"><label class="fl">Déjà payé (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="ap-paye" value="${a?(a.montantPaye||0):0}" ${a?'readonly title="Utilise le bouton 💰 Paiement pour ajouter un versement"':''}></div>
+    </div>
+    <div class="fg"><label class="fl">Modalité de paiement</label><input class="fi" id="ap-modalite" placeholder="Comptant / échelonné..." value="${a?(a.modalitePaiement||'').replace(/"/g,'&quot;'):''}"></div>
+    <div class="fg" style="display:flex;flex-wrap:wrap;gap:14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-doc-extrait" ${docs.extrait?'checked':''}> Extrait de naissance / CNI</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-doc-piece" ${docs.pieceParent?'checked':''}> Pièce du parent</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-doc-photos" ${docs.photos?'checked':''}> Photos d'identité</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-doc-recu" ${docs.recu?'checked':''}> Reçu de paiement</label>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Statut</label><select class="fs" id="ap-statut">${APPR_STATUTS.map(st=>`<option value="${st}" ${a&&a.statut===st?'selected':''}>${APPR_STATUT_EMOJI[st]} ${st}</option>`).join('')}</select></div>
+      <div class="fg" style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-contrat-signe" ${a&&a.contratSigne?'checked':''}> Contrat de formation signé</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="ap-droit-image" ${a&&a.droitImageOppose?'checked':''}> Opposition au droit à l'image</label>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="ap-notes" rows="2">${a?(a.notes||''):''}</textarea></div>
+
+    ${a&&a.avertissements&&a.avertissements.length?`<div style="font-size:11px;color:var(--amber);margin-bottom:10px;line-height:1.7">⚠️ ${a.avertissements.map(w=>`${fmtD(w.date)} — ${(w.motif||'').replace(/</g,'&lt;')}`).join('<br>⚠️ ')}</div>`:''}
+    ${a&&a.historique&&a.historique.length?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.7">${a.historique.slice(-5).map(h=>`• ${fmtD(h.date)} — ${h.action}`).join('<br>')}</div>`:''}
+
+    <div class="mff" style="flex-wrap:wrap">
+      ${a?`<button class="btn" style="color:var(--red)" onclick="supprimerApprenti(${a.id})">🗑️ Supprimer</button>`:''}
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveApprenti(${a?a.id:'null'})">${a?'Enregistrer':'Créer'}</button>
+    </div>`);
+}
+
+function saveApprenti(id){
+  const nom = document.getElementById('ap-nom').value.trim();
+  if(!nom) return toast('❌ Nom requis');
+  const prenom = document.getElementById('ap-prenom').value.trim();
+  const dateNaissance = document.getElementById('ap-naissance').value;
+  const sexe = document.getElementById('ap-sexe').value;
+  const niveauScolaire = document.getElementById('ap-niveau').value.trim();
+  const parentNom = document.getElementById('ap-parent-nom').value.trim();
+  const parentLien = document.getElementById('ap-parent-lien').value.trim();
+  const parentTel = document.getElementById('ap-parent-tel').value.trim();
+  const parentTel2 = document.getElementById('ap-parent-tel2').value.trim();
+  const adresse = document.getElementById('ap-adresse').value.trim();
+
+  const filieres = [];
+  APPR_FILIERES_AV.forEach((f,i)=>{ if(document.getElementById('ap-av-'+i)?.checked) filieres.push(f); });
+  APPR_FILIERES_BUR.forEach((f,i)=>{ if(document.getElementById('ap-bur-'+i)?.checked) filieres.push(f); });
+
+  const dateDebut = document.getElementById('ap-date-debut').value;
+  const dateFin = document.getElementById('ap-date-fin').value;
+  const rythme = document.getElementById('ap-rythme').value.trim();
+  const creneauHoraire = document.getElementById('ap-creneau').value.trim();
+
+  const frais = +document.getElementById('ap-frais').value || 0;
+  const modalitePaiement = document.getElementById('ap-modalite').value.trim();
+  const documents = {
+    extrait: document.getElementById('ap-doc-extrait').checked,
+    pieceParent: document.getElementById('ap-doc-piece').checked,
+    photos: document.getElementById('ap-doc-photos').checked,
+    recu: document.getElementById('ap-doc-recu').checked,
+  };
+  const statut = document.getElementById('ap-statut').value;
+  const contratSigne = document.getElementById('ap-contrat-signe').checked;
+  const droitImageOppose = document.getElementById('ap-droit-image').checked;
+  const notes = document.getElementById('ap-notes').value.trim();
+
+  if(!S.apprentis) S.apprentis=[];
+  if(id && id!=='null'){
+    const a = S.apprentis.find(a=>a.id==id);
+    if(!a) return;
+    const ancienStatut = a.statut;
+    Object.assign(a,{nom,prenom,dateNaissance,sexe,niveauScolaire,parentNom,parentLien,parentTel,parentTel2,adresse,
+      filieres,dateDebut,dateFin,rythme,creneauHoraire,frais,modalitePaiement,documents,statut,contratSigne,droitImageOppose,notes,ts:Date.now()});
+    if(!a.historique) a.historique=[];
+    if(ancienStatut!==statut) a.historique.push({date:D(),action:`${ancienStatut} → ${statut}`});
+    saveData();closeModal();toast('✅ Apprenant(e) mis(e) à jour');rApprentis();
+  } else {
+    const dossier = _genererNumeroDossier();
+    S.apprentis.push({id:genId(),dossier,nom,prenom,dateNaissance,sexe,niveauScolaire,parentNom,parentLien,parentTel,parentTel2,adresse,
+      filieres,dateDebut,dateFin,rythme,creneauHoraire,frais,montantPaye:0,modalitePaiement,documents,statut:statut||'Inscrit',
+      contratSigne,droitImageOppose,notes,avertissements:[],paiements:[],certificatDelivre:false,
+      historique:[{date:D(),action:'Dossier créé'}],ts:Date.now()});
+    saveData();closeModal();toast(`✅ Apprenant(e) créé(e) — dossier ${dossier}`);rApprentis();
+  }
+}
+
+function supprimerApprenti(id){
+  if(!confirm('Supprimer ce dossier apprenant ?')) return;
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  a._deleted = true;
+  a.ts = Date.now();
+  saveData();closeModal();toast('🗑️ Dossier supprimé');rApprentis();
+}
+
+function ouvrirModalPaiementApprenti(id){
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  const reste = Math.max((+a.frais||0)-(+a.montantPaye||0),0);
+  modal(`<div class="mft">💰 Paiement — ${(a.nom||'').replace(/</g,'&lt;')} ${(a.prenom||'').replace(/</g,'&lt;')}</div>
+    <div class="fg" style="font-size:12px;color:var(--text2)">Frais total : <b>${F(a.frais||0)}</b> — Déjà payé : <b>${F(a.montantPaye||0)}</b> — Reste : <b style="color:${reste>0?'var(--red)':'var(--green)'}">${F(reste)}</b></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Montant versé (${(S.parametres&&S.parametres.devise)||'FCFA'})</label><input class="fi" type="number" id="pay-montant" value="${reste}"></div>
+      <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="pay-date" value="${D()}"></div>
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="ouvrirModalApprenti(${id})">← Retour</button>
+      <button class="btn btn-primary" onclick="enregistrerPaiementApprenti(${id})">✅ Enregistrer</button>
+    </div>`);
+}
+
+function enregistrerPaiementApprenti(id){
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  const montant = +document.getElementById('pay-montant').value || 0;
+  if(montant<=0) return toast('❌ Montant invalide');
+  const date = document.getElementById('pay-date').value || D();
+  if(!a.paiements) a.paiements=[];
+  a.paiements.push({date,montant});
+  a.montantPaye = (+a.montantPaye||0) + montant;
+  if(!a.historique) a.historique=[];
+  a.historique.push({date,action:`Paiement de ${F(montant)} enregistré`});
+  a.ts = Date.now();
+  saveData();closeModal();toast(`✅ Paiement de ${F(montant)} enregistré`);rApprentis();
+}
+
+function ouvrirModalAvertissementApprenti(id){
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  modal(`<div class="mft">⚠️ Avertissement — ${(a.nom||'').replace(/</g,'&lt;')} ${(a.prenom||'').replace(/</g,'&lt;')}</div>
+    <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="av-date" value="${D()}"></div>
+    <div class="fg"><label class="fl">Motif</label><textarea class="fi" id="av-motif" rows="3" placeholder="Ex : Absence non justifiée, retard répété, non-respect du matériel..."></textarea></div>
+    ${(a.avertissements||[]).length?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Avertissements précédents :<br>${a.avertissements.map(w=>`⚠️ ${fmtD(w.date)} — ${(w.motif||'').replace(/</g,'&lt;')}`).join('<br>')}</div>`:''}
+    <div class="mff">
+      <button class="btn" onclick="ouvrirModalApprenti(${id})">← Retour</button>
+      <button class="btn btn-primary" style="background:var(--amber-bg,#fdf1d6);color:var(--amber,#946200)" onclick="ajouterAvertissementApprenti(${id})">⚠️ Ajouter l'avertissement</button>
+    </div>`);
+}
+
+function ajouterAvertissementApprenti(id){
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  const motif = document.getElementById('av-motif').value.trim();
+  if(!motif) return toast('❌ Motif requis');
+  const date = document.getElementById('av-date').value || D();
+  if(!a.avertissements) a.avertissements=[];
+  a.avertissements.push({date,motif});
+  if(!a.historique) a.historique=[];
+  a.historique.push({date,action:`Avertissement : ${motif}`});
+  a.ts = Date.now();
+  saveData();closeModal();
+  const nb = a.avertissements.length;
+  toast(nb>=3?`⚠️ ${nb}e avertissement — envisager une suspension`:'⚠️ Avertissement enregistré');
+  rApprentis();
+}
+
+function imprimerFicheApprenti(id){
+  const a = S.apprentis.find(a=>a.id==id);
+  if(!a) return;
+  const w = window.open('', '_blank');
+  if(!w) return toast('❌ Autorise les pop-ups pour imprimer cette fiche');
+  const nomShop = (S.parametres&&S.parametres.nom) || 'Christ Media';
+  const pay = _apprStatutPaiement(a);
+  w.document.write(
+    '<html><head><meta charset="utf-8"><title>Fiche '+(a.dossier||'')+'</title><style>' +
+    'body{font-family:Georgia,serif;padding:40px;max-width:700px;margin:0 auto;color:#111}' +
+    'h1{font-size:20px;border-bottom:2px solid #0f1f3d;padding-bottom:10px;margin-bottom:4px}' +
+    '.meta{font-size:12px;color:#555;margin-bottom:20px;line-height:1.7}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px}' +
+    'td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:top}' +
+    'td.lbl{color:#555;width:180px;font-weight:600}' +
+    '@media print{body{padding:20px}}' +
+    '</style></head><body>' +
+    '<h1>'+nomShop.replace(/</g,'&lt;')+' — Fiche Apprenant(e)</h1>' +
+    '<div class="meta">Dossier n° <b>'+(a.dossier||'—')+'</b> — Statut : '+(a.statut||'—')+'</div>' +
+    '<table>' +
+      '<tr><td class="lbl">Nom complet</td><td>'+((a.nom||'')+' '+(a.prenom||'')).replace(/</g,'&lt;')+'</td></tr>' +
+      '<tr><td class="lbl">Date de naissance</td><td>'+fmtD(a.dateNaissance)+'</td></tr>' +
+      '<tr><td class="lbl">Filière(s)</td><td>'+(a.filieres||[]).join(', ')+'</td></tr>' +
+      '<tr><td class="lbl">Parent / Tuteur</td><td>'+(a.parentNom||'—').replace(/</g,'&lt;')+' ('+(a.parentLien||'—')+')</td></tr>' +
+      '<tr><td class="lbl">Téléphone parent</td><td>'+(a.parentTel||'—')+'</td></tr>' +
+      '<tr><td class="lbl">Période</td><td>'+fmtD(a.dateDebut)+' → '+(a.dateFin?fmtD(a.dateFin):'—')+'</td></tr>' +
+      '<tr><td class="lbl">Frais</td><td>'+F(a.frais||0)+' — Payé : '+F(a.montantPaye||0)+' ('+pay.label+')</td></tr>' +
+      '<tr><td class="lbl">Contrat de formation</td><td>'+(a.contratSigne?'✅ Signé':'⏳ Non signé')+'</td></tr>' +
+      '<tr><td class="lbl">Avertissements</td><td>'+((a.avertissements||[]).length)+'</td></tr>' +
+    '</table>' +
+    '</body></html>'
+  );
+  w.document.close();
+  setTimeout(() => { try{ w.print(); }catch(e){} }, 400);
+}
+
 // ─── MODULE APPROBATIONS — WORKFLOW DE VALIDATION ───
 // Toute personne (caissier, vendeur, superviseur) peut soumettre une
 // demande (dépense exceptionnelle, achat, remise, avance...) qui doit
