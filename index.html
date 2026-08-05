@@ -3959,6 +3959,30 @@ function rDash(){
         <div class="ms">${detail}</div>
       </div>`;
     })()}
+    ${(()=>{
+      const soldes = getSoldesInterBoutiques();
+      if(!soldes.length)return '';
+      const nomB=id=>{const b=(S.boutiques||[]).find(x=>x.id==id);return b?`${b.emoji||'🏪'} ${b.nom}`:'?';};
+      const mine = soldes.filter(s=>s.bidDebiteur==bid||s.bidCrediteur==bid);
+      const mineTotal = mine.reduce((s,x)=>s+(x.bidCrediteur==bid?x.montant:-x.montant),0);
+      const ligneStyle=s=>{
+        const jeSuisCrediteur = s.bidCrediteur==bid;
+        const jeSuisDebiteur = s.bidDebiteur==bid;
+        const highlight = jeSuisCrediteur||jeSuisDebiteur;
+        return `<div class="stat-row" style="${highlight?'font-weight:600':''}">
+          <span style="font-size:13px">${nomB(s.bidDebiteur)} doit à ${nomB(s.bidCrediteur)}</span>
+          <span style="color:${jeSuisCrediteur?'var(--green)':jeSuisDebiteur?'var(--red)':'var(--text3)'}">${F(s.montant)}</span>
+        </div>`;
+      };
+      return `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--teal,#0d9488);cursor:pointer" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div class="ct">🔄 Avances inter-boutiques en cours</div>
+        </div>
+        ${mine.length?`<div class="mv" style="color:${mineTotal>=0?'var(--green)':'var(--red)'}">${mineTotal>=0?'+':''}${F(mineTotal)}</div>
+        <div class="ms" style="margin-bottom:10px">${mineTotal>0?`${bActive.nom} doit recevoir ce montant`:mineTotal<0?`${bActive.nom} doit rembourser ce montant`:'Soldé'}</div>`:''}
+        ${soldes.map(ligneStyle).join('')}
+      </div>`;
+    })()}
     <p class="st">Vue d'ensemble <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">${curM}</span></p>
     <div class="g4">
       <div class="card"><div class="ct">Solde net</div><div class="mv" style="color:${solde>=0?'var(--green)':'var(--red)'}">${F(solde)}</div><span class="badge ${solde>=0?'bg':'br'}">${solde>=0?'Bénéfice':'Déficit'}</span></div>
