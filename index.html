@@ -1834,6 +1834,21 @@ const firebaseConfig = {
 // ─── FIREBASE INIT (via CDN) ───
 let firebaseApp=null, db=null, fbReady=false;
 
+// FIX : variables d'état Master Save déclarées ICI, tout en haut du script — pas plus
+// loin dans le fichier comme avant. Certaines fonctions d'init (initAméliorations,
+// startFirebaseSync) les utilisent très tôt au chargement de la page, avant que
+// l'exécution linéaire du script n'atteigne leur ancienne position. Un `let` référencé
+// avant sa ligne de déclaration reste en "zone morte temporelle" et lève
+// "ReferenceError: Cannot access ... before initialization" — ce qui cassait
+// silencieusement le Master Save automatique, le listener multi-appareils, et le bouton
+// Master Save manuel. Les déclarer avant toute utilisation possible élimine ce risque.
+let _autoMasterSaveTimer = null;
+const AUTO_MASTER_SAVE_INTERVAL_MIN = 5; // toutes les 5 minutes
+let _masterSaveListener = null;
+let _dernierMasterSaveTs = 0;
+let _justDidMasterSave = false;   // flag pour bloquer la réception après émission
+let _justDidMasterSaveTimer = null;
+
 function initFirebase(){
   return new Promise(resolve=>{
     if(typeof firebase==='undefined'){resolve(false);return;}
@@ -23545,13 +23560,9 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
-// FIX : déclarées ICI (avant masterSave, qui les utilise) plutôt que plus loin dans le
-// fichier comme avant. Un `let` déclaré après sa première utilisation peut, dans certains
-// cas de chargement (cache Service Worker partiel, script interrompu plus haut), rester
-// en "zone morte temporelle" et déclencher "ReferenceError: Cannot access before
-// initialization" à chaque clic sur Master Save. Les déclarer avant élimine ce risque.
-let _justDidMasterSave = false;   // flag pour bloquer la réception après émission
-let _justDidMasterSaveTimer = null;
+// FIX : _justDidMasterSave / _justDidMasterSaveTimer sont déclarées tout en haut du
+// fichier (voir près de la définition de `db`), pas ici — pour éviter tout risque de
+// zone morte temporelle (TDZ) sur des fonctions d'init appelées tôt au chargement.
 
 async function masterSave(auto){
   if(S.session?.role !== 'admin'){ if(!auto) toast('⛔ Réservé à l\'admin'); return; }
@@ -23647,9 +23658,8 @@ async function masterSave(auto){
 // Sur l'appareil admin, vérifie régulièrement s'il y a des ventes de
 // vendeurs en attente (zone pending) et lance un Master Save silencieux
 // si besoin, pour que le stock affiché reste à jour sans action manuelle.
+// (_autoMasterSaveTimer / AUTO_MASTER_SAVE_INTERVAL_MIN déclarées tout en haut du fichier)
 // ══════════════════════════════════════════════════════════════════
-let _autoMasterSaveTimer = null;
-const AUTO_MASTER_SAVE_INTERVAL_MIN = 5; // toutes les 5 minutes
 
 function initAutoMasterSave(){
   if(S.session?.role !== 'admin') return; // seulement pour l'admin
@@ -23674,8 +23684,7 @@ async function _verifierAutoMasterSave(){
 
 // ─── LISTENER MASTER SAVE (tous les appareils) ───
 // Dès qu'un master_save est détecté sur Firebase, recharger les données locales
-let _masterSaveListener = null;
-let _dernierMasterSaveTs = 0;
+// (_masterSaveListener / _dernierMasterSaveTs déclarées tout en haut du fichier)
 
 function activerListenerMasterSave(){
   if(!fbReady || !db) return;
