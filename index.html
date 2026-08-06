@@ -23477,49 +23477,72 @@ async function priseDeService(){
 
   toast('🔄 Prise de service — synchronisation en cours...', 3000);
 
-  // Étape 1 : charger Firebase et fusionner
-  setSyncStatus('syncing','Prise de service...');
-  const remote = await loadFromFirebase();
-  if(remote){
-    const merged = fusionnerDonnees(S, remote);
-    appliquerEtatFusionne(merged);
+  const resetBtn = () => { if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; } };
+
+  // FIX : try/catch/finally global, comme pour Master Save — garantit que le bouton ne
+  // reste jamais figé sur "En cours..." même si un appel réseau se bloque en silence.
+  try {
+    // Étape 1 : charger Firebase et fusionner
+    setSyncStatus('syncing','Prise de service...');
+    const remote = await withTimeout(loadFromFirebase(), 20000, 'chargement Firebase');
+    if(remote){
+      const merged = fusionnerDonnees(S, remote);
+      appliquerEtatFusionne(merged);
+      saveLocal(S);
+    }
+
+    // Étape 1bis : absorber les ventes/achats en attente des vendeurs (zone pending)
+    // FIX : avant ce correctif, "Prise de service" ne récupérait pas les ventes des
+    // vendeurs restées dans la zone d'attente — seul Master Save le faisait. Résultat :
+    // le stock semblait ne pas bouger tant qu'on ne cliquait pas sur Master Save.
+    if(btn) btn.innerHTML = '📥 Récupération vendeurs...';
+    try {
+      await withTimeout(absorberPendingFirebase(), 20000, 'récupération vendeurs');
+    } catch(e) {
+      console.warn('[PRISE DE SERVICE] Absorption vendeurs a expiré/échoué, on continue quand même:', e);
+    }
+
+    // Étape 2 : générer nouvelle version et pousser vers Firebase
+    genVersion();
+    S.version = Date.now();
     saveLocal(S);
+    const ok = await withTimeout(saveToFirebase(S), 20000, 'écriture Firebase');
+    if(!ok){
+      toast('❌ Échec de la synchronisation');
+      return;
+    }
+
+    // Étape 3 : signal Master Save pour que tous les appareils se synchronisent
+    const signal = {
+      ts: S.version,
+      par: (S.session?.nom || 'Admin') + ' (Prise de service)',
+      email: S.session?.email || '',
+      at: new Date().toISOString()
+    };
+    await withTimeout(db.ref('christmedia/master_save').set(signal), 15000, 'signal master_save');
+
+    setSyncStatus('online','Synchronisé ✓');
+    toast('✅ Prise de service terminée — tous les appareils sont synchronisés !', 4000);
+    // Notifier le SW local pour renouveler le cache
+    swEnvoyerVersion();
+    rafraichirPageCourante();
+  } catch(e) {
+    console.warn('[PRISE DE SERVICE] Erreur ou timeout:', e);
+    setSyncStatus('offline','Échec synchro');
+    toast('❌ Prise de service : ' + (e && e.message ? e.message : 'échec réseau') + ' — réessayez');
+  } finally {
+    resetBtn();
   }
+}
 
-  // Étape 1bis : absorber les ventes/achats en attente des vendeurs (zone pending)
-  // FIX : avant ce correctif, "Prise de service" ne récupérait pas les ventes des
-  // vendeurs restées dans la zone d'attente — seul Master Save le faisait. Résultat :
-  // le stock semblait ne pas bouger tant qu'on ne cliquait pas sur Master Save.
-  if(btn) btn.innerHTML = '📥 Récupération vendeurs...';
-  await absorberPendingFirebase();
-
-  // Étape 2 : générer nouvelle version et pousser vers Firebase
-  genVersion();
-  S.version = Date.now();
-  saveLocal(S);
-  const ok = await saveToFirebase(S);
-  if(!ok){
-    toast('❌ Échec de la synchronisation');
-    if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
-    return;
-  }
-
-  // Étape 3 : signal Master Save pour que tous les appareils se synchronisent
-  const signal = {
-    ts: S.version,
-    par: (S.session?.nom || 'Admin') + ' (Prise de service)',
-    email: S.session?.email || '',
-    at: new Date().toISOString()
-  };
-  await db.ref('christmedia/master_save').set(signal);
-
-  setSyncStatus('online','Synchronisé ✓');
-  toast('✅ Prise de service terminée — tous les appareils sont synchronisés !', 4000);
-  // Notifier le SW local pour renouveler le cache
-  swEnvoyerVersion();
-  rafraichirPageCourante();
-
-  if(btn){ btn.style.opacity=''; btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> 🔄 Prise de service'; }
+// FIX : empêche un appel réseau silencieusement bloqué (connexion instable) de figer
+// indéfiniment le bouton Master Save sur "Envoi...". Au-delà de `ms`, la promesse est
+// rejetée et le bloc appelant peut nettoyer proprement au lieu de rester suspendu.
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout: ' + (label||'opération') + ' (>' + Math.round(ms/1000) + 's)')), ms))
+  ]);
 }
 
 async function masterSave(auto){
@@ -23531,71 +23554,84 @@ async function masterSave(auto){
   const origHtml = btn ? btn.innerHTML : '';
   if(btn && !auto){ btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/></svg> Envoi...'; btn.style.opacity='0.7'; }
 
-  // Étape 0 : absorber les données en attente des vendeurs avant de publier
-  if(navigator.onLine){
-    const btnLabel = btn ? btn.innerHTML : '';
-    if(btn && !auto) btn.innerHTML = '📥 Récupération vendeurs...';
-    await absorberPendingFirebase();
-    if(btn && !auto) btn.innerHTML = btnLabel;
-  }
-
-  // Générer une version maître (timestamp)
-  genVersion();
-  S.version = Date.now();
-  // Mettre à jour sw_version pour forcer le renouvellement du cache sur tous les appareils
-  if(!S.parametres) S.parametres = {};
-  S.parametres.sw_version = S.version;
-  saveLocal(S);
-
-  // 1. Écrire toutes les données dans Firebase
-  const ok = await saveToFirebase(S);
-  if(!ok){
-    toast('❌ Échec de l\'écriture Firebase');
-    if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
-    return;
-  }
-
-  // 2. Écrire le signal master_save avec timestamp + auteur
-  const signal = {
-    ts: S.version,
-    par: S.session?.nom || 'Admin',
-    email: S.session?.email || '',
-    at: new Date().toISOString()
-  };
-
-  // FIX : bloquer la réception du signal sur CET appareil pendant 30s
-  // (Firebase peut prendre jusqu'à 20s à propager selon la connexion)
-  _justDidMasterSave = true;
-  clearTimeout(_justDidMasterSaveTimer);
-  _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 30000);
-
-  await db.ref('christmedia/master_save').set(signal);
-
-  // Enregistrer dans l'historique des Master Save (30 derniers)
+  // FIX : try/catch/finally global — quoi qu'il arrive (erreur, timeout, connexion
+  // coupée en cours de route), le bouton est TOUJOURS remis à son état normal dans le
+  // finally. Avant ce fix, un appel réseau resté bloqué (sans jamais résoudre ni rejeter)
+  // laissait le bouton figé sur "Envoi..." indéfiniment, jusqu'au redémarrage de l'app.
   try {
-    const histSnap = await db.ref('christmedia/master_save_history').once('value');
-    const hist = histSnap.val() || [];
-    const histArr = Array.isArray(hist) ? hist : Object.values(hist);
-    histArr.unshift({ ...signal, date: signal.at.slice(0,10), heure: new Date(signal.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) });
-    await db.ref('christmedia/master_save_history').set(histArr.slice(0,30));
-  } catch(e) { console.warn('Historique MS:', e); }
+    // Étape 0 : absorber les données en attente des vendeurs avant de publier
+    if(navigator.onLine){
+      const btnLabel = btn ? btn.innerHTML : '';
+      if(btn && !auto) btn.innerHTML = '📥 Récupération vendeurs...';
+      try {
+        await withTimeout(absorberPendingFirebase(), 20000, 'récupération vendeurs');
+      } catch(e) {
+        console.warn('[MASTER SAVE] Absorption vendeurs a expiré/échoué, on continue quand même:', e);
+      }
+      if(btn && !auto) btn.innerHTML = btnLabel;
+    }
 
-  toast(auto ? '⚡ Synchro auto — ventes des vendeurs récupérées' : '⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
-  // Réinitialiser le rappel du soir (Master Save vient d'être fait)
-  _dernierMasterSaveJour = new Date().toISOString().slice(0,10);
-  // Notifier le SW local pour renouveler le cache
-  swEnvoyerVersion();
-  // FIX : rafraîchir la page affichée sur CET appareil (l'admin qui vient de faire le
-  // Master Save). Avant ce fix, le stock/les ventes absorbées étaient bien à jour en
-  // mémoire et sur disque, mais l'écran restait figé sur les anciennes valeurs tant
-  // qu'on ne rechargeait pas la page manuellement.
-  rafraichirPageCourante();
-  // FIX : forcer une relecture immédiate du badge "vendeur en attente" au lieu de
-  // compter uniquement sur le listener passif. Filet de sécurité utile si le listener
-  // n'était pas encore attaché (rechargement de page récent, cache SW pas encore
-  // renouvelé) — le badge se met à jour tout de suite après un Master Save réussi.
-  verifierPendingDisponible();
-  if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
+    // Générer une version maître (timestamp)
+    genVersion();
+    S.version = Date.now();
+    // Mettre à jour sw_version pour forcer le renouvellement du cache sur tous les appareils
+    if(!S.parametres) S.parametres = {};
+    S.parametres.sw_version = S.version;
+    saveLocal(S);
+
+    // 1. Écrire toutes les données dans Firebase
+    const ok = await withTimeout(saveToFirebase(S), 20000, 'écriture Firebase');
+    if(!ok){
+      toast('❌ Échec de l\'écriture Firebase');
+      return;
+    }
+
+    // 2. Écrire le signal master_save avec timestamp + auteur
+    const signal = {
+      ts: S.version,
+      par: S.session?.nom || 'Admin',
+      email: S.session?.email || '',
+      at: new Date().toISOString()
+    };
+
+    // FIX : bloquer la réception du signal sur CET appareil pendant 30s
+    // (Firebase peut prendre jusqu'à 20s à propager selon la connexion)
+    _justDidMasterSave = true;
+    clearTimeout(_justDidMasterSaveTimer);
+    _justDidMasterSaveTimer = setTimeout(() => { _justDidMasterSave = false; }, 30000);
+
+    await withTimeout(db.ref('christmedia/master_save').set(signal), 15000, 'signal master_save');
+
+    // Enregistrer dans l'historique des Master Save (30 derniers)
+    try {
+      const histSnap = await withTimeout(db.ref('christmedia/master_save_history').once('value'), 15000, 'lecture historique');
+      const hist = histSnap.val() || [];
+      const histArr = Array.isArray(hist) ? hist : Object.values(hist);
+      histArr.unshift({ ...signal, date: signal.at.slice(0,10), heure: new Date(signal.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) });
+      await withTimeout(db.ref('christmedia/master_save_history').set(histArr.slice(0,30)), 15000, 'écriture historique');
+    } catch(e) { console.warn('Historique MS:', e); }
+
+    toast(auto ? '⚡ Synchro auto — ventes des vendeurs récupérées' : '⚡ Master Save envoyé — tous les appareils vont se synchroniser !');
+    // Réinitialiser le rappel du soir (Master Save vient d'être fait)
+    _dernierMasterSaveJour = new Date().toISOString().slice(0,10);
+    // Notifier le SW local pour renouveler le cache
+    swEnvoyerVersion();
+    // FIX : rafraîchir la page affichée sur CET appareil (l'admin qui vient de faire le
+    // Master Save). Avant ce fix, le stock/les ventes absorbées étaient bien à jour en
+    // mémoire et sur disque, mais l'écran restait figé sur les anciennes valeurs tant
+    // qu'on ne rechargeait pas la page manuellement.
+    rafraichirPageCourante();
+    // FIX : forcer une relecture immédiate du badge "vendeur en attente" au lieu de
+    // compter uniquement sur le listener passif. Filet de sécurité utile si le listener
+    // n'était pas encore attaché (rechargement de page récent, cache SW pas encore
+    // renouvelé) — le badge se met à jour tout de suite après un Master Save réussi.
+    verifierPendingDisponible();
+  } catch(e) {
+    console.warn('[MASTER SAVE] Erreur ou timeout:', e);
+    toast('❌ Master Save : ' + (e && e.message ? e.message : 'échec réseau') + ' — réessayez');
+  } finally {
+    if(btn){ btn.innerHTML = origHtml; btn.style.opacity=''; }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
