@@ -23545,6 +23545,14 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
+// FIX : déclarées ICI (avant masterSave, qui les utilise) plutôt que plus loin dans le
+// fichier comme avant. Un `let` déclaré après sa première utilisation peut, dans certains
+// cas de chargement (cache Service Worker partiel, script interrompu plus haut), rester
+// en "zone morte temporelle" et déclencher "ReferenceError: Cannot access before
+// initialization" à chaque clic sur Master Save. Les déclarer avant élimine ce risque.
+let _justDidMasterSave = false;   // flag pour bloquer la réception après émission
+let _justDidMasterSaveTimer = null;
+
 async function masterSave(auto){
   if(S.session?.role !== 'admin'){ if(!auto) toast('⛔ Réservé à l\'admin'); return; }
   if(!fbReady || !db){ if(!auto) toast('⚠️ Firebase non disponible'); return; }
@@ -23668,8 +23676,6 @@ async function _verifierAutoMasterSave(){
 // Dès qu'un master_save est détecté sur Firebase, recharger les données locales
 let _masterSaveListener = null;
 let _dernierMasterSaveTs = 0;
-let _justDidMasterSave = false;   // FIX : flag pour bloquer la réception après émission
-let _justDidMasterSaveTimer = null;
 
 function activerListenerMasterSave(){
   if(!fbReady || !db) return;
