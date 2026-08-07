@@ -2185,7 +2185,7 @@ async function absorberPendingFirebase(){
         if(Array.isArray(zone.achats)){
           zone.achats.forEach(achat => {
             if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
-            const f = (S.fournisseurs||[]).find(x => x.id == achat.fid);
+            const f = getFournisseursActifs().find(x => x.id == achat.fid);
             if(!f) return;
             if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
             // Vérifier si cet achat est déjà dans l'historique
@@ -3042,7 +3042,11 @@ window.addEventListener('offline', ()=>{
 // ─── HELPERS ───
 const sa=a=>Math.max(0,(a.si||0)+((a.ea||0))-Math.max(0,a.qv||0));
 const ga=id=>S.stock.find(a=>a.id==id);
-const gf=id=>S.fournisseurs.find(f=>f.id==id);
+// FIX : liste des fournisseurs actifs (exclut les soft-deleted _deleted:true).
+// Utilisé partout à la lecture pour éviter qu'un fournisseur supprimé ne
+// réapparaisse dans les listes/rapports après une fusion pending d'un vendeur.
+const getFournisseursActifs=()=>(S.fournisseurs||[]).filter(f=>f&&!f._deleted);
+const gf=id=>getFournisseursActifs().find(f=>f.id==id);
 const cb=cat=>{const m={'Lingerie':'cat-l','Audio-Vidéo':'cat-a','Bureautique':'cat-b'};return`<span class="${m[cat]||'cat-b'}">${cat}</span>`};
 const sb=s=>{const m={'Payé':'bg','Non payé':'br','Débiteur':'br','Régulier':'bt','Actif':'bg','VIP':'bp','Inactif':'ba'};return`<span class="badge ${m[s]||'bb'}">${s}</span>`};
 
@@ -3202,7 +3206,11 @@ const actionsMap={
   achats:()=>'<button class="btn" onclick="modalExportExcel()">📊 Excel</button> <button class="btn btn-primary" onclick="addAchat()">+ Achat</button>',
   stock:()=>`<div class="search-bar"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input type="text" placeholder="Rechercher..." oninput="filterStock(this.value)" id="stock-search"></div><button class="btn" onclick="openScanner('stock')" title="Scanner code-barres">📷 Scanner</button><button class="btn" onclick="ouvrirEtiquettes()">🏷️ Étiquettes</button><button class="btn" onclick="modalExportExcel()">📊 Excel</button>${isAdmin()?'<button class="btn" onclick="migrerArticlesBoutique()" title="Assigner les articles sans boutique">🔀 Assigner</button>':''}<button class="btn btn-primary" onclick="addArticle()">+ Article</button>`,
   clients:()=>'<button class="btn" onclick="ouvrirRelanceClients()">📱 Relances</button> <button class="btn btn-primary" onclick="addClient()">+ Client</button>',
-  fournisseurs:()=>'<button class="btn btn-primary" onclick="addFour()">+ Fournisseur</button>',
+  fournisseurs:()=>{
+    const nb=detecterDoublonsFournisseurs().length;
+    return (nb>0?`<button class="btn btn-sm" onclick="fusionnerDoublonsFournisseurs()" style="background:var(--red-bg);color:var(--red);border-color:var(--red);margin-right:8px">🔀 Fusionner doublons <span style="background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;margin-left:4px">${nb}</span></button>`:'')
+      +'<button class="btn btn-primary" onclick="addFour()">+ Fournisseur</button>';
+  },
   depenses:()=>'<button class="btn btn-danger" onclick="addDep()">+ Dépense</button>',
   tresorerie:()=>'',revenus:()=>'<button class="btn btn-success" onclick="addRevenu()">+ Revenu</button> <button class="btn" onclick="addCharge()">+ Charge</button>',rapports:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',
   historique:()=>'<button class="btn" onclick="clearHistorique()">🗑️ Vider</button>',inventaire:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',workspace:()=>'',comptes:()=>'<button class="btn btn-primary" onclick="addCompte()">+ Compte</button>',devis:()=>'<button class="btn" onclick="_devisFiltreStatut=\'Envoyé\';rDevis()">📤 En attente</button> <button class="btn btn-primary" onclick="addDevis()">+ Devis</button>',planning:()=>'<button class="btn btn-primary" onclick="addPlanning()">+ Tâche</button>',calculatrice:()=>'',parametres:()=>'',
@@ -4035,7 +4043,7 @@ function rDash(){
     <p class="st">Finances résumé</p>
     <div class="g3">
       <div class="card"><div class="ct">Total dépenses</div><div class="mv" style="color:var(--red)">${F(dep)}</div><span class="badge br">${depensesB.length} opérations</span></div>
-      <div class="card"><div class="ct">Dettes fournisseurs</div><div class="mv" style="color:var(--amber)">${F((S.fournisseurs||[]).filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))).reduce((s,f)=>s+f.dette,0))}</div><span class="badge ba">À régler</span></div>
+      <div class="card"><div class="ct">Dettes fournisseurs</div><div class="mv" style="color:var(--amber)">${F(getFournisseursActifs().filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))).reduce((s,f)=>s+f.dette,0))}</div><span class="badge ba">À régler</span></div>
       <div class="card"><div class="ct">Clients débiteurs</div><div class="mv">${N((S.clients||[]).filter(c=>c.solde>0&&(c.bid==bid||(!c.bid&&bid==((S.boutiques||[])[0]?.id||1)))).length)}</div><span class="badge ba">${F((S.clients||[]).filter(c=>c.bid==bid||(!c.bid&&bid==((S.boutiques||[])[0]?.id||1))).reduce((s,c)=>s+c.solde,0))}</span></div>
     </div>
     ${getDailyCoachQuote()}
@@ -4770,7 +4778,7 @@ function addAchat(){
 }
 
 function _renderModalAchat(){
-  const fourOpts=S.fournisseurs.map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
+  const fourOpts=getFournisseursActifs().map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
   const stockB=getStockBoutique(getBid());
   const artOpts=stockB.map(a=>`<option value="${a.id}">[${a.code}] ${a.nom}</option>`).join('');
   const panier=window.panierAchat||[];
@@ -4942,7 +4950,7 @@ function saveAchatMulti(){
     if(statut_achat==='Payé'){
       debiterCompte(cid,l.mt);
     } else {
-      const f=S.fournisseurs.find(f=>f.id==fid);
+      const f=getFournisseursActifs().find(f=>f.id==fid);
       if(f){
         const avantDette=f.dette||0;
         f.dette=avantDette+l.mt;
@@ -4986,7 +4994,7 @@ function delAchat(id){
       // Réduire la dette fournisseur du montant RESTANT (non encore payé)
       const totalPaye=ac.tranches?ac.tranches.reduce((s,t)=>s+t.mt,0):0;
       const restedu=ac.mt-totalPaye;
-      const f=S.fournisseurs.find(f=>f.id==ac.fid);
+      const f=getFournisseursActifs().find(f=>f.id==ac.fid);
       if(f) f.dette=Math.max(0,(f.dette||0)-restedu);
       // FIX soft delete : marquer _deleted au lieu de filter (évite réapparition après sync Firebase)
       if(S.dettesAchats){ const _daA=S.dettesAchats.find(d=>d.id==id); if(_daA){_daA._deleted=true;_daA.ts=Date.now();} }
@@ -5744,7 +5752,7 @@ function delClient(id){
 function rFour(){
   const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>x.bid==bid||(!x.bid&&bid==defaultBid);
-  const fournisseurs=(S.fournisseurs||[]).filter(isMine);
+  const fournisseurs=getFournisseursActifs().filter(isMine);
   const achatsB=getAchatsBoutique(bid);
   const totalDettes=fournisseurs.reduce((s,f)=>s+(f.dette||0),0);
   const totalAchats=achatsB.reduce((s,a)=>s+a.mt,0);
@@ -5770,7 +5778,7 @@ function rFour(){
       </tr>`}).join('')}
       </tbody></table></div>
     <div class="g4" style="margin-top:18px">
-      <div class="card"><div class="ct">Total fournisseurs</div><div class="mv">${N(S.fournisseurs.length)}</div></div>
+      <div class="card"><div class="ct">Total fournisseurs</div><div class="mv">${N(getFournisseursActifs().length)}</div></div>
       <div class="card"><div class="ct">Total achats</div><div class="mv" style="color:var(--purple)">${F(totalAchats)}</div></div>
       <div class="card"><div class="ct">Total dettes</div><div class="mv" style="color:var(--red)">${F(totalDettes)}</div></div>
       <div class="card"><div class="ct">Fournisseurs actifs</div><div class="mv">${N(fournisseurs.filter(f=>f.statut==='Actif').length)}</div></div>
@@ -5860,7 +5868,15 @@ function delFour(id){
   if((f.dette||0)>0) msg+=`\n\n⚠️ Ce fournisseur a encore une dette de ${F(f.dette)} — elle sera perdue (non payée) si vous supprimez.`;
   if(achatsF.length>0) msg+=`\n\n⚠️ ${achatsF.length} achat(s) sont liés à ce fournisseur — ils resteront dans l'historique mais n'afficheront plus de nom de fournisseur.`;
   if(!confirm(msg))return;
-  S.fournisseurs=S.fournisseurs.filter(f=>f.id!=id);
+  // FIX : soft delete (_deleted:true) au lieu de retirer physiquement l'entrée.
+  // Avant ce fix, la suppression était physique : quand un vendeur (dont l'état
+  // local contenait encore l'ancien fournisseur) se reconnectait, sa zone
+  // "pending" repoussait l'entrée vers l'admin qui la fusionnait comme si elle
+  // était nouvelle (aucune trace de suppression) → le fournisseur réapparaissait
+  // en double. Avec le tombstone _deleted:true + ts récent, la fusion pending
+  // (absorberPendingFirebase) et la fusion Firebase normale (mergeCollection)
+  // respectent déjà ce flag et conservent la suppression.
+  f._deleted=true; f.ts=Date.now();
   saveData();toast('🗑️ Fournisseur supprimé');
   if(currentPage==='dettes') rDettes();
   else if(currentPage==='fournisseurs') rFour();
@@ -5871,7 +5887,9 @@ function delFour(id){
 // ─── FUSION DOUBLONS FOURNISSEURS ───
 function detecterDoublonsFournisseurs(){
   const groupes={};
-  (S.fournisseurs||[]).forEach(f=>{
+  // FIX : ne regrouper que les fournisseurs actifs (non supprimés). Un fournisseur
+  // soft-deleted ne doit plus compter comme doublon.
+  getFournisseursActifs().forEach(f=>{
     const key=(f.nom||'').trim().toLowerCase()+'|'+(f.tel||'').replace(/\s/g,'');
     if(!groupes[key]) groupes[key]=[];
     groupes[key].push(f);
@@ -5920,7 +5938,9 @@ function _executerFusionFournisseurs(){
         principal.historiquePaiementsFour.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
       }
       (S.achats||[]).forEach(a=>{if(a.fid==doublon.id) a.fid=principal.id;});
-      S.fournisseurs=S.fournisseurs.filter(f=>f.id!==doublon.id);
+      // FIX : soft delete du doublon (au lieu de le retirer physiquement) pour que
+      // la fusion pending d'un vendeur ne le fasse pas réapparaître ensuite.
+      doublon._deleted=true; doublon.ts=Date.now();
       nbFusions++;
     });
     principal.ts=Date.now();
@@ -6430,7 +6450,7 @@ function rTresorerie(){
   const achats=achatsB.reduce((s,a)=>s+a.mt,0);
   const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
-  const foursB=(S.fournisseurs||[]).filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1)));
+  const foursB=getFournisseursActifs().filter(f=>f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1)));
   const clientsB=getClientsBoutique(bid);
   const detteFour=foursB.reduce((s,f)=>s+f.dette,0);
   // Emprunts perso non soldés (argent qu'on doit rembourser) — filtrés par boutique active
@@ -6549,7 +6569,7 @@ function rTresorerie(){
 }
 
 function editerDetteFour(fid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);
+  const f=getFournisseursActifs().find(x=>x.id==fid);
   if(!f) return;
   const overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -6623,7 +6643,7 @@ function editerEmprunt(did){
 }
 
 function reglerDette(fid){
-  const f=S.fournisseurs.find(f=>f.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(f=>f.id==fid);if(!f)return;
   modal(`<div class="mft">💳 Régler dette — ${f.nom}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">Solde actuel</span><strong style="color:var(--red)">${F(f.dette)}</strong></div>
@@ -6643,7 +6663,7 @@ function reglerDette(fid){
       <button class="btn btn-success" onclick="saveReglementDette(${fid})">✅ Confirmer paiement</button></div>`);
 }
 function saveReglementDette(fid){
-  const f=S.fournisseurs.find(f=>f.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(f=>f.id==fid);if(!f)return;
   const mt=+document.getElementById('mmt').value||0;
   const cid_d=document.getElementById('mmo').value;
   const note=(document.getElementById('mmt-note')||{}).value||'';
@@ -6686,7 +6706,7 @@ function resteAchat(a){
   return Math.max(0, (+a.mt||0) - paye);
 }
 function reconcilierDette(fid){
-  const f=S.fournisseurs&&S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const f=S.fournisseurs&&getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const achatsF=S.achats.filter(a=>a.fid==fid && a.statut==='À payer' && !a._deleted);
   if(achatsF.length===0) return toast('ℹ️ Aucun achat "À payer" pour ce fournisseur');
 
@@ -6723,7 +6743,7 @@ function reconcilierDette(fid){
   if(currentPage==='dettes') rDettes();
 }
 function reconcilierToutesLesDettes(){
-  const fours=(S.fournisseurs||[]).filter(f=>{
+  const fours=getFournisseursActifs().filter(f=>{
     const achatsF=S.achats.filter(a=>a.fid==f.id && a.statut==='À payer' && !a._deleted);
     const totalOuvert=achatsF.reduce((s,a)=>s+resteAchat(a),0);
     return totalOuvert > (f.dette||0);
@@ -7338,7 +7358,7 @@ function rParametres(){
     <div class="param-section">
       <div class="param-section-title">🔀 Réassigner les fournisseurs aux boutiques</div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Les fournisseurs sans boutique apparaissent partout. Assigne chacun à sa boutique ici.</div>
-      ${(S.fournisseurs||[]).map(f=>{
+      ${getFournisseursActifs().map(f=>{
         const bOpts=(S.boutiques||[]).map(b=>`<option value="${b.id}"${f.bid==b.id?' selected':''}>` + (b.emoji||'🏪') + ' ' + b.nom + '</option>').join('');
         const badge=f.bid?'':'<span style="font-size:10px;background:#FAEEDA;color:#854F0B;padding:1px 6px;border-radius:8px;margin-left:6px">Non assigné</span>';
         return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border2)">'
@@ -7738,7 +7758,7 @@ function supprimerCatCharge(i){
 }
 function reassignerFour(fid, bid){
   if(!bid) return;
-  const f=(S.fournisseurs||[]).find(f=>f.id==fid);
+  const f=getFournisseursActifs().find(f=>f.id==fid);
   if(!f) return;
   f.bid=bid;
   saveData();
@@ -9097,7 +9117,7 @@ function getNotifs(){
     const retard=S.dettesAchats.filter(d=>!d._deleted&&d.statut!=='Soldé'&&d.echeance&&d.echeance<today);
     retard.forEach(d=>{
       const jours=Math.ceil((new Date()-new Date(d.echeance))/864e5);
-      const f=(S.fournisseurs||[]).find(f=>f.id==d.fid);
+      const f=getFournisseursActifs().find(f=>f.id==d.fid);
       notifs.push({icon:'🚨',msg:`Facture fournisseur en retard`,sub:`${f?f.nom:'?'} — ${F(d.montant)} — ${jours}j`,type:'fourn',urgent:true,action:"nav(document.querySelector('[data-page=fourni_avance]'),'fourni_avance')"});
     });
   }
@@ -9385,7 +9405,7 @@ function rechercheGlobale(q){
       `nav(document.querySelector('[data-page=services]'),'services');fermerRecherche()`,'');
   });
   // Fournisseurs
-  S.fournisseurs.filter(f=>f.nom.toLowerCase().includes(r)).slice(0,3).forEach(f=>{
+  getFournisseursActifs().filter(f=>f.nom.toLowerCase().includes(r)).slice(0,3).forEach(f=>{
     addR('🚚 Fournisseurs','🚚','var(--pink-bg)',f.nom,`${f.secteur} · Dette: ${F(f.dette)}`,
       `nav(document.querySelector('[data-page=fournisseurs]'),'fournisseurs');fermerRecherche()`,'');
   });
@@ -11520,7 +11540,7 @@ function saveTrancheAchat(acid){
     }
   }
   // Mettre à jour dette fournisseur
-  const f=S.fournisseurs&&S.fournisseurs.find(f=>f.id==ac.fid);
+  const f=S.fournisseurs&&getFournisseursActifs().find(f=>f.id==ac.fid);
   if(f){
     const avantF=f.dette||0;
     f.dette=Math.max(0,avantF-mt);
@@ -11558,7 +11578,7 @@ function recalcTousDettes(){
   // PROTECTION : on ne met à jour f.dette que si le recalc correspond exactement
   // à ce qu'on attend (totalAjouts - totalPaie = f.dette ± tolérance 0)
   let changed=false;
-  (S.fournisseurs||[]).forEach(f=>{
+  getFournisseursActifs().forEach(f=>{
     // 1. Dédoublonner paiements (même date + même montant + même type)
     if(f.historiquePaiementsFour&&f.historiquePaiementsFour.length){
       const seen=new Set();
@@ -11608,7 +11628,7 @@ function rDettes(){
   const prets=S.dettesPerso.filter(d=>d.typeDette==='preter'&&d.statut!=='Soldé'&&(!d.bid||d.bid==bid));
   const totalEmprunts=emprunts.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
   const totalPrets=prets.reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  const foursDirects=(S.fournisseurs||[]).filter(f=>f.dette>0&&(f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))));
+  const foursDirects=getFournisseursActifs().filter(f=>f.dette>0&&(f.bid==bid||(!f.bid&&bid==((S.boutiques||[])[0]?.id||1))));
   const totalFoursDirects=foursDirects.reduce((s,f)=>s+f.dette,0);
 
   const tabs=[{id:'tout',label:'Tout'},{id:'fournisseurs',label:'📦 Fournisseurs (achats)'},{id:'foursDirects',label:'🏭 Fournisseurs (solde)'},{id:'clients',label:'👤 Clients'},{id:'emprunts',label:'📥 Emprunts'},{id:'prets',label:'📤 Prêts'}];
@@ -12269,11 +12289,11 @@ function convertirEnEmprunt(type, id) {
     if (!a) return toast('❌ Achat introuvable');
     const paye = (a.tranches || []).reduce((s, t) => s + t.mt, 0);
     montant = Math.max(0, a.mt - paye);
-    const f = (S.fournisseurs || []).find(x => x.id == a.fid);
+    const f = getFournisseursActifs().find(x => x.id == a.fid);
     const art = (S.stock || []).find(x => x.id == a.aid);
     nom = (f ? f.nom : '?') + (art ? ' — ' + art.nom : '');
   } else if (type === 'fourDirect') {
-    const f = (S.fournisseurs || []).find(x => x.id == id);
+    const f = getFournisseursActifs().find(x => x.id == id);
     if (!f) return toast('❌ Fournisseur introuvable');
     montant = f.dette || 0;
     nom = f.nom;
@@ -12405,7 +12425,7 @@ function validerConversion(type, id, montant) {
       a.tranches.push({ date: D(), mt: montant, note: 'Converti en plan de remboursement', cid });
     }
   } else if (type === 'fourDirect') {
-    const f = (S.fournisseurs || []).find(x => x.id == id);
+    const f = getFournisseursActifs().find(x => x.id == id);
     if (f) {
       if (!f.historiquePaiementsFour) f.historiquePaiementsFour = [];
       f.historiquePaiementsFour.push({ date: D(), mt: f.dette, note: 'Converti en plan de remboursement' });
@@ -12428,7 +12448,7 @@ function validerConversion(type, id, montant) {
 }
 
 function augmenterDette(fid){
-  const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   modal(`<div class="mft">➕ Nouvelle dette — ${f.nom}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px;font-size:13px">
       <div style="display:flex;justify-content:space-between"><span>Dette actuelle</span><strong style="color:var(--red)">${F(f.dette)}</strong></div>
@@ -12451,7 +12471,7 @@ function augmenterDette(fid){
 }
 
 function saveAugmentDette(fid){
-  const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const mt=+document.getElementById('ad-mt').value||0;
   const notes=document.getElementById('ad-notes').value.trim();
   const date=document.getElementById('ad-date').value||D();
@@ -12464,7 +12484,7 @@ function saveAugmentDette(fid){
 }
 
 function corrigerSoldeManuellement(fid){
-  const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const val=prompt(`Corriger le solde de la dette de ${f.nom}\nSolde actuel : ${f.dette} FCFA\n\nEntrer le nouveau solde exact (en FCFA) :`, f.dette);
   if(val===null) return; // annulé
   const nouveau=parseInt(val.replace(/\s/g,''),10);
@@ -12485,7 +12505,7 @@ function corrigerTousLesSoldes(){
   ];
   const lignes=[];
   corrections.forEach(({nom,solde})=>{
-    const f=(S.fournisseurs||[]).find(x=>x.nom&&x.nom.trim().toLowerCase()===nom.trim().toLowerCase());
+    const f=getFournisseursActifs().find(x=>x.nom&&x.nom.trim().toLowerCase()===nom.trim().toLowerCase());
     if(f){const avant=f.dette;f.dette=solde;lignes.push(nom+": "+avant+" → "+solde);}
     else lignes.push("⚠️ "+nom+" introuvable");
   });
@@ -12507,7 +12527,7 @@ function toggleReleveFullscreen(){
 
 // Réconcilier l'historiqueDetteAjouts d'un fournisseur avec ses achats réels
 function reconcilierHistoDette(fid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   let nb=0;
@@ -12608,7 +12628,7 @@ function reconcilierHistoDette(fid){
 }
 
 function voirHistoDette(fid){
-  const f=S.fournisseurs.find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const ajouts=f.historiqueDetteAjouts||[];
   const paiements=f.historiquePaiementsFour||[];
   // Fusionner et trier chronologiquement
@@ -12702,7 +12722,7 @@ function voirHistoDette(fid){
 
 // ─── SUPPRIMER UNE LIGNE DU RELEVÉ FOURNISSEUR ───
 function supprimerLigneReleve(fid, type, lid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const sid=String(lid);
   if(!confirm('Supprimer cette ligne du relevé ?\nCette action est irréversible.'))return;
   if(type==='ajout'){
@@ -12733,7 +12753,7 @@ function supprimerLigneReleve(fid, type, lid){
 
 // ─── NETTOYER DOUBLONS PAIEMENTS (stricts : même date + même montant) ───
 function nettoyerDoublonsPaiements(fid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
   const seen=new Map();const aSupprimer=new Set();
   f.historiquePaiementsFour.forEach(p=>{
@@ -12755,7 +12775,7 @@ function nettoyerDoublonsPaiements(fid){
 
 // ─── RECONSTRUCTION HISTORIQUE DEPUIS EXCEL ───
 function ouvrirReconstructionExcel(fid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   modal(`<div class="mft">📊 Reconstruire depuis Excel — ${f.nom}</div>
     <p style="color:var(--text2);font-size:13px;margin-bottom:10px">
       Collez les lignes du tableau Excel (colonnes : <strong>Date · Ancienne Dette · Nouvelle Dette · Paiement Partiel · Reste à Payer · Observations</strong>).<br>
@@ -12776,7 +12796,7 @@ function ouvrirReconstructionExcel(fid){
 }
 
 function executerReconstructionExcel(fid){
-  const f=(S.fournisseurs||[]).find(x=>x.id==fid);if(!f)return;
+  const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const raw=document.getElementById('excel-paste').value.trim();
   const soldeFinalStr=(document.getElementById('excel-solde-final').value||'').replace(/[^\d]/g,'');
   const soldeFinal=parseInt(soldeFinalStr,10);
@@ -13969,7 +13989,7 @@ function initAutocomplete(){
     // Selon l'id de l'input, proposer les bonnes suggestions
     if(id==='mf'||id==='mod-nom'||id.includes('four')){
       // Fournisseurs
-      const fours=S.fournisseurs.map(f=>f.nom).filter(n=>n.toLowerCase().includes(val.toLowerCase()));
+      const fours=getFournisseursActifs().map(f=>f.nom).filter(n=>n.toLowerCase().includes(val.toLowerCase()));
       suggestions=[...new Set([...fours])].slice(0,6);
     } else if(id==='mn'||id==='vr-client'||id.includes('client')){
       // Clients
@@ -14180,7 +14200,7 @@ if(!S.boutique_active) S.boutique_active = S.boutiques[0]?.id || 1;
   (S.depenses||[]).forEach(d=>{ if(!d.bid){ d.bid=defaultBid; modifie=true; } });
   (S.comptes||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   // Migration fournisseurs : anciens fournisseurs sans bid → boutique par défaut (CHRIST DECO)
-  (S.fournisseurs||[]).forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
+  getFournisseursActifs().forEach(f=>{ if(!f.bid){ f.bid=defaultBid; modifie=true; } });
   (S.revenus||[]).forEach(r=>{ if(!r.bid){ r.bid=defaultBid; modifie=true; } });
   (S.charges||[]).forEach(c=>{ if(!c.bid){ c.bid=defaultBid; modifie=true; } });
   (S.services||[]).forEach(s=>{ if(!s.bid){ s.bid=defaultBid; modifie=true; } });
@@ -15190,7 +15210,7 @@ function rCalcCommande(){
     var qteManque = cible>0 ? Math.max(0,cible-dispo) : 0;
     var qteSugg = Math.max(qte30j, qteManque, dispo===0?5:0);
     // Fournisseur lié
-    var fourn = (S.fournisseurs||[]).find(function(f){ return f.articles&&f.articles.includes(a.id); });
+    var fourn = getFournisseursActifs().find(function(f){ return f.articles&&f.articles.includes(a.id); });
     if(filtreFourn && (!fourn||fourn.id!=filtreFourn)) return null;
     return {
       a:a, qteSold:qteSold, vitJour:vitJour, dispo:dispo,
@@ -15211,7 +15231,7 @@ function rCalcCommande(){
 
   // Catégories et fournisseurs pour filtres
   var cats = [...new Set(stock.map(function(a){ return a.cat; }).filter(Boolean))].sort();
-  var fourns = (S.fournisseurs||[]).filter(function(f){ return !bid||f.bid==bid||!f.bid; });
+  var fourns = getFournisseursActifs().filter(function(f){ return !bid||f.bid==bid||!f.bid; });
 
   var html = '<div class="page">';
 
@@ -16594,7 +16614,7 @@ function rClotureCaisse(){
 
       const cmdsActives = (S.commandes||[]).filter(c=>c.statut!=='Reçue');
       const cmdsAvecPrix = cmdsActives
-        .map(c=>({...c, total:(c.lignes||[]).reduce((s,l)=>s+(l.qte*(l.pu||0)),0), fnom:((S.fournisseurs||[]).find(f=>f.id==c.fid)||{nom:'—'}).nom}))
+        .map(c=>({...c, total:(c.lignes||[]).reduce((s,l)=>s+(l.qte*(l.pu||0)),0), fnom:(getFournisseursActifs().find(f=>f.id==c.fid)||{nom:'—'}).nom}))
         .filter(c=>c.total>0)
         .sort((a,b)=>a.total-b.total);
 
@@ -19245,7 +19265,7 @@ function rCommandes(){
         <thead><tr><th>N°</th><th>Fournisseur</th><th>Articles</th><th>Total estimé</th><th>Date</th><th>Statut</th><th></th></tr></thead>
         <tbody>
           ${cmds.slice().reverse().map(c => {
-            const f = S.fournisseurs.find(f => f.id == c.fid);
+            const f = getFournisseursActifs().find(f => f.id == c.fid);
             const nbLignes = (c.lignes||[]).length;
             const total = (c.lignes||[]).reduce((s,l) => s+(l.qte*(l.pu||0)),0);
             const statusColor = c.statut==='Reçue'?'bg':c.statut==='Envoyée'?'bb':'ba';
@@ -19289,9 +19309,9 @@ function genCommandesAuto(){
   // Regrouper par fournisseur (basé sur le secteur → fournisseur actif du même secteur)
   const parFour = {};
   articlesBasSansCmd.forEach(a => {
-    const four = S.fournisseurs.find(f => f.statut === 'Actif' && f.secteur === a.cat)
-                 || S.fournisseurs.find(f => f.statut === 'Actif')
-                 || S.fournisseurs[0];
+    const four = getFournisseursActifs().find(f => f.statut === 'Actif' && f.secteur === a.cat)
+                 || getFournisseursActifs().find(f => f.statut === 'Actif')
+                 || getFournisseursActifs()[0];
     if(!four) return;
     if(!parFour[four.id]) parFour[four.id] = {four, articles: []};
     // Quantité suggérée = seuil * 2 - stock actuel (pour remonter à 2× le seuil)
@@ -19363,7 +19383,7 @@ function editCommande(id){
 
 function _modalCommande(c){
   const isEdit = !!c;
-  const fourOptions = S.fournisseurs.map(f =>
+  const fourOptions = getFournisseursActifs().map(f =>
     '<option value="' + f.id + '"' + (c?.fid==f.id?' selected':'') + '>' + f.nom + '</option>'
   ).join('');
   const lignesHtml = (c?.lignes||[{aid:'',qte:1,pu:0}]).map((l,i) => {
@@ -19455,7 +19475,7 @@ function saveCommande(id){
 // ── Voir détail commande ──
 function voirCommande(id){
   const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
-  const f = S.fournisseurs.find(f=>f.id==c.fid);
+  const f = getFournisseursActifs().find(f=>f.id==c.fid);
   const total = (c.lignes||[]).reduce((s,l)=>s+(l.qte||0)*(l.pu||0),0);
   const numCmd = 'CMD-' + String(c.id).slice(-4).padStart(4,'0');
   modal('<div class="mft">📋 ' + numCmd + '</div>' +
@@ -19489,7 +19509,7 @@ function voirCommande(id){
 // ── Envoyer commande par WhatsApp ──
 function envoyerCommandeWA(id){
   const c = (S.commandes||[]).find(c=>c.id==id); if(!c) return;
-  const f = S.fournisseurs.find(f=>f.id==c.fid); if(!f) return toast('❌ Fournisseur introuvable');
+  const f = getFournisseursActifs().find(f=>f.id==c.fid); if(!f) return toast('❌ Fournisseur introuvable');
   const p = S.parametres || {};
   const nomShop = p.nom || 'Christ Media';
   const numCmd = 'CMD-' + String(c.id).slice(-4).padStart(4,'0');
@@ -19718,7 +19738,7 @@ function confirmerReception(id){
 
   if(rejetsQualite.length>0){
     const totalRej = rejetsQualite.reduce((s,r)=>s+r.qteRejetee,0);
-    const fourn = S.fournisseurs.find(f=>f.id==c.fid);
+    const fourn = getFournisseursActifs().find(f=>f.id==c.fid);
     modal('<div class="mft">⚠️ Réception avec anomalies qualité</div>' +
       '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">' + totalRej + ' unité(s) non conforme(s) n\u2019ont pas été ajoutées au stock :</div>' +
       '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px">' +
@@ -19745,7 +19765,7 @@ function voirHistoriqueControlesQualite(){
     '<div style="max-height:360px;overflow-y:auto">' +
     historique.map(h=>{
       const cmd = (S.commandes||[]).find(c=>c.id==h.cmdId);
-      const fourn = S.fournisseurs.find(f=>f.id==h.fid);
+      const fourn = getFournisseursActifs().find(f=>f.id==h.fid);
       const numCmd = cmd ? 'CMD-' + String(cmd.id).slice(-4).padStart(4,'0') : ('CMD #'+h.cmdId);
       return '<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">' +
         '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">' +
@@ -22549,7 +22569,7 @@ function rFourniAvance(){
 
 function renderFourniOverview(){
   const bid = getBid();
-  const fournisseurs = S.fournisseurs||[];
+  const fournisseurs = getFournisseursActifs();
   const achats = getAchatsBoutique(bid);
   const today = D(); const curY = today.slice(0,4);
 
@@ -22620,7 +22640,7 @@ function renderFourniHistorique(){
 }
 
 function renderFourniEval(){
-  const fournisseurs = S.fournisseurs||[];
+  const fournisseurs = getFournisseursActifs();
   const evals = S.fourni_evals||[];
   document.getElementById('fourni-body').innerHTML=`
   <div style="margin-bottom:12px;text-align:right">
@@ -22672,7 +22692,7 @@ function renderFourniDelais(){
     <thead><tr><th>Fournisseur</th><th>Montant dû</th><th>Échéance</th><th>Jours restants</th><th>Statut</th></tr></thead>
     <tbody>
       ${dettes.sort((a,b)=>(a.echeance||'9999').localeCompare(b.echeance||'9999')).map(d=>{
-        const f=(S.fournisseurs||[]).find(f=>f.id==d.fid)||(S.fournisseurs||[]).find(f=>f.nom===d.fourn)||{nom:d.fourn||'?'};
+        const f=getFournisseursActifs().find(f=>f.id==d.fid)||getFournisseursActifs().find(f=>f.nom===d.fourn)||{nom:d.fourn||'?'};
         const jours = d.echeance ? Math.round((new Date(d.echeance)-new Date(today))/86400000) : null;
         const retard = jours!==null&&jours<0;
         return `<tr style="${retard?'background:var(--red-bg)':''}">
@@ -22690,7 +22710,7 @@ function renderFourniDelais(){
 }
 
 function ouvrirModalEvalFourn(fid){
-  const fournisseurs = S.fournisseurs||[];
+  const fournisseurs = getFournisseursActifs();
   if(fournisseurs.length===0){toast('⚠️ Aucun fournisseur');return;}
   ouvrirModal('⭐ Évaluer un fournisseur',`
   <div class="form-grid">
@@ -22748,7 +22768,7 @@ function renderFourniCapacite(){
   const cmdsActives = (S.commandes||[]).filter(c=>c.statut!=='Reçue');
   const cmdsAvecPrix = cmdsActives.map(c=>{
     const total = (c.lignes||[]).reduce((s,l)=>s+(l.qte*(l.pu||0)),0);
-    const f = (S.fournisseurs||[]).find(f=>f.id==c.fid);
+    const f = getFournisseursActifs().find(f=>f.id==c.fid);
     return {...c, totalEstime:total, fournisseurNom:f?f.nom:'—'};
   }).sort((a,b)=>a.totalEstime-b.totalEstime); // trier par montant croissant
 
