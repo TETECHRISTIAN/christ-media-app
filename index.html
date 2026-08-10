@@ -17418,11 +17418,17 @@ function renderCaisseRapide(){
   const nbItems = crPanier.reduce((s,l)=>s+l.qte,0);
   const monnaieRendue = crMonnaie > total ? crMonnaie - total : 0;
 
-  const cats = ['Tout', ...new Set(S.stock.map(a=>a.cat).filter(Boolean))];
+  const bidActif = getBid();
+  const boutiqueActive = getBoutiqueActive();
+  const b0id = (S.boutiques[0]&&S.boutiques[0].id)||1;
+  const stockBoutique = S.stock.filter(a=>a.bid==bidActif || (!a.bid && bidActif==b0id));
+  const cats = ['Tout', ...new Set(stockBoutique.map(a=>a.cat).filter(Boolean))];
   const modes = ['Espèces','Flooz','Mixx','Carte','Autre'];
   const clients = S.clients||[];
+  const roleActif = S.session?.role;
+  const peutChangerBoutique = (roleActif==='admin'||roleActif==='superviseur') && (S.boutiques||[]).length>1;
 
-  let stockFiltre = S.stock.filter(a=>sa(a)>=0);
+  let stockFiltre = stockBoutique.filter(a=>sa(a)>=0);
   if(crCat!=='Tout') stockFiltre = stockFiltre.filter(a=>a.cat===crCat);
   if(crSearch){
     const q = crSearch.toLowerCase();
@@ -17441,6 +17447,11 @@ function renderCaisseRapide(){
   <div class="cr-topbar">
     <button onclick="fermerCaisseRapide()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">✕ Fermer</button>
     <div class="cr-topbar-title">⚡ Caisse Rapide</div>
+    ${peutChangerBoutique?`
+      <select onchange="crChangerBoutique(this.value)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">
+        ${(S.boutiques||[]).map(b=>`<option value="${b.id}" ${bidActif==b.id?'selected':''} style="color:#000">${b.emoji||'🏪'} ${b.nom}</option>`).join('')}
+      </select>
+    `:`<div style="background:rgba(255,255,255,.15);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700">${boutiqueActive.emoji||'🏪'} ${boutiqueActive.nom}</div>`}
     ${nbItems>0?`<div class="cr-total-badge">${nbItems} art. · ${F(total)}</div>`:'<div style="font-size:12px;color:rgba(255,255,255,.4)">Panier vide</div>'}
   </div>
 
@@ -17603,6 +17614,24 @@ function crMajMonnaie(){
     const renduEl=document.querySelector('.cr-monnaie-rendu');
     if(renduEl)renduEl.textContent=rendu>0?`💵 Monnaie: ${F(rendu)}`:'';
   }
+}
+
+function crChangerBoutique(id){
+  if(S.session?.role !== 'admin' && S.session?.role !== 'superviseur'){toast('⛔ Réservé à l\'admin/superviseur');return;}
+  if(!S.session) S.session = {};
+  S.session.boutique_active = +id;
+  S.boutique_active = +id;
+  saveLocal(S);
+  _ignorerProchainUpdate = true;
+  clearTimeout(_ignorerTimer);
+  _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
+  majBoutiqueUI();
+  crPanier = [];
+  crSearch = '';
+  crCat = 'Tout';
+  renderCaisseRapide();
+  const b = getBoutiqueActive();
+  toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
 }
 
 function crSetTypePrix(t){
