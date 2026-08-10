@@ -8897,7 +8897,22 @@ function imprimerThermiqueService(id){
   <div class="center" style="font-size:10px;margin-top:4px">${p.ticketMsg||'Merci pour votre confiance'}</div>
   <div class="center" style="font-size:9px;color:#aaa;margin-top:2px">${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
   </body></html>`;
-  imprimerViaIframe(html);
+  modal(`<div class="mft">🧾 Reçu de service</div>
+    <div style="overflow:auto;max-height:65vh;border-radius:8px;border:1px solid var(--border);background:#f5f5f5;padding:12px;display:flex;justify-content:center">
+      <iframe id="recu-svc-iframe" style="width:260px;min-height:520px;border:none;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.15);background:#fff"></iframe>
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-primary" onclick="document.getElementById('recu-svc-iframe').contentWindow.print()">🖨️ Imprimer</button>
+    </div>`);
+  setTimeout(()=>{
+    const iframe = document.getElementById('recu-svc-iframe');
+    if(iframe){
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+    }
+  }, 150);
 }
 
 function imprimerRecuService(id){
@@ -17733,9 +17748,7 @@ function crValider(){
     if(compte) compte.solde=(compte.solde||0)+total;
     saveData();
     toast(`✅ Vente encaissée — ${F(total)}`);
-    if(confirm('Imprimer le reçu thermique ?')){
-      imprimerThermique(vid);
-    }
+    apercuEtImprimerRecu(vid);
     crPanier=[];
     crRemise={type:'%',val:0};
     crClient='';
@@ -21342,9 +21355,33 @@ function imprimerViaIframe(html){
   }, 300);
 }
 
-function imprimerThermique(vid){
+// Affiche le reçu thermique dans une fenêtre modale visible (aperçu), avec un bouton
+// pour lancer l'impression. Plus fiable que l'impression silencieuse en arrière-plan,
+// et n'utilise pas confirm()/window.open() qui peuvent être bloqués dans certains
+// environnements desktop.
+function apercuEtImprimerRecu(vid){
   const v = S.ventes.find(v => v.id == vid); if(!v) return;
-  imprimerViaIframe(genTicketHTML(v));
+  const html = genTicketHTML(v);
+  modal(`<div class="mft">🧾 Reçu — Vente encaissée</div>
+    <div style="overflow:auto;max-height:65vh;border-radius:8px;border:1px solid var(--border);background:#f5f5f5;padding:12px;display:flex;justify-content:center">
+      <iframe id="recu-cr-iframe" style="width:260px;min-height:580px;border:none;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.15);background:#fff"></iframe>
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Ignorer</button>
+      <button class="btn btn-primary" onclick="document.getElementById('recu-cr-iframe').contentWindow.print()">🖨️ Imprimer</button>
+    </div>`);
+  setTimeout(()=>{
+    const iframe = document.getElementById('recu-cr-iframe');
+    if(iframe){
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+    }
+  }, 150);
+}
+
+function imprimerThermique(vid){
+  apercuEtImprimerRecu(vid);
 }
 
 function aperçuTicketModal(){
