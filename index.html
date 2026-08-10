@@ -8863,25 +8863,16 @@ function imprimerThermiqueService(id){
   const couleur=b.couleur||p.ticketColor||'#0f1f3d';
   const numRecu='SVC-'+String(v.id).slice(-5).padStart(5,'0');
   const now=new Date();
-  const w=window.open('','_therm_svc','width=320,height=520');
-  if(!w){toast('❌ Popup bloquée — autorisez les popups');return;}
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${numRecu}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${numRecu}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'Courier New',monospace;font-size:12px;width:58mm;padding:4mm 3mm;color:#000;background:#fff}
-    .no-print{display:flex;gap:6px;justify-content:center;margin-bottom:8px}
-    @media print{.no-print{display:none!important}@page{margin:0;size:58mm auto}}
-    button{padding:5px 12px;border-radius:4px;border:1px solid #ccc;cursor:pointer;font-size:12px}
-    .btn-p{background:#0f1f3d;color:#fff;border-color:#0f1f3d}
+    @media print{@page{margin:0;size:58mm auto}}
     .center{text-align:center}.bold{font-weight:700}.line{border-top:1px dashed #000;margin:5px 0}
     .row{display:flex;justify-content:space-between}
     .shop{font-size:14px;font-weight:700;text-align:center;margin-bottom:2px}
     .sub{font-size:10px;text-align:center;margin-bottom:4px;color:#555}
   </style></head><body>
-  <div class="no-print">
-    <button class="btn-p" onclick="window.print()">🖨️</button>
-    <button onclick="window.close()">✕</button>
-  </div>
   <div class="shop">${nomShop}</div>
   <div class="sub">${nomB}</div>
   <div class="sub">${p.ville||'Lomé, Togo'}${p.tel?' | '+p.tel:''}</div>
@@ -8905,8 +8896,8 @@ function imprimerThermiqueService(id){
   <div class="line"></div>
   <div class="center" style="font-size:10px;margin-top:4px">${p.ticketMsg||'Merci pour votre confiance'}</div>
   <div class="center" style="font-size:9px;color:#aaa;margin-top:2px">${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
-  </body></html>`);
-  w.document.close();
+  </body></html>`;
+  imprimerViaIframe(html);
 }
 
 function imprimerRecuService(id){
@@ -17422,7 +17413,7 @@ function renderCaisseRapide(){
   const boutiqueActive = getBoutiqueActive();
   const b0id = (S.boutiques[0]&&S.boutiques[0].id)||1;
   const stockBoutique = S.stock.filter(a=>a.bid==bidActif || (!a.bid && bidActif==b0id));
-  const cats = ['Tout', ...new Set(stockBoutique.map(a=>a.cat).filter(Boolean))];
+  const cats = ['Tout', ...new Set(stockBoutique.map(a=>a.cat).filter(Boolean))].sort((a,b)=>a==='Tout'?-1:b==='Tout'?1:a.localeCompare(b,'fr',{sensitivity:'base'}));
   const modes = ['Espèces','Flooz','Mixx','Carte','Autre'];
   const clients = S.clients||[];
   const roleActif = S.session?.role;
@@ -17430,6 +17421,7 @@ function renderCaisseRapide(){
 
   let stockFiltre = stockBoutique.filter(a=>sa(a)>=0);
   if(crCat!=='Tout') stockFiltre = stockFiltre.filter(a=>a.cat===crCat);
+  stockFiltre = stockFiltre.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{sensitivity:'base'}));
   if(crSearch){
     const q = crSearch.toLowerCase();
     stockFiltre = stockFiltre.filter(a=>a.nom.toLowerCase().includes(q)||a.code.toLowerCase().includes(q));
@@ -21327,16 +21319,32 @@ function genTicketHTML(v, opts){
   </body></html>`;
 }
 
+// Imprime du HTML via un iframe caché injecté dans la page (évite le bloqueur de popups
+// du navigateur / de l'app desktop, contrairement à window.open qui peut être bloqué).
+function imprimerViaIframe(html){
+  let frame = document.getElementById('_print-frame');
+  if(frame) frame.remove();
+  frame = document.createElement('iframe');
+  frame.id = '_print-frame';
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(frame);
+  frame.contentDocument.open();
+  frame.contentDocument.write(html);
+  frame.contentDocument.close();
+  setTimeout(()=>{
+    try{
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    }catch(e){
+      toast('❌ Impression impossible : '+e.message);
+    }
+    setTimeout(()=>{ const f=document.getElementById('_print-frame'); if(f) f.remove(); }, 1000);
+  }, 300);
+}
+
 function imprimerThermique(vid){
   const v = S.ventes.find(v => v.id == vid); if(!v) return;
-  const p = S.parametres || {};
-  const format = p.ticketFormat || '58mm';
-  const dims = format === 'A4' ? 'width=800,height=1000' : format === '80mm' ? 'width=350,height=700' : 'width=300,height=650';
-  const w = window.open('', '_print_therm', dims);
-  if(!w) { toast('❌ Popup bloquée — autorisez les popups'); return; }
-  w.document.write(genTicketHTML(v));
-  w.document.close();
-  setTimeout(()=>{ w.print(); w.close(); }, 600);
+  imprimerViaIframe(genTicketHTML(v));
 }
 
 function aperçuTicketModal(){
