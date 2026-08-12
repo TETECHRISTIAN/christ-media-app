@@ -2116,105 +2116,137 @@ async function absorberPendingFirebase(){
         const zone = sousZones[uidKey];
         if(!zone || !zone.ts) continue;
 
-        // Fusionner chaque collection de la zone dans S
-        PENDING_COLLECTIONS.forEach(col => {
-          if(!Array.isArray(zone[col]) || zone[col].length === 0) return;
-          if(!Array.isArray(S[col])) S[col] = [];
+        // FIX BADGE FANTÔME : toute cette section de fusion est maintenant isolée dans
+        // son propre try/catch. Avant ce fix, une seule entrée corrompue (item malformé,
+        // champ inattendu, etc.) dans N'IMPORTE QUELLE zone faisait planter toute la
+        // fonction absorberPendingFirebase() — ce qui empêchait le nettoyage Firebase de
+        // s'exécuter (voir plus bas) pour TOUTES les zones, pas seulement la fautive.
+        // Résultat concret observé : le badge rouge "vendeur en attente" réapparaissait
+        // à chaque redémarrage de l'app, même juste après un Master Save réussi, car la
+        // même zone corrompue faisait échouer silencieusement l'absorption à chaque fois.
+        // Désormais, une zone qui plante est quand même marquée comme "traitée" (donc
+        // nettoyée de Firebase) pour ne plus jamais bloquer les autres zones ni revenir
+        // indéfiniment ; l'erreur est loguée en détail pour investigation.
+        try {
+          // Fusionner chaque collection de la zone dans S
+          PENDING_COLLECTIONS.forEach(col => {
+            if(!Array.isArray(zone[col]) || zone[col].length === 0) return;
+            if(!Array.isArray(S[col])) S[col] = [];
 
-          const existingIds = new Set(S[col].map(x => String(x.id)));
-          let nb = 0;
-          zone[col].forEach(item => {
-            if(!item || item.id == null) return;
-            const key = String(item.id);
-            if(!existingIds.has(key)){
-              S[col].push(item);
-              existingIds.add(key);
-              nb++;
-              // FIX : déduire le stock (qv) pour toute vente nouvellement absorbée,
-              // exactement comme le fait la vente locale (a.qv+=l.qte). Avant ce fix,
-              // seule la ligne de vente était fusionnée : le stock de l'admin n'était
-              // jamais décrémenté pour les ventes faites par les vendeurs.
-              if(col === 'ventes' && !item._deleted){
-                const lignesV = item.lignes || [{aid:item.aid, qte:item.qte||1}];
-                lignesV.forEach(l => {
-                  if(l.aid == null) return;
-                  const art = (S.stock||[]).find(x => x.id == l.aid);
-                  if(art) art.qv = (art.qv||0) + (l.qte||1);
-                });
-              }
-              // Créditer le compte si c'est une vente Payée nouvellement absorbée
-              if(col === 'ventes' && item.statut === 'Payé' && item.cid && S.comptes){
-                const cpt = S.comptes.find(x => x.id == item.cid);
-                if(cpt){ cpt.solde = (cpt.solde||0) + (item.mt||0);
-                  console.log('[PENDING→COMPTE] +' + item.mt + ' sur ' + cpt.nom); }
-                // Acomptes
-                (item.acomptes||[]).forEach(a => {
-                  if(!a.cid) return;
-                  const ca = S.comptes.find(x => x.id == a.cid);
-                  if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
-                });
-                // Tranches
-                (item.tranches||[]).filter(t => t.cid && t.statut === 'Payé').forEach(t => {
-                  const ct = S.comptes.find(x => x.id == t.cid);
-                  if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
-                });
-              }
-              if(col === 'ventes_services' && item.cid && S.comptes){
-                const cpt = S.comptes.find(x => x.id == item.cid);
-                if(cpt){
-                  const montant = item.statut === 'Payé' ? (item.mt||0) : (item.avance||0);
-                  if(montant > 0){ cpt.solde = (cpt.solde||0) + montant;
-                    console.log('[PENDING→COMPTE] svc +' + montant + ' sur ' + cpt.nom); }
+            const existingIds = new Set(S[col].map(x => String(x.id)));
+            let nb = 0;
+            zone[col].forEach(item => {
+              // FIX : chaque item est traité isolément — un item malformé est ignoré
+              // (avec un warning) plutôt que de faire planter toute la zone.
+              try {
+                if(!item || item.id == null) return;
+                const key = String(item.id);
+                if(!existingIds.has(key)){
+                  S[col].push(item);
+                  existingIds.add(key);
+                  nb++;
+                  // FIX : déduire le stock (qv) pour toute vente nouvellement absorbée,
+                  // exactement comme le fait la vente locale (a.qv+=l.qte). Avant ce fix,
+                  // seule la ligne de vente était fusionnée : le stock de l'admin n'était
+                  // jamais décrémenté pour les ventes faites par les vendeurs.
+                  if(col === 'ventes' && !item._deleted){
+                    const lignesV = item.lignes || [{aid:item.aid, qte:item.qte||1}];
+                    (Array.isArray(lignesV) ? lignesV : []).forEach(l => {
+                      if(!l || l.aid == null) return;
+                      const art = (S.stock||[]).find(x => x.id == l.aid);
+                      if(art) art.qv = (art.qv||0) + (l.qte||1);
+                    });
+                  }
+                  // Créditer le compte si c'est une vente Payée nouvellement absorbée
+                  if(col === 'ventes' && item.statut === 'Payé' && item.cid && S.comptes){
+                    const cpt = S.comptes.find(x => x.id == item.cid);
+                    if(cpt){ cpt.solde = (cpt.solde||0) + (item.mt||0);
+                      console.log('[PENDING→COMPTE] +' + item.mt + ' sur ' + cpt.nom); }
+                    // Acomptes — FIX : garde-fou si "acomptes" n'est pas un tableau
+                    // (ancien schéma / donnée corrompue) pour éviter un TypeError sur .forEach
+                    (Array.isArray(item.acomptes) ? item.acomptes : []).forEach(a => {
+                      if(!a || !a.cid) return;
+                      const ca = S.comptes.find(x => x.id == a.cid);
+                      if(ca) ca.solde = (ca.solde||0) + (a.mt||0);
+                    });
+                    // Tranches — même garde-fou
+                    (Array.isArray(item.tranches) ? item.tranches : []).filter(t => t && t.cid && t.statut === 'Payé').forEach(t => {
+                      const ct = S.comptes.find(x => x.id == t.cid);
+                      if(ct) ct.solde = (ct.solde||0) + (t.mt||0);
+                    });
+                  }
+                  if(col === 'ventes_services' && item.cid && S.comptes){
+                    const cpt = S.comptes.find(x => x.id == item.cid);
+                    if(cpt){
+                      const montant = item.statut === 'Payé' ? (item.mt||0) : (item.avance||0);
+                      if(montant > 0){ cpt.solde = (cpt.solde||0) + montant;
+                        console.log('[PENDING→COMPTE] svc +' + montant + ' sur ' + cpt.nom); }
+                    }
+                  }
+                } else {
+                  // Mettre à jour si l'item pending est plus récent
+                  const idx = S[col].findIndex(x => String(x.id) === key);
+                  if(idx !== -1){
+                    const existingTs = S[col][idx].ts || 0;
+                    const pendingTs  = item.ts || 0;
+                    if(pendingTs > existingTs) S[col][idx] = item;
+                  }
                 }
+              } catch(itemErr) {
+                console.warn('[PENDING] Item corrompu ignoré dans', col, '(zone', bidKey, '/', uidKey, ') :', itemErr, item);
               }
-            } else {
-              // Mettre à jour si l'item pending est plus récent
-              const idx = S[col].findIndex(x => String(x.id) === key);
-              if(idx !== -1){
-                const existingTs = S[col][idx].ts || 0;
-                const pendingTs  = item.ts || 0;
-                if(pendingTs > existingTs) S[col][idx] = item;
-              }
-            }
+            });
+            if(nb > 0) totalAbsorbes += nb;
           });
-          if(nb > 0) totalAbsorbes += nb;
-        });
 
-        // Synchroniser historiqueDetteAjouts des fournisseurs à partir des achats absorbés
-        // Si un achat "À payer" est nouveau, s'assurer qu'il est tracé dans l'historique du fournisseur
-        if(Array.isArray(zone.achats)){
-          zone.achats.forEach(achat => {
-            if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
-            const f = getFournisseursActifs().find(x => x.id == achat.fid);
-            if(!f) return;
-            if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
-            // Vérifier si cet achat est déjà dans l'historique
-            const dejaDans = f.historiqueDetteAjouts.some(h => String(h.id) === String(achat.id));
-            if(!dejaDans){
-              const art = (S.stock||[]).find(x => x.id == achat.aid);
-              const artNom = art ? art.nom : (achat.aid || 'Article');
-              const avantDette = f.dette || 0;
-              f.dette = avantDette + achat.mt;
-              f.historiqueDetteAjouts.push({
-                id: achat.id,
-                date: achat.date,
-                mt: achat.mt,
-                avant: avantDette,
-                apres: f.dette,
-                notes: `Achat — ${artNom}${achat.notes ? ' · ' + achat.notes : ''}`,
-                ts: achat.ts || Date.now()
-              });
-              console.log('[PENDING] HistoDette mis à jour pour', f.nom, '— achat', achat.date, '+', achat.mt);
-            }
-          });
+          // Synchroniser historiqueDetteAjouts des fournisseurs à partir des achats absorbés
+          // Si un achat "À payer" est nouveau, s'assurer qu'il est tracé dans l'historique du fournisseur
+          if(Array.isArray(zone.achats)){
+            zone.achats.forEach(achat => {
+              try {
+                if(!achat || achat.statut !== 'À payer' || !achat.fid) return;
+                const f = getFournisseursActifs().find(x => x.id == achat.fid);
+                if(!f) return;
+                if(!f.historiqueDetteAjouts) f.historiqueDetteAjouts = [];
+                // Vérifier si cet achat est déjà dans l'historique
+                const dejaDans = f.historiqueDetteAjouts.some(h => String(h.id) === String(achat.id));
+                if(!dejaDans){
+                  const art = (S.stock||[]).find(x => x.id == achat.aid);
+                  const artNom = art ? art.nom : (achat.aid || 'Article');
+                  const avantDette = f.dette || 0;
+                  f.dette = avantDette + achat.mt;
+                  f.historiqueDetteAjouts.push({
+                    id: achat.id,
+                    date: achat.date,
+                    mt: achat.mt,
+                    avant: avantDette,
+                    apres: f.dette,
+                    notes: `Achat — ${artNom}${achat.notes ? ' · ' + achat.notes : ''}`,
+                    ts: achat.ts || Date.now()
+                  });
+                  console.log('[PENDING] HistoDette mis à jour pour', f.nom, '— achat', achat.date, '+', achat.mt);
+                }
+              } catch(achatErr) {
+                console.warn('[PENDING] Achat corrompu ignoré (zone', bidKey, '/', uidKey, ') :', achatErr, achat);
+              }
+            });
+          }
+
+          console.log('[PENDING] Zone absorbée:', bidKey, '/', uidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
+        } catch(zoneErr) {
+          // FIX : même en cas d'erreur imprévue sur toute la zone, on continue le traitement
+          // des autres zones et on marque quand même celle-ci comme "traitée" plus bas, pour
+          // qu'elle soit nettoyée de Firebase et ne bloque plus jamais les Master Save suivants.
+          console.warn('[PENDING] Erreur sur la zone', bidKey, '/', uidKey, '— zone ignorée et nettoyée pour éviter un blocage permanent :', zoneErr);
         }
 
-        console.log('[PENDING] Zone absorbée:', bidKey, '/', uidKey, '— ts:', new Date(zone.ts).toLocaleString('fr-FR'));
         // FIX : bidKey (ex: "bid_1") et uidKey (ex: "uid_656") contiennent DÉJÀ leur
         // préfixe puisqu'ils viennent directement de Object.keys() sur les nœuds Firebase.
         // Le code précédent rajoutait "bid_"/"uid_" par-dessus, créant un chemin inexistant
         // ("bid_bid_1/uid_uid_656") : la suppression ne supprimait donc jamais rien, et le
         // badge "vendeur en attente" restait affiché même après une absorption réussie.
+        // Ce push est désormais TOUJOURS exécuté (même si la zone a levé une erreur
+        // ci-dessus), pour garantir que le nettoyage a lieu dans tous les cas.
         cheminsTraites.push(uidKey === 'legacy' ? bidKey : (bidKey + '/' + uidKey));
       }
     }
@@ -2233,8 +2265,16 @@ async function absorberPendingFirebase(){
     if(cheminsTraites.length > 0){
       const suppressions = {};
       cheminsTraites.forEach(p => { suppressions[p] = null; });
-      await db.ref('christmedia/pending').update(suppressions);
-      console.log('[PENDING] Chemins nettoyés après absorption:', cheminsTraites);
+      try {
+        await db.ref('christmedia/pending').update(suppressions);
+        console.log('[PENDING] Chemins nettoyés après absorption:', cheminsTraites);
+      } catch(delErr) {
+        // FIX : si la suppression échoue (ex. règles de sécurité Firebase), on le voit
+        // maintenant clairement dans la console au lieu d'un échec silencieux — c'est
+        // ce qui expliquerait un badge qui revient malgré une absorption réussie côté
+        // données locales.
+        console.warn('[PENDING] ÉCHEC de la suppression Firebase après absorption — le badge va probablement réapparaître. Détail :', delErr, cheminsTraites);
+      }
     }
     return totalAbsorbes > 0;
 
