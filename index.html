@@ -2052,6 +2052,18 @@ const PENDING_COLLECTIONS = [
 ];
 
 // Vendeur → envoie ses données locales dans la zone pending
+// FIX BADGE FANTÔME (v2) : mémorise la "signature" du dernier envoi réussi. Avant ce
+// fix, cette fonction réécrivait TOUJOURS l'intégralité des ventes/achats/etc. du
+// vendeur dans Firebase à chaque appel (déclenché par saveData() sur N'IMPORTE QUELLE
+// action du vendeur, pas seulement une nouvelle vente). Conséquence concrète : une
+// vente déjà absorbée par l'admin (via Master Save) était renvoyée telle quelle dès
+// que le vendeur touchait à l'app, recréant la zone pending sur Firebase — et donc
+// le badge rouge "vendeur en attente" réapparaissait côté admin alors que la vente
+// était déjà réalisée et synchronisée depuis longtemps.
+// Désormais, on compare la signature (nombre d'items + ts le plus récent par
+// collection) au dernier envoi qui a réellement réussi : si rien n'a changé, on
+// n'écrit rien sur Firebase — donc pas de zone pending recréée, pas de badge fantôme.
+let _pendingLastSignature = null;
 async function envoyerPendingFirebase(){
   if(!fbReady||!db) return false;
   const role = S.session?.role;
@@ -2077,8 +2089,24 @@ async function envoyerPendingFirebase(){
     }
   });
 
+  // Signature légère du contenu (hors "ts" du payload lui-même, qui change toujours)
+  const signature = PENDING_COLLECTIONS.map(col => {
+    const arr = payload[col] || [];
+    let maxTs = 0;
+    for(const x of arr){ const t = (x && x.ts) || 0; if(t > maxTs) maxTs = t; }
+    return col + ':' + arr.length + ':' + maxTs;
+  }).join('|');
+
+  if(signature === _pendingLastSignature){
+    // Rien de nouveau depuis le dernier envoi réussi → on n'écrit rien sur Firebase.
+    // Évite de recréer la zone pending (et donc le badge) pour des ventes déjà absorbées.
+    console.log('[PENDING] Aucune donnée nouvelle depuis le dernier envoi — envoi ignoré');
+    return false;
+  }
+
   try {
     await db.ref(path).set(payload);
+    _pendingLastSignature = signature; // Uniquement mis à jour si l'envoi a réussi
     console.log('[PENDING] Données envoyées dans la zone d\'attente (bid=' + bid + ')');
     // Afficher badge de confirmation discrète
     setSyncStatus('online', '📤 En attente admin');
@@ -2114,7 +2142,17 @@ async function absorberPendingFirebase(){
 
       for(const uidKey of Object.keys(sousZones)){
         const zone = sousZones[uidKey];
-        if(!zone || !zone.ts) continue;
+        // FIX BADGE FANTÔME (v2) : une zone invalide/malformée (sans "ts") était avant
+        // ignorée par ce "continue" SANS jamais être ajoutée à cheminsTraites — donc
+        // jamais supprimée de Firebase plus bas. Une seule zone corrompue de ce type
+        // suffisait à faire réapparaître le badge "vendeur en attente" indéfiniment,
+        // même après un Master Save réussi. On la marque maintenant comme traitée
+        // (donc nettoyée) tout en la signalant en console pour investigation.
+        if(!zone || !zone.ts){
+          console.warn('[PENDING] Zone invalide ignorée et nettoyée (bid', bidKey, '/', uidKey, '):', zone);
+          cheminsTraites.push(uidKey === 'legacy' ? bidKey : (bidKey + '/' + uidKey));
+          continue;
+        }
 
         // FIX BADGE FANTÔME : toute cette section de fusion est maintenant isolée dans
         // son propre try/catch. Avant ce fix, une seule entrée corrompue (item malformé,
