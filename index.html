@@ -4473,6 +4473,24 @@ function rVente(){
 
 
 // ─── VENTE RAPIDE — FONCTIONS CARTES ───
+// ─── Ajouter un SERVICE au panier de vente (pour le combiner avec des
+// produits sur une même facture — voir bouton "🛒 + Panier" page Services) ───
+function ajouterServiceAuPanier(sid){
+  const sv=S.services&&S.services.find(s=>s.id==sid);if(!sv)return;
+  if(!window.panier) window.panier=[];
+  // Chaque ajout crée une nouvelle ligne distincte (pas de fusion de quantité
+  // automatique) : deux prestations différentes du même service restent lisibles.
+  const existant=window.panier.findIndex(l=>l.type==='service'&&l.sid===sid);
+  if(existant>=0){
+    window.panier[existant].qte++;
+    window.panier[existant].mt=window.panier[existant].qte*window.panier[existant].pu;
+  }else{
+    window.panier.push({aid:null,sid:sv.id,type:'service',nom:sv.nom,qte:1,pu:sv.prix,mt:sv.prix,pa:0,dispo:999999,typePrix:'service'});
+  }
+  toast(`✅ ${sv.nom} ajouté au panier (${window.panier.length} article${window.panier.length>1?'s':''}) — allez dans "Ventes" pour ajouter des produits et finaliser`);
+  // Si on est déjà sur la page Ventes avec le panier ouvert, rafraîchir l'affichage
+  if(typeof rVente==='function' && currentPage==='vente') rVente();
+}
 function ajouterProduitRapide(aid){
   const a=ga(aid);if(!a)return;
   const dispo=sa(a); // Vente autorisée même stock épuisé
@@ -4662,13 +4680,15 @@ function validerPanier(){
   const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
   const mt=Math.max(0,sousTotal-remiseMt);
 
-  // Vérifier stocks
+  // Vérifier stocks (uniquement pour les lignes produits — les services n'ont pas de stock)
   for(const l of window.panier){
+    if(l.type==='service') continue;
     const a=ga(l.aid);
     if(!a||sa(a)<l.qte){toast(`❌ Stock insuffisant pour ${l.nom}`);return;}
   }
-  // Déduire stocks + historique
+  // Déduire stocks + historique (uniquement pour les lignes produits)
   for(const l of window.panier){
+    if(l.type==='service') continue;
     const a=ga(l.aid);
     a.qv+=l.qte;
     addHistorique('Sortie',a,l.qte,`Vente à ${client||'client anonyme'}`);
@@ -8570,7 +8590,8 @@ function rServices(){
             <span class="badge bt" style="margin-top:4px">${sv.cat||'Service'}</span>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <button class="btn btn-success btn-sm" onclick="vendrService(${sv.id})">Vendre</button>
+            <button class="btn btn-success btn-sm" onclick="vendrService(${sv.id})">Vendre seul</button>
+            <button class="btn btn-primary btn-sm" onclick="ajouterServiceAuPanier(${sv.id})" title="Ajouter au panier pour combiner avec des produits sur la même facture">🛒 + Panier</button>
             <button class="btn btn-sm" onclick="editService(${sv.id})">✏️</button>
             <button class="btn btn-sm" onclick="delService(${sv.id})" style="color:var(--red)">✕</button>
           </div>
