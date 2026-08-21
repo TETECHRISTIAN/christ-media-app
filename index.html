@@ -11,15 +11,39 @@
 <title>Christ Media — All-in-One V11</title>
 
 <!-- ═══════════════════════════════════════════════════════════════
-     DIAGNOSTIC DE CHARGEMENT — ajouté pour identifier pourquoi
-     l'application peut rester bloquée sur un écran blanc/vide sur
-     certains appareils (ressources CDN bloquées, réseau lent,
-     erreur JS précoce, etc). N'affecte AUCUNE logique métier.
+     DIAGNOSTIC + FILET DE SECOURS CDN — ajouté pour que l'application
+     ne reste plus jamais bloquée en silence sur un écran blanc/vide.
+     N'affecte AUCUNE logique métier existante.
+
+     Fonctionnement :
+     1) Si un script critique (Chart.js / ZXing / JsBarcode / Firebase)
+        échoue à charger, on retente automatiquement via un CDN alternatif.
+     2) Le panneau de diagnostic ne s'affiche QUE si le CDN alternatif
+        échoue aussi (ou s'il n'y a pas d'alternative) — donc jamais pour
+        une simple ressource secondaire (ex: police Google indisponible).
+     3) Filet de sécurité final à 15s si le script principal de l'appli
+        n'a toujours pas fini de se charger, quelle qu'en soit la cause.
      ═══════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
   var _cmErrors = [];
   var _cmPanelShown = false;
+
+  // CDN alternatif pour chaque ressource critique. Clé = fragment d'URL
+  // du script principal, valeur = URL de secours sur un autre CDN.
+  var _cmFallbacks = {
+    'cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js':
+      'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
+    'cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js':
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+    'cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js':
+      'https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
+    'www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js':
+      'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.js',
+    'www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js':
+      'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.js'
+  };
+  var _cmCriticalHosts = ['cdnjs.cloudflare.com','unpkg.com','cdn.jsdelivr.net','gstatic.com'];
 
   function cmShowPanel(){
     if(_cmPanelShown) return;
@@ -53,14 +77,42 @@
     list.textContent = lines.join('\n');
   }
 
-  // Scripts vraiment critiques : si l'un d'eux ne charge pas, l'appli ne peut pas démarrer.
-  var _cmCriticalHosts = ['cdnjs.cloudflare.com','unpkg.com','cdn.jsdelivr.net','gstatic.com'];
-
   window.addEventListener('error', function(e){
     if(e && e.target && e.target.tagName === 'SCRIPT' && e.target.src){
-      var isCritical = _cmCriticalHosts.some(function(h){ return e.target.src.indexOf(h) !== -1; });
-      _cmErrors.push('❌ Échec de chargement du script : ' + e.target.src);
-      if(isCritical) cmShowPanel();
+      var src = e.target.src;
+      var isCritical = _cmCriticalHosts.some(function(h){ return src.indexOf(h) !== -1; });
+      var alreadyFallback = e.target.getAttribute('data-cm-fallback-tried');
+
+      if(isCritical && !alreadyFallback){
+        // 1ère tentative échouée sur ce script → on essaie un CDN alternatif
+        // en silence, sans encore afficher le panneau.
+        for(var key in _cmFallbacks){
+          if(src.indexOf(key) !== -1){
+            _cmErrors.push('⚠️ ' + src + ' inaccessible → tentative via CDN alternatif : ' + _cmFallbacks[key]);
+            var s = document.createElement('script');
+            s.src = _cmFallbacks[key];
+            s.setAttribute('data-cm-fallback-tried', '1');
+            s.onerror = function(){
+              _cmErrors.push('❌ Le CDN alternatif a échoué aussi.');
+              cmShowPanel();
+            };
+            document.head.appendChild(s);
+            return;
+          }
+        }
+        // Pas d'alternative connue pour ce script → on affiche directement.
+        _cmErrors.push('❌ Échec de chargement du script (aucun secours disponible) : ' + src);
+        cmShowPanel();
+        return;
+      }
+      if(isCritical && alreadyFallback){
+        // Le CDN alternatif lui-même a échoué (géré aussi par son propre onerror
+        // ci-dessus, ce bloc est une sécurité supplémentaire).
+        _cmErrors.push('❌ Échec de chargement du script (secours inclus) : ' + src);
+        cmShowPanel();
+        return;
+      }
+      _cmErrors.push('❌ Échec de chargement du script : ' + src);
       return;
     }
     // Ressources non-script (police, image, feuille de style...) : on note
@@ -77,10 +129,10 @@
     cmShowPanel();
   });
 
-  // Filet de sécurité : si après 15s le script principal n'a toujours pas
-  // fini de se charger (fonction afficherDiag jamais définie), on affiche
-  // le panneau même sans erreur JS explicite captée (ex: script CDN qui
-  // reste bloqué en "pending" sans jamais déclencher onerror).
+  // Filet de sécurité final : si après 15s le script principal n'a toujours
+  // pas fini de se charger (fonction afficherDiag jamais définie), on
+  // affiche le panneau même sans erreur JS explicite captée (ex: script
+  // CDN qui reste bloqué en "pending" sans jamais déclencher onerror).
   setTimeout(function(){
     if(typeof window.afficherDiag !== 'function'){
       _cmErrors.push('⏱️ Le script principal de l\'application n\'a pas terminé son chargement après 15 secondes.');
@@ -90,8 +142,11 @@
 })();
 </script>
 
+<!-- ZXing basculé vers jsdelivr : unpkg.com s'est révélé inaccessible sur
+     certains réseaux (confirmé par le diagnostic ci-dessus). jsdelivr est
+     déjà utilisé pour JsBarcode et fonctionne de façon fiable ici. -->
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,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">
