@@ -3275,8 +3275,17 @@ const sb=s=>{const m={'Payé':'bg','Non payé':'br','Débiteur':'br','Régulier'
 // Retourne l'id de la boutique active pour la session courante
 function getBid(){
   const s = S.session || {};
-  // Vendeur/caissier → toujours sa boutique assignée
-  if(s.role !== 'admin' && s.role !== 'superviseur' && s.boutique_id) return s.boutique_id;
+  // Si c'est un vendeur/caissier avec plusieurs boutiques, utiliser boutique_active (qu'il peut switcher)
+  if(s.role !== 'admin' && s.role !== 'superviseur'){
+    if(s.boutiques_ids && s.boutiques_ids.length > 0){
+      // Vendeur avec plusieurs boutiques : utiliser sa sélection active
+      if(s.boutique_active && s.boutiques_ids.includes(s.boutique_active)) return s.boutique_active;
+      // Sinon, prendre la première de ses boutiques
+      return s.boutiques_ids[0];
+    }
+    // Fallback ancien format (boutique_id unique)
+    if(s.boutique_id) return s.boutique_id;
+  }
   // Admin / Superviseur → boutique sélectionnée (stockée dans la session)
   if(s.boutique_active) return s.boutique_active;
   // Fallback : boutique_active globale ou 1
@@ -3303,21 +3312,48 @@ function getObjBoutique(){
   return S.objectifs_par_boutique[bid];
 }
 
-// Switcher de boutique (admin uniquement)
+// Switcher de boutique (admin/superviseur OU vendeur avec plusieurs boutiques)
 function switcherBoutique(bid){
-  if(S.session?.role !== 'admin' && S.session?.role !== 'superviseur'){toast('⛔ Réservé à l\'admin/superviseur');return;}
-  if(!S.session) S.session = {};
-  S.session.boutique_active = bid;
-  S.boutique_active = bid; // sync global
-  saveLocal(S);
-  // Bloquer le listener Firebase pendant 10s pour éviter rollback boutique_active
-  _ignorerProchainUpdate = true;
-  clearTimeout(_ignorerTimer);
-  _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
-  majBoutiqueUI();
-  // Rafraîchir la page courante
-  try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,
+  const s = S.session || {};
+  const role = s.role || 'vendeur';
+  
+  // Admin/Superviseur : peut switcher vers n'importe quelle boutique
+  if(role === 'admin' || role === 'superviseur'){
+    if(!S.session) S.session = {};
+    S.session.boutique_active = bid;
+    S.boutique_active = bid;
+    saveLocal(S);
+    _ignorerProchainUpdate = true;
+    clearTimeout(_ignorerTimer);
+    _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
+    majBoutiqueUI();
+    try{
+      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
+    }catch(e){console.error('Erreur rafraîchissement page :',e);}
+  }
+  // Vendeur/Caissier avec plusieurs boutiques : peut switcher entre ses boutiques
+  else if((s.boutiques_ids && s.boutiques_ids.length > 1) || (s.boutique_id && s.role === 'caissier')){
+    // Vérifier que le vendeur a accès à cette boutique
+    const boutiquesDisponibles = s.boutiques_ids || [s.boutique_id];
+    if(!boutiquesDisponibles.includes(bid)){
+      toast('⛔ Vous n\'avez pas accès à cette boutique');
+      return;
+    }
+    if(!S.session) S.session = {};
+    S.session.boutique_active = bid;
+    saveLocal(S);
+    _ignorerProchainUpdate = true;
+    clearTimeout(_ignorerTimer);
+    _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
+    majBoutiqueUI();
+    try{
+      rDashVendeur(); // Rafraîchir le dashboard
+    }catch(e){console.error('Erreur rafraîchissement dashboard :',e);}
+  }
+  else {
+    toast('⛔ Vous ne pouvez switcher que si vous avez plusieurs boutiques');
+  }
+}
       vente:rVente,services:rServices,achats:rAchats,stock:rStock,
       clients:rClients,fournisseurs:rFour,depenses:rDep,
       tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,
@@ -3964,6 +4000,17 @@ function rDashVendeur(){
         <div class="vd-score-lbl">${scoreMsg}</div>
       </div>
     </div>
+
+    ${
+      (session.boutiques_ids && session.boutiques_ids.length > 1)
+        ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:13px;font-weight:600">🏪 Boutique active :</span>
+            <select onchange="switcherBoutique(+this.value)" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer">
+              ${(S.boutiques||[]).filter(b => session.boutiques_ids.includes(b.id)).map(b => '<option value="'+b.id+'" '+(b.id==bid?'selected':'')+'>'+(b.emoji||'🏪')+' '+b.nom+'</option>').join('')}
+            </select>
+          </div>`
+        : ''
+    }
 
     <!-- KPIs aujourd'hui -->
     <p class="st">Aujourd'hui</p>
@@ -11353,7 +11400,7 @@ function appliquerMenusVisibles(){
 
 function addUserWS(){
   const boutiques = S.boutiques || [];
-  const boutiquesOpts = `<option value="">— Toutes (Admin) —</option>` + boutiques.map(b=>`<option value="${b.id}">${b.emoji||'🏪'} ${b.nom}</option>`).join('');
+  const boutiquesChecks = boutiques.map(b=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="wu-boutique-cb" value="${b.id}" style="cursor:pointer"> ${b.emoji||'🏪'} ${b.nom}</label>`).join('');
   modal(`<div class="mft">➕ Nouvel utilisateur</div>
     <div class="fr">
       <div class="fg"><label class="fl">Prénom / Nom</label><input class="fi" id="wu-nom" placeholder="Ex: Marie Kodjovi"></div>
@@ -11362,9 +11409,11 @@ function addUserWS(){
                   <option value="superviseur">👁️ Superviseur</option><option value="caissier">💰 Caissier</option><option value="admin">👑 Administrateur</option></select>
       </div>
     </div>
-    <div class="fg"><label class="fl">🏪 Boutique assignée</label>
-      <select class="fs" id="wu-boutique">${boutiquesOpts}</select>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">Vendeur/Caissier : choisir sa boutique. Admin : laisser vide.</div>
+    <div class="fg"><label class="fl">🏪 Boutiques assignées</label>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px;margin-bottom:8px">
+        ${boutiquesChecks}
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Vendeur/Caissier : sélectionner 1+ boutiques. Admin : laisser vide.</div>
     </div>
     <div class="fg"><label class="fl">Adresse e-mail (identifiant de connexion)</label>
       <input class="fi" type="email" id="wu-email" placeholder="marie@christmedia.com"></div>
@@ -11386,14 +11435,16 @@ function saveUserWS(){
   // Vérifier unicité email
   if(S.utilisateurs.find(u=>u.email&&u.email.toLowerCase()===email))return toast('❌ Cet email est déjà utilisé');
   const roleVal = document.getElementById('wu-role').value;
-  const bidVal = document.getElementById('wu-boutique')?.value ? +document.getElementById('wu-boutique').value : null;
-  S.utilisateurs.push({id:genId(),nom,role:roleVal,email,password,pin:'0000',emoji:document.getElementById('wu-emoji').value||'👤',actif:true,boutique_id:bidVal});
+  // Récupérer les boutiques sélectionnées via checkboxes
+  const boutiques_ids = Array.from(document.querySelectorAll('.wu-boutique-cb:checked')).map(cb => +cb.value);
+  S.utilisateurs.push({id:genId(),nom,role:roleVal,email,password,pin:'0000',emoji:document.getElementById('wu-emoji').value||'👤',actif:true,boutique_id:null,boutiques_ids:boutiques_ids});
   saveData();closeModal();toast('✅ Utilisateur créé');rWorkspace();
 }
 function editUserWS(id){
   const u=(S.utilisateurs||[]).find(u=>u.id==id);if(!u)return;
   const boutiques = S.boutiques || [];
-  const boutiquesOpts = `<option value=""${!u.boutique_id?' selected':''}>— Toutes (Admin) —</option>` + boutiques.map(b=>`<option value="${b.id}"${u.boutique_id==b.id?' selected':''}>${b.emoji||'🏪'} ${b.nom}</option>`).join('');
+  const bidListe = u.boutiques_ids || (u.boutique_id ? [u.boutique_id] : []);
+  const boutiquesChecks = boutiques.map(b=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="wu-boutique-cb" value="${b.id}" ${bidListe.includes(b.id)?'checked':''} style="cursor:pointer"> ${b.emoji||'🏪'} ${b.nom}</label>`).join('');
   modal(`<div class="mft">✏️ Modifier — ${u.nom}</div>
     <div class="fr">
       <div class="fg"><label class="fl">Nom</label><input class="fi" id="wu-nom" value="${u.nom}"></div>
@@ -11405,9 +11456,11 @@ function editUserWS(id){
         </select>
       </div>
     </div>
-    <div class="fg"><label class="fl">🏪 Boutique assignée</label>
-      <select class="fs" id="wu-boutique">${boutiquesOpts}</select>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">Vendeur/Caissier : choisir sa boutique. Admin : laisser vide.</div>
+    <div class="fg"><label class="fl">🏪 Boutiques assignées</label>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px;margin-bottom:8px">
+        ${boutiquesChecks}
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Vendeur/Caissier : sélectionner 1+ boutiques. Admin : laisser vide.</div>
     </div>
     <div class="fg"><label class="fl">Email</label>
       <input class="fi" type="email" id="wu-email" value="${u.email||''}"></div>
@@ -11428,7 +11481,9 @@ function updateUserWS(id){
   u.role=document.getElementById('wu-role').value;
   u.email=email;
   u.emoji=document.getElementById('wu-emoji').value||'👤';
-  u.boutique_id = document.getElementById('wu-boutique')?.value ? +document.getElementById('wu-boutique').value : null;
+  // Récupérer les boutiques sélectionnées via checkboxes
+  u.boutiques_ids = Array.from(document.querySelectorAll('.wu-boutique-cb:checked')).map(cb => +cb.value);
+  u.boutique_id = null; // Garder pour la rétro-compatibilité, mais utiliser boutiques_ids
   const newPw=document.getElementById('wu-password').value;
   if(newPw&&newPw.length>=4)u.password=newPw;
   saveData();closeModal();toast('✅ Utilisateur modifié');rWorkspace();
