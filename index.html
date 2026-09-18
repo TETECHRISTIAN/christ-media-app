@@ -4003,12 +4003,7 @@ function rDashVendeur(){
 
     ${
       (session.boutiques_ids && session.boutiques_ids.length > 1)
-        ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-size:13px;font-weight:600">🏪 Boutique active :</span>
-            <select onchange="switcherBoutique(+this.value)" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer">
-              ${(S.boutiques||[]).filter(b => session.boutiques_ids.includes(b.id)).map(b => '<option value="'+b.id+'" '+(b.id==bid?'selected':'')+'>'+(b.emoji||'🏪')+' '+b.nom+'</option>').join('')}
-            </select>
-          </div>`
+        ? '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600">🏪 Boutique active :</span><select onchange="switcherBoutique(+this.value)" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer">' + ((S.boutiques||[]).filter(b => session.boutiques_ids.includes(b.id)).map(b => '<option value="'+b.id+'" '+(b.id==bid?'selected':'')+'>'+(b.emoji||'🏪')+' '+b.nom+'</option>').join('')) + '</select></div>'
         : ''
     }
 
