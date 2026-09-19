@@ -8801,30 +8801,44 @@ function createLocationChaise(client, qte, notes=''){
   S.locations_chaises.push(loc);
   
   // ─── CRÉER AUTOMATIQUEMENT UNE VENTE DE SERVICE ───
-  // Trouver le compte "Vente Studio"
-  let compte_vente_studio = null;
-  if(S.comptes && Array.isArray(S.comptes)){
-    compte_vente_studio = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
-  }
-  
-  const vs_id = Math.max(...(S.ventes_services||[]).map(v=>v.id||0), 0) + 1;
+  const heure_now = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   const vente_service = {
-    id: vs_id,
-    date: new Date().toISOString().split('T')[0],
+    bid: getBid(),
+    id: genId(),
+    date: D(),
     nom_service: 'Location chaises plastiques',
     client: client,
+    qte: parseInt(qte),
+    pu: PRIX_CHAISE_24H,
     mt: loc.montant,
+    mode: 'Vente Studio',
+    cid: null, // sera trouvé par genId
+    statut: 'Payé',
     avance: 0,
     reste: null,
-    statut: 'Payé',
-    cid: compte_vente_studio ? compte_vente_studio.id : null,
-    mode: compte_vente_studio ? compte_vente_studio.nom : 'Compte Studio',
-    bid: getBid(),
+    heure: heure_now,
+    ts: Date.now(),
     location_id: id // Lier à la location
   };
   
+  // Trouver le compte "Vente Studio" et créditer
+  let compte_studio_id = null;
+  if(S.comptes && Array.isArray(S.comptes)){
+    const compte = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
+    if(compte){
+      compte_studio_id = compte.id;
+      vente_service.cid = compte.id;
+      vente_service.mode = compte.nom;
+    }
+  }
+  
   if(!S.ventes_services) S.ventes_services = [];
   S.ventes_services.push(vente_service);
+  
+  // Créditer le compte si trouvé
+  if(compte_studio_id){
+    crediterCompte(compte_studio_id, loc.montant);
+  }
   
   saveLocal(S);
   saveToFirebase(S);
