@@ -1937,6 +1937,12 @@ const defaultData={
   approbations:[],
   apprentis:[],
   controles_qualite:[],
+  locations_catalog:[
+    {id:1,nom:'Chaises plastiques',prix:50,stock:300,unite:'chaise'},
+    {id:2,nom:'Tables',prix:100,stock:50,unite:'table'},
+    {id:3,nom:'Nappes',prix:25,stock:100,unite:'nappe'},
+    {id:4,nom:'Chaises hautes',prix:75,stock:30,unite:'chaise'}
+  ],
   locations_chaises:[],
   parametres:{
     nom:'Christ Media',
@@ -2218,7 +2224,7 @@ const FB_COLLECTIONS=[
   'boutiques',
   'clotures_caisse',
   'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite','apprentis',
-  'locations_chaises'
+  'locations_catalog','locations_chaises'
 ];
 
 async function saveToFirebase(data){
@@ -8774,6 +8780,68 @@ function getStockChaises(){
   return { total: STOCK_CHAISES_INITIAL, loues: totalLoues, dispo: dispo, actives: actives };
 }
 
+// ─── GESTION CATALOGUE DE LOCATIONS ───
+function getCatalogArticle(id){
+  return (S.locations_catalog || []).find(a => a.id === id);
+}
+
+function getStockArticle(articleId){
+  if(!S.locations_chaises) S.locations_chaises = [];
+  const actives = (S.locations_chaises||[]).filter(l=>l.statut==='En location');
+  const articles = [];
+  
+  actives.forEach(loc => {
+    if(loc.articles) {
+      loc.articles.forEach(art => {
+        if(art.article_id === articleId) {
+          articles.push({qte: art.qte, id: loc.id});
+        }
+      });
+    }
+  });
+  
+  const totalLoue = articles.reduce((sum, a) => sum + a.qte, 0);
+  const article = getCatalogArticle(articleId);
+  if(!article) return null;
+  
+  const dispo = Math.max(0, article.stock - totalLoue);
+  return { total: article.stock, loue: totalLoue, dispo: dispo, article: article };
+}
+
+function editArticleCatalog(id, nom, prix, stock){
+  const article = getCatalogArticle(id);
+  if(!article) return;
+  article.nom = nom;
+  article.prix = parseInt(prix);
+  article.stock = parseInt(stock);
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ Article modifié : '+nom);
+}
+
+function addArticleCatalog(nom, prix, stock, unite){
+  if(!S.locations_catalog) S.locations_catalog = [];
+  const id = Math.max(...S.locations_catalog.map(a => a.id || 0), 0) + 1;
+  S.locations_catalog.push({
+    id: id,
+    nom: nom,
+    prix: parseInt(prix),
+    stock: parseInt(stock),
+    unite: unite
+  });
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ Article ajouté : '+nom);
+}
+
+function deleteArticleCatalog(id){
+  if(!confirm('Supprimer cet article ?')) return;
+  S.locations_catalog = (S.locations_catalog||[]).filter(a => a.id !== id);
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ Article supprimé');
+}
+
 // ─── VÉRIFICATION DES ALERTES RETOUR CHAISES ───
 function checkLocationAlertes(){
   if(!S.locations_chaises) S.locations_chaises = [];
@@ -8843,10 +8911,36 @@ function checkAndAlertLocationRetards(){
   }catch(e){}
 }
 
-function createLocationChaise(client, qte, notes=''){
+function createLocationMultiArticles(client, articlesData, notes=''){
   if(!S.locations_chaises) S.locations_chaises = [];
-  const stock = getStockChaises();
-  if(qte > stock.dispo) { toast('❌ Stock insuffisant : '+stock.dispo+' chaises disponibles'); return; }
+  if(!S.locations_catalog) S.locations_catalog = [];
+  
+  let montantTotal = 0;
+  const articles = [];
+  
+  articlesData.forEach(item => {
+    if(item.qte <= 0) return;
+    const art = getCatalogArticle(item.article_id);
+    if(!art) return;
+    
+    const stockInfo = getStockArticle(item.article_id);
+    if(item.qte > stockInfo.dispo) {
+      toast('❌ Stock insuffisant pour '+art.nom);
+      return;
+    }
+    
+    const montant = item.qte * art.prix;
+    montantTotal += montant;
+    articles.push({
+      article_id: item.article_id,
+      nom: art.nom,
+      qte: item.qte,
+      prix_unitaire: art.prix,
+      montant: montant
+    });
+  });
+  
+  if(articles.length === 0) { toast('❌ Aucun article sélectionné'); return; }
   
   const id = Math.max(...S.locations_chaises.map(l=>l.id||0), 0) + 1;
   const now = new Date();
@@ -8856,9 +8950,8 @@ function createLocationChaise(client, qte, notes=''){
   const loc = {
     id: id,
     client: client,
-    qte: parseInt(qte),
-    prix_unitaire: PRIX_CHAISE_24H,
-    montant: parseInt(qte) * PRIX_CHAISE_24H,
+    articles: articles,
+    montant: montantTotal,
     date_debut: dateDebut,
     date_retour_prevue: dateRetourPrevue.toISOString().split('T')[0] + ' ' + dateRetourPrevue.getHours().toString().padStart(2,'0') + ':' + dateRetourPrevue.getMinutes().toString().padStart(2,'0'),
     date_retour_reel: null,
@@ -8869,38 +8962,50 @@ function createLocationChaise(client, qte, notes=''){
   
   S.locations_chaises.push(loc);
   
-  // ─── CRÉER AUTOMATIQUEMENT UNE VENTE DE SERVICE ───
-  // Trouver le compte "Vente Studio"
-  let compte_vente_studio = null;
-  if(S.comptes && Array.isArray(S.comptes)){
-    compte_vente_studio = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
-  }
-  
-  const vs_id = Math.max(...(S.ventes_services||[]).map(v=>v.id||0), 0) + 1;
+  const heure_now = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const desc = articles.map(a => a.qte + ' ' + a.nom).join(', ');
   const vente_service = {
-    id: vs_id,
-    date: new Date().toISOString().split('T')[0],
-    nom_service: 'Location chaises plastiques',
+    bid: getBid(),
+    id: genId(),
+    date: D(),
+    nom_service: 'Location: '+desc,
     client: client,
-    mt: loc.montant,
+    qte: articles.length,
+    pu: Math.round(montantTotal / articles.length),
+    mt: montantTotal,
+    mode: 'Vente Studio',
+    cid: null,
+    statut: 'Payé',
     avance: 0,
     reste: null,
-    statut: 'Payé',
-    cid: compte_vente_studio ? compte_vente_studio.id : null,
-    mode: compte_vente_studio ? compte_vente_studio.nom : 'Compte Studio',
-    bid: getBid(),
-    location_id: id // Lier à la location
+    heure: heure_now,
+    ts: Date.now(),
+    location_id: id
   };
+  
+  let compte_id = null;
+  if(S.comptes && Array.isArray(S.comptes)){
+    const compte = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
+    if(compte){
+      compte_id = compte.id;
+      vente_service.cid = compte.id;
+      vente_service.mode = compte.nom;
+    }
+  }
   
   if(!S.ventes_services) S.ventes_services = [];
   S.ventes_services.push(vente_service);
   
+  if(compte_id) crediterCompte(compte_id, montantTotal);
+  
   saveLocal(S);
   saveToFirebase(S);
-  toast('✅ Location créée : '+qte+' chaises pour '+client);
-  
-  // Imprimer le reçu immédiatement
+  toast('✅ Location créée pour '+client);
   imprimerReceuLocationChaise(id, true);
+}
+
+function createLocationChaise(client, qte, notes=''){
+  createLocationMultiArticles(client, [{article_id: 1, qte: parseInt(qte)}], notes);
 }
 
 function returnChaises(locId){
