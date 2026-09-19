@@ -2076,7 +2076,7 @@ function stopPresence(){
   if(bar)bar.innerHTML='';
 }
 
-// ─── LOCAL STORAGE (fallback) ───
+// ─── LOCAL STORAGE (fallback) + AUTO-CLEANUP ───
 function loadLocal(){
   try{
     const saved=localStorage.getItem('christmedia_v2');
@@ -2084,9 +2084,103 @@ function loadLocal(){
   }catch(e){}
   return JSON.parse(JSON.stringify(defaultData));
 }
-function saveLocal(data){
-  try{localStorage.setItem('christmedia_v2',JSON.stringify(data));}catch(e){}
+
+// ─── NETTOYAGE AUTOMATIQUE : limite les données volumineuses ───
+function cleanDataForStorage(data){
+  const cleaned = JSON.parse(JSON.stringify(data));
+  
+  // Limiter le journal aux 200 dernières entrées
+  if(cleaned.journal_entries && Array.isArray(cleaned.journal_entries)){
+    if(cleaned.journal_entries.length > 200){
+      cleaned.journal_entries = cleaned.journal_entries.slice(-200);
+    }
+  }
+  
+  // Limiter l'historique aux 100 derniers enregistrements
+  if(cleaned.historique && Array.isArray(cleaned.historique)){
+    if(cleaned.historique.length > 100){
+      cleaned.historique = cleaned.historique.slice(-100);
+    }
+  }
+  
+  // Limiter historique_prix aux 100 derniers
+  if(cleaned.historique_prix && Array.isArray(cleaned.historique_prix)){
+    if(cleaned.historique_prix.length > 100){
+      cleaned.historique_prix = cleaned.historique_prix.slice(-100);
+    }
+  }
+  
+  // Limiter audit aux 100 derniers
+  if(cleaned.audit && Array.isArray(cleaned.audit)){
+    if(cleaned.audit.length > 100){
+      cleaned.audit = cleaned.audit.slice(-100);
+    }
+  }
+  
+  return cleaned;
 }
+
+function saveLocal(data){
+  try{
+    const cleaned = cleanDataForStorage(data);
+    localStorage.setItem('christmedia_v2', JSON.stringify(cleaned));
+  }catch(e){
+    // Si quota dépassé, faire un nettoyage encore plus agressif
+    console.warn('localStorage quota exceeded, aggressive cleanup...');
+    try{
+      const cleaned = JSON.parse(JSON.stringify(data));
+      // Nettoyage agressif
+      if(cleaned.journal_entries) cleaned.journal_entries = cleaned.journal_entries.slice(-50);
+      if(cleaned.historique) cleaned.historique = cleaned.historique.slice(-30);
+      if(cleaned.historique_prix) cleaned.historique_prix = cleaned.historique_prix.slice(-30);
+      if(cleaned.audit) cleaned.audit = cleaned.audit.slice(-30);
+      localStorage.setItem('christmedia_v2', JSON.stringify(cleaned));
+    }catch(e2){
+      console.error('localStorage completely full, clearing old data...');
+      try{
+        localStorage.removeItem('cm_journal_v1');
+        localStorage.removeItem('cm_connexions_v1');
+        localStorage.removeItem('cm_mobilebar');
+        localStorage.removeItem('cm_quickbar');
+        localStorage.setItem('christmedia_v2', JSON.stringify(cleanDataForStorage(data)));
+      }catch(e3){
+        console.error('Cannot save to localStorage:', e3);
+      }
+    }
+  }
+}
+
+// ─── GARBAGE COLLECTION PÉRIODIQUE ───
+// Nettoie les clés localStorage secondaires toutes les heures
+function runLocalStorageGarbageCollection(){
+  try{
+    // Nettoyer le journal des connexions (garder seulement 50 dernières)
+    const CONNEXIONS_KEY = 'cm_connexions_v1';
+    try{
+      const hist = JSON.parse(localStorage.getItem(CONNEXIONS_KEY)) || [];
+      if(hist.length > 50){
+        localStorage.setItem(CONNEXIONS_KEY, JSON.stringify(hist.slice(-50)));
+      }
+    }catch(e){}
+    
+    // Nettoyer les barres mobiles si trop volumineuses
+    ['cm_mobilebar', 'cm_quickbar'].forEach(key => {
+      try{
+        const val = localStorage.getItem(key);
+        if(val && val.length > 100000){
+          localStorage.removeItem(key); // Réinitialiser si > 100kb
+        }
+      }catch(e){}
+    });
+  }catch(e){}
+}
+
+// Lancer le GC au chargement de l'app
+window.addEventListener('load', () => {
+  runLocalStorageGarbageCollection();
+  // Re-lancer toutes les heures
+  setInterval(runLocalStorageGarbageCollection, 3600000);
+});
 
 // ─── FIREBASE READ ───
 async function loadFromFirebase(){
