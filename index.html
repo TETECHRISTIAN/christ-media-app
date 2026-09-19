@@ -8781,6 +8781,19 @@ function getStockChaises(){
 }
 
 // ─── GESTION CATALOGUE DE LOCATIONS ───
+function initCatalogIfEmpty(){
+  if(!S.locations_catalog || S.locations_catalog.length === 0){
+    S.locations_catalog = [
+      {id:1, nom:'Chaises plastiques', prix:50, stock:300, unite:'chaise'},
+      {id:2, nom:'Tables', prix:100, stock:50, unite:'table'},
+      {id:3, nom:'Nappes', prix:25, stock:100, unite:'nappe'},
+      {id:4, nom:'Chaises hautes', prix:75, stock:30, unite:'chaise'}
+    ];
+    saveLocal(S);
+    saveToFirebase(S);
+  }
+}
+
 function getCatalogArticle(id){
   return (S.locations_catalog || []).find(a => a.id === id);
 }
@@ -9143,6 +9156,7 @@ function factureLocationChaise(locId){
 
 // ─── DASHBOARD LOCATIONS (ADMIN) ───
 function rLocations(){
+  initCatalogIfEmpty();
   if(!S.locations_chaises) S.locations_chaises = [];
   if(!S.boutiques) S.boutiques = [];
   
@@ -9269,6 +9283,7 @@ function rLocations(){
 
 // ─── SERVICES ───
 function rServices(){
+  initCatalogIfEmpty();
   if(!S.services)S.services=[];
   if(!S.ventes_services)S.ventes_services=[];
   const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
@@ -11692,6 +11707,7 @@ function _ouvrirSession(u){
   try{majBoutiqueUI();}catch(e){}
   try{toast(`✅ Bienvenue ${u.nom} !`);}catch(e){}
   try{addAudit('LOGIN','Connexion','Connexion de '+u.nom+' ('+u.role+')',null,null);}catch(e){}
+  try{initCatalogIfEmpty();}catch(e){}
   setTimeout(()=>{try{checkAndAlertLocationRetards();}catch(e){}},2000); // Vérifier les retards
   try{logConnexionDetaille(u);}catch(e){}
   setTimeout(()=>{try{initPresence();}catch(e){}},1000);
