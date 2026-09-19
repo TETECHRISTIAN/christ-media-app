@@ -8801,44 +8801,30 @@ function createLocationChaise(client, qte, notes=''){
   S.locations_chaises.push(loc);
   
   // ─── CRÉER AUTOMATIQUEMENT UNE VENTE DE SERVICE ───
-  const heure_now = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  // Trouver le compte "Vente Studio"
+  let compte_vente_studio = null;
+  if(S.comptes && Array.isArray(S.comptes)){
+    compte_vente_studio = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
+  }
+  
+  const vs_id = Math.max(...(S.ventes_services||[]).map(v=>v.id||0), 0) + 1;
   const vente_service = {
-    bid: getBid(),
-    id: genId(),
-    date: D(),
+    id: vs_id,
+    date: new Date().toISOString().split('T')[0],
     nom_service: 'Location chaises plastiques',
     client: client,
-    qte: parseInt(qte),
-    pu: PRIX_CHAISE_24H,
     mt: loc.montant,
-    mode: 'Vente Studio',
-    cid: null, // sera trouvé par genId
-    statut: 'Payé',
     avance: 0,
     reste: null,
-    heure: heure_now,
-    ts: Date.now(),
+    statut: 'Payé',
+    cid: compte_vente_studio ? compte_vente_studio.id : null,
+    mode: compte_vente_studio ? compte_vente_studio.nom : 'Compte Studio',
+    bid: getBid(),
     location_id: id // Lier à la location
   };
   
-  // Trouver le compte "Vente Studio" et créditer
-  let compte_studio_id = null;
-  if(S.comptes && Array.isArray(S.comptes)){
-    const compte = S.comptes.find(c => c.nom && c.nom.toLowerCase().includes('studio'));
-    if(compte){
-      compte_studio_id = compte.id;
-      vente_service.cid = compte.id;
-      vente_service.mode = compte.nom;
-    }
-  }
-  
   if(!S.ventes_services) S.ventes_services = [];
   S.ventes_services.push(vente_service);
-  
-  // Créditer le compte si trouvé
-  if(compte_studio_id){
-    crediterCompte(compte_studio_id, loc.montant);
-  }
   
   saveLocal(S);
   saveToFirebase(S);
@@ -11374,7 +11360,12 @@ function _ouvrirSession(u){
   if(errEl){errEl.style.color='';errEl.style.display='none';}
   let boutiqueActive=S.boutique_active||1;
   if(u.role!=='admin'&&u.boutique_id) boutiqueActive=u.boutique_id;
-  S.session={uid:u.id,role:u.role,nom:u.nom,emoji:u.emoji||'👤',email:u.email,boutique_id:u.boutique_id||null,boutique_active:boutiqueActive};
+  // Si l'utilisateur a boutiques_ids assignées, utiliser ça ; sinon utiliser boutique_id
+  const boutiquesDisponibles = u.boutiques_ids && u.boutiques_ids.length > 0 ? u.boutiques_ids : (u.boutique_id ? [u.boutique_id] : []);
+  if(u.role!=='admin'&&boutiquesDisponibles.length > 0 && !boutiquesDisponibles.includes(boutiqueActive)){
+    boutiqueActive = boutiquesDisponibles[0];
+  }
+  S.session={uid:u.id,role:u.role,nom:u.nom,emoji:u.emoji||'👤',email:u.email,boutique_id:u.boutique_id||null,boutiques_ids:boutiquesDisponibles,boutique_active:boutiqueActive};
   saveLocal(S);
   try{enregistrerConnexion(u,'connexion');}catch(e){console.warn('enregistrerConnexion:',e);}
   document.getElementById('login-screen').style.display='none';
