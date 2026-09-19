@@ -1937,6 +1937,7 @@ const defaultData={
   approbations:[],
   apprentis:[],
   controles_qualite:[],
+  locations_chaises:[],
   parametres:{
     nom:'Christ Media',
     ville:'Lomé, Togo',
@@ -2216,7 +2217,8 @@ const FB_COLLECTIONS=[
   'transferts_stock','fourni_evals',
   'boutiques',
   'clotures_caisse',
-  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite','apprentis'
+  'crm_opportunites','projets','couts_atterrissage','materiel','contrats','approbations','controles_qualite','apprentis',
+  'locations_chaises'
 ];
 
 async function saveToFirebase(data){
@@ -8760,6 +8762,109 @@ function rTransactions(){
     </div>`}`;
 }
 
+// ─── LOCATIONS DE CHAISES ───
+const STOCK_CHAISES_INITIAL = 300;
+const PRIX_CHAISE_24H = 50;
+
+function getStockChaises(){
+  if(!S.locations_chaises) S.locations_chaises = [];
+  const actives = (S.locations_chaises||[]).filter(l=>l.statut==='En location');
+  const totalLoues = actives.reduce((sum, l) => sum + (l.qte||0), 0);
+  const dispo = Math.max(0, STOCK_CHAISES_INITIAL - totalLoues);
+  return { total: STOCK_CHAISES_INITIAL, loues: totalLoues, dispo: dispo, actives: actives };
+}
+
+function createLocationChaise(client, qte, notes=''){
+  if(!S.locations_chaises) S.locations_chaises = [];
+  const stock = getStockChaises();
+  if(qte > stock.dispo) { toast('❌ Stock insuffisant : '+stock.dispo+' chaises disponibles'); return; }
+  
+  const id = Math.max(...S.locations_chaises.map(l=>l.id||0), 0) + 1;
+  const now = new Date();
+  const dateDebut = now.toISOString().split('T')[0] + ' ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const dateRetourPrevue = new Date(now.getTime() + 24*3600000);
+  
+  const loc = {
+    id: id,
+    client: client,
+    qte: parseInt(qte),
+    prix_unitaire: PRIX_CHAISE_24H,
+    montant: parseInt(qte) * PRIX_CHAISE_24H,
+    date_debut: dateDebut,
+    date_retour_prevue: dateRetourPrevue.toISOString().split('T')[0] + ' ' + dateRetourPrevue.getHours().toString().padStart(2,'0') + ':' + dateRetourPrevue.getMinutes().toString().padStart(2,'0'),
+    date_retour_reel: null,
+    statut: 'En location',
+    notes: notes,
+    bid: getBid()
+  };
+  
+  S.locations_chaises.push(loc);
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ Location créée : '+qte+' chaises pour '+client);
+}
+
+function returnChaises(locId){
+  const loc = (S.locations_chaises||[]).find(l=>l.id===locId);
+  if(!loc) return;
+  const now = new Date();
+  loc.date_retour_reel = now.toISOString().split('T')[0] + ' ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  loc.statut = 'Retourné';
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ '+loc.qte+' chaises retournées par '+loc.client);
+}
+
+function deleteLocationChaise(locId){
+  if(!confirm('Supprimer cette location ?')) return;
+  S.locations_chaises = (S.locations_chaises||[]).filter(l=>l.id!==locId);
+  saveLocal(S);
+  saveToFirebase(S);
+  toast('✅ Location supprimée');
+}
+
+function factureLocationChaise(locId){
+  const loc = (S.locations_chaises||[]).find(l=>l.id===locId);
+  if(!loc) return;
+  const html = `
+    <html><head><meta charset="UTF-8"><title>Facture Location</title>
+    <style>
+      body{font-family:Arial;margin:20px;font-size:13px}
+      .header{text-align:center;margin-bottom:20px}
+      .header h1{margin:0;font-size:18px}
+      .header p{margin:2px 0;font-size:11px;color:#666}
+      table{width:100%;border-collapse:collapse;margin-bottom:20px}
+      th,td{border:1px solid #ddd;padding:8px;text-align:left}
+      th{background:#0f1f3d;color:white}
+      tr.total td{background:#f0f0f0;font-weight:700}
+      .footer{text-align:center;font-size:11px;color:#999;margin-top:20px;border-top:1px solid #ddd;padding-top:10px}
+    </style></head><body>
+    <div class="header">
+      <h1>CHRIST MEDIA — Location de Chaises</h1>
+      <p>Studio: Tsévié, en face Nationale N1 | Tel: 90 26 06 58 / 97 21 76 35</p>
+    </div>
+    <table>
+      <tr><td><strong>Client:</strong></td><td>${loc.client}</td></tr>
+      <tr><td><strong>Date location:</strong></td><td>${loc.date_debut}</td></tr>
+      <tr><td><strong>Retour prévu:</strong></td><td>${loc.date_retour_prevue}</td></tr>
+    </table>
+    <table>
+      <thead><tr><th>Description</th><th style="text-align:right">Qté</th><th style="text-align:right">P.U. (24h)</th><th style="text-align:right">Montant</th></tr></thead>
+      <tbody>
+        <tr><td>Location chaises plastiques</td><td style="text-align:right">${loc.qte}</td><td style="text-align:right">${F(PRIX_CHAISE_24H)}</td><td style="text-align:right">${F(loc.montant)}</td></tr>
+        <tr class="total"><td colspan="3" style="text-align:right">TOTAL:</td><td style="text-align:right">${F(loc.montant)}</td></tr>
+      </tbody>
+    </table>
+    <div class="footer">
+      <p>Pas de dépôt de garantie requis | Retour dans les 24h</p>
+      <p>${new Date().toLocaleDateString('fr-FR')}</p>
+    </div>
+    </body></html>`;
+  const w = window.open();
+  w.document.write(html);
+  w.print();
+}
+
 // ─── SERVICES ───
 function rServices(){
   if(!S.services)S.services=[];
@@ -8769,12 +8874,77 @@ function rServices(){
   const services=(S.services||[]).filter(isMine);
   const ventes_services=(S.ventes_services||[]).filter(isMine);
   const totalSvcs=ventes_services.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
+  
+  // ─── LOCATIONS CHAISES ───
+  if(!S.locations_chaises) S.locations_chaises = [];
+  const locChaises = (S.locations_chaises||[]).filter(l=>(!l.bid&&bid==defaultBid)||l.bid==bid);
+  const stock = getStockChaises();
+  const revenus_locations = locChaises.filter(l=>l.statut==='Retourné').reduce((s,l)=>s+l.montant,0);
+  
   document.getElementById('content').innerHTML=`
-    <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="ct">Services proposés</div><div class="mv">${N(services.length)}</div></div>
-      <div class="card"><div class="ct">Prestations réalisées</div><div class="mv">${N(ventes_services.length)}</div></div>
-      <div class="card"><div class="ct">Revenus services</div><div class="mv" style="color:var(--green)">${F(totalSvcs)}</div></div>
-    </div>
+    ${bid==defaultBid?`
+      <p class="st" style="color:var(--teal)">🪑 Location de Chaises — CHRIST MEDIA STUDIO</p>
+      <div class="g3" style="margin-bottom:16px">
+        <div class="card"><div class="ct">Total chaises</div><div class="mv">${stock.total}</div></div>
+        <div class="card"><div class="ct">En location</div><div class="mv" style="color:var(--amber)">${stock.loues}</div></div>
+        <div class="card"><div class="ct">Disponibles</div><div class="mv" style="color:var(--green)">${stock.dispo}</div></div>
+        <div class="card"><div class="ct">Revenus locations</div><div class="mv" style="color:var(--navy)">${F(revenus_locations)}</div></div>
+      </div>
+      
+      <div style="background:var(--surface2);padding:16px;border-radius:8px;margin-bottom:20px">
+        <p style="margin:0 0 12px 0;font-weight:600">+ Nouvelle location</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px">
+          <input type="text" id="loc_client" placeholder="Nom client" style="padding:8px;border:1px solid var(--border);border-radius:4px">
+          <input type="number" id="loc_qte" placeholder="Nombre de chaises" min="1" max="${stock.dispo}" style="padding:8px;border:1px solid var(--border);border-radius:4px">
+          <input type="text" id="loc_notes" placeholder="Notes (optional)" style="padding:8px;border:1px solid var(--border);border-radius:4px">
+          <button class="btn btn-success" onclick="createLocationChaise(document.getElementById('loc_client').value, document.getElementById('loc_qte').value, document.getElementById('loc_notes').value); rServices();">Créer</button>
+        </div>
+        <small style="color:var(--text3)">Prix: ${PRIX_CHAISE_24H}F par chaise / 24h | Retour après 24h sans dépôt</small>
+      </div>
+      
+      <p class="st">📍 Locations actives (${stock.actives.length})</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Client</th><th style="text-align:center">Qté</th><th>Début</th><th>Retour prévu</th><th style="text-align:right">Montant</th><th>État</th><th></th></tr></thead>
+        <tbody>
+          ${stock.actives.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune location active</td></tr>':
+            stock.actives.map(l=>{
+              const now = new Date();
+              const retourPrevue = new Date(l.date_retour_prevue);
+              const retard = now > retourPrevue;
+              return `<tr style="background:${retard?'var(--red-bg,#ffe6e6)':''}">
+                <td style="font-weight:600">${l.client}</td>
+                <td style="text-align:center;font-weight:700">${l.qte}</td>
+                <td style="font-size:11px">${l.date_debut}</td>
+                <td style="font-size:11px;color:${retard?'var(--red)':''};font-weight:${retard?'700':''}">${l.date_retour_prevue}${retard?' ⚠️ RETARD':''}</td>
+                <td style="text-align:right;font-weight:600">${F(l.montant)}</td>
+                <td><span class="badge" style="background:var(--amber);color:white">En cours</span></td>
+                <td><div class="td-actions">
+                  <button class="btn-icon btn-sm" onclick="returnChaises(${l.id}); rServices();" title="Retour">✓</button>
+                  <button class="btn-icon btn-sm" onclick="factureLocationChaise(${l.id})" title="Facture">🖨️</button>
+                  <button class="btn-icon btn-sm" onclick="deleteLocationChaise(${l.id}); rServices();" style="color:var(--red)" title="Supprimer">✕</button>
+                </div></td>
+              </tr>`;
+            }).join('')}
+        </tbody>
+      </table></div>
+      
+      <p class="st">✅ Locations retournées (${locChaises.filter(l=>l.statut==='Retourné').length})</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Client</th><th>Qté</th><th>Début</th><th>Retourné</th><th style="text-align:right">Montant</th><th></th></tr></thead>
+        <tbody>
+          ${locChaises.filter(l=>l.statut==='Retourné').length===0?'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Aucun retour</td></tr>':
+            locChaises.filter(l=>l.statut==='Retourné').slice().reverse().map(l=>`<tr>
+              <td style="font-weight:600">${l.client}</td>
+              <td style="text-align:center">${l.qte}</td>
+              <td style="font-size:11px">${l.date_debut}</td>
+              <td style="font-size:11px">${l.date_retour_reel}</td>
+              <td style="text-align:right;font-weight:600;color:var(--green)">${F(l.montant)}</td>
+              <td><button class="btn-icon btn-sm" onclick="deleteLocationChaise(${l.id}); rServices();" style="color:var(--red)" title="Supprimer">✕</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table></div>
+    `:``}
+    
     <p class="st">Catalogue de services</p>
     <div class="g3" style="margin-bottom:20px">
       ${services.map(sv=>`
