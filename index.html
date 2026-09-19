@@ -8780,8 +8780,67 @@ function getStockChaises(){
   return { total: STOCK_CHAISES_INITIAL, loues: totalLoues, dispo: dispo, actives: actives };
 }
 
-// ─── GESTION CATALOGUE DE LOCATIONS ───
-function initCatalogIfEmpty(){
+function calcTotalLocation(){
+  let total = 0;
+  const catalog = S.locations_catalog || [];
+  catalog.forEach(art => {
+    const checkbox = document.getElementById('art_' + art.id);
+    const qtyInput = document.getElementById('qty_' + art.id);
+    if(checkbox && qtyInput && checkbox.checked){
+      const qty = parseInt(qtyInput.value) || 0;
+      const montant = qty * art.prix;
+      total += montant;
+      if(document.getElementById('mt_' + art.id)){
+        document.getElementById('mt_' + art.id).textContent = F(montant);
+      }
+    }
+  });
+  if(document.getElementById('total_location')){
+    document.getElementById('total_location').textContent = F(total);
+  }
+}
+
+function createLocationFromUI(){
+  const client = document.getElementById('loc_client').value;
+  const notes = document.getElementById('loc_notes').value;
+  
+  if(!client.trim()){ toast('❌ Veuillez entrer un nom client'); return; }
+  
+  const articlesData = [];
+  const catalog = S.locations_catalog || [];
+  
+  catalog.forEach(art => {
+    const checkbox = document.getElementById('art_' + art.id);
+    const qtyInput = document.getElementById('qty_' + art.id);
+    if(checkbox && checkbox.checked && qtyInput){
+      const qty = parseInt(qtyInput.value) || 0;
+      if(qty > 0){
+        articlesData.push({article_id: art.id, qte: qty});
+      }
+    }
+  });
+  
+  if(articlesData.length === 0){ toast('❌ Sélectionnez au moins un article'); return; }
+  
+  createLocationMultiArticles(client, articlesData, notes);
+  
+  // Reset form
+  document.getElementById('loc_client').value = '';
+  document.getElementById('loc_notes').value = '';
+  document.querySelectorAll('[id^="art_"]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('[id^="qty_"]').forEach(inp => inp.value = '1');
+  calcTotalLocation();
+}
+
+// Listener pour recalculer au changement de checkbox
+document.addEventListener('change', (e) => {
+  if(e.target.id && (e.target.id.startsWith('art_') || e.target.id.startsWith('qty_'))){
+    calcTotalLocation();
+  }
+}, true);
+
+// Calculer au chargement de la page
+setTimeout(() => { calcTotalLocation(); }, 100);
   if(!S.locations_catalog || S.locations_catalog.length === 0){
     S.locations_catalog = [
       {id:1, nom:'Chaises plastiques', prix:50, stock:300, unite:'chaise'},
@@ -9312,14 +9371,36 @@ function rServices(){
       
       <div style="background:var(--surface2);padding:16px;border-radius:8px;margin-bottom:20px">
         <p style="margin:0 0 12px 0;font-weight:600">+ Nouvelle location</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px">
-          <input type="text" id="loc_client" placeholder="Nom client" style="padding:8px;border:1px solid var(--border);border-radius:4px">
-          <input type="number" id="loc_qte" placeholder="Nombre de chaises" min="1" max="${stock.dispo}" style="padding:8px;border:1px solid var(--border);border-radius:4px">
-          <input type="text" id="loc_notes" placeholder="Notes (optional)" style="padding:8px;border:1px solid var(--border);border-radius:4px">
-          <button class="btn btn-success" onclick="createLocationChaise(document.getElementById('loc_client').value, document.getElementById('loc_qte').value, document.getElementById('loc_notes').value); rServices();">Créer</button>
+        <div style="background:var(--bg2);border-radius:8px;padding:16px;margin-bottom:16px">
+          <input type="text" id="loc_client" placeholder="Nom client" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">
+          
+          <div style="background:white;border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px">
+            <p style="margin:0 0 12px 0;font-weight:600;font-size:13px">Sélectionner articles :</p>
+            ${(S.locations_catalog || []).map(art => {
+              const stock_info = getStockArticle(art.id);
+              const dispo = stock_info ? stock_info.dispo : 0;
+              return \`<div style="display:grid;grid-template-columns:30px 1fr 80px auto;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#fafafa;border-radius:4px">
+                <input type="checkbox" id="art_\${art.id}" value="\${art.id}" style="cursor:pointer">
+                <label for="art_\${art.id}" style="cursor:pointer;font-size:13px">
+                  <strong>\${art.nom}</strong> (\${art.prix}F) — Dispo: <span style="color:var(--green);font-weight:700">\${dispo}</span>
+                </label>
+                <input type="number" id="qty_\${art.id}" min="0" max="\${dispo}" value="1" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center" onchange="calcTotalLocation()">
+                <span id="mt_\${art.id}" style="font-weight:600;color:var(--teal);min-width:60px;text-align:right">\${art.prix}F</span>
+              </div>\`;
+            }).join('')}
+          </div>
+          
+          <div style="background:#f0f9ff;border-left:3px solid var(--blue);padding:10px;margin-bottom:12px;border-radius:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:600">MONTANT TOTAL :</span>
+              <span id="total_location" style="font-size:18px;font-weight:700;color:var(--blue)">0 FCFA</span>
+            </div>
+          </div>
+          
+          <input type="text" id="loc_notes" placeholder="Notes (optionnel)" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">
+          
+          <button class="btn btn-success" onclick="createLocationFromUI(); rServices();" style="width:100%;padding:12px;font-weight:600">Créer location</button>
         </div>
-        <small style="color:var(--text3)">Prix: ${PRIX_CHAISE_24H}F par chaise / 24h | Retour après 24h sans dépôt</small>
-      </div>
       
       <p class="st">📍 Locations actives (${stock.actives.length})</p>
       <div class="tbl-wrap"><table>
