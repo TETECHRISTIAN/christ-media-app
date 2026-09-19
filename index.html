@@ -8774,6 +8774,75 @@ function getStockChaises(){
   return { total: STOCK_CHAISES_INITIAL, loues: totalLoues, dispo: dispo, actives: actives };
 }
 
+// ─── VÉRIFICATION DES ALERTES RETOUR CHAISES ───
+function checkLocationAlertes(){
+  if(!S.locations_chaises) S.locations_chaises = [];
+  const now = new Date();
+  const alertes = {
+    enRetard: [],      // Retour dépassé
+    urgent: [],        // Retour dans < 2h
+    bientot: []        // Retour dans 2-24h
+  };
+  
+  (S.locations_chaises||[]).forEach(l => {
+    if(l.statut !== 'En location') return;
+    
+    const dateRetour = new Date(l.date_retour_prevue);
+    const diffMs = dateRetour - now;
+    const diffHeures = diffMs / (1000 * 60 * 60);
+    
+    if(diffHeures < 0){
+      // Retour dépassé
+      const delaiHeures = Math.floor(-diffHeures);
+      const delaiJours = Math.floor(delaiHeures / 24);
+      l._alerte = {
+        type: 'retard',
+        texte: delaiJours > 0 ? `+${delaiJours}j ${delaiHeures % 24}h` : `+${Math.ceil(-diffHeures)}h`,
+        couleur: 'var(--red)'
+      };
+      alertes.enRetard.push(l);
+    }else if(diffHeures < 2){
+      // Urgent : retour dans < 2h
+      l._alerte = {
+        type: 'urgent',
+        texte: `${Math.ceil(diffHeures * 60)} min`,
+        couleur: 'var(--orange,#ff9800)'
+      };
+      alertes.urgent.push(l);
+    }else if(diffHeures < 24){
+      // Bientôt : retour dans 2-24h
+      l._alerte = {
+        type: 'bientot',
+        texte: `${Math.ceil(diffHeures)}h`,
+        couleur: 'var(--amber,#ffc107)'
+      };
+      alertes.bientot.push(l);
+    }
+  });
+  
+  return alertes;
+}
+
+// Compte total des locations en retard
+function countLocationsRetard(){
+  const alertes = checkLocationAlertes();
+  return alertes.enRetard.length;
+}
+
+// Notification des retards au démarrage ou à la connexion
+function checkAndAlertLocationRetards(){
+  try{
+    if(!S.locations_chaises) return;
+    const alertes = checkLocationAlertes();
+    if(alertes.enRetard.length > 0){
+      const msg = alertes.enRetard.length === 1 
+        ? `⚠️ 1 location en RETARD : ${alertes.enRetard[0].client} (${alertes.enRetard[0].qte} chaises)`
+        : `⚠️ ${alertes.enRetard.length} locations EN RETARD !`;
+      toast(msg);
+    }
+  }catch(e){}
+}
+
 function createLocationChaise(client, qte, notes=''){
   if(!S.locations_chaises) S.locations_chaises = [];
   const stock = getStockChaises();
@@ -9008,20 +9077,37 @@ function rServices(){
       
       <p class="st">📍 Locations actives (${stock.actives.length})</p>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Client</th><th style="text-align:center">Qté</th><th>Début</th><th>Retour prévu</th><th style="text-align:right">Montant</th><th>État</th><th></th></tr></thead>
+        <thead><tr><th>Client</th><th style="text-align:center">Qté</th><th>Début</th><th>Retour prévu</th><th style="text-align:right">Montant</th><th>Alerte</th><th></th></tr></thead>
         <tbody>
-          ${stock.actives.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune location active</td></tr>':
-            stock.actives.map(l=>{
-              const now = new Date();
-              const retourPrevue = new Date(l.date_retour_prevue);
-              const retard = now > retourPrevue;
-              return `<tr style="background:${retard?'var(--red-bg,#ffe6e6)':''}">
+          ${(()=>{
+            const alertes = checkLocationAlertes();
+            const ordonnees = [...alertes.enRetard, ...alertes.urgent, ...alertes.bientot, ...stock.actives.filter(l => !l._alerte)];
+            
+            if(ordonnees.length === 0){
+              return '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucune location active</td></tr>';
+            }
+            
+            return ordonnees.map(l => {
+              const bgColor = l._alerte ? (
+                l._alerte.type === 'retard' ? '#ffe6e6' :
+                l._alerte.type === 'urgent' ? '#fff3e0' :
+                '#fffbe6'
+              ) : '';
+              
+              const badgeColor = l._alerte ? l._alerte.couleur : 'var(--amber)';
+              const badgeTexte = l._alerte ? (
+                l._alerte.type === 'retard' ? '⚠️ RETARD' :
+                l._alerte.type === 'urgent' ? '🔴 URGENT' :
+                '⏰ BIENTÔT'
+              ) : 'En cours';
+              
+              return `<tr style="background:${bgColor}">
                 <td style="font-weight:600">${l.client}</td>
                 <td style="text-align:center;font-weight:700">${l.qte}</td>
                 <td style="font-size:11px">${l.date_debut}</td>
-                <td style="font-size:11px;color:${retard?'var(--red)':''};font-weight:${retard?'700':''}">${l.date_retour_prevue}${retard?' ⚠️ RETARD':''}</td>
+                <td style="font-size:11px;font-weight:${l._alerte?'700':''};color:${l._alerte?l._alerte.couleur:''}">${l.date_retour_prevue}</td>
                 <td style="text-align:right;font-weight:600">${F(l.montant)}</td>
-                <td><span class="badge" style="background:var(--amber);color:white">En cours</span></td>
+                <td><span class="badge" style="background:${badgeColor};color:white;font-weight:700">${badgeTexte}${l._alerte?' '+l._alerte.texte:''}</span></td>
                 <td><div class="td-actions">
                   <button class="btn-icon btn-sm" onclick="returnChaises(${l.id}); rServices();" title="Retour">✓</button>
                   <button class="btn-icon btn-sm" onclick="imprimerReceuLocationChaise(${l.id})" title="Reçu de location" style="color:var(--teal)">🧾</button>
@@ -9029,7 +9115,8 @@ function rServices(){
                   <button class="btn-icon btn-sm" onclick="deleteLocationChaise(${l.id}); rServices();" style="color:var(--red)" title="Supprimer">✕</button>
                 </div></td>
               </tr>`;
-            }).join('')}
+            }).join('');
+          })()}
         </tbody>
       </table></div>
       
@@ -11374,6 +11461,7 @@ function _ouvrirSession(u){
   try{majBoutiqueUI();}catch(e){}
   try{toast(`✅ Bienvenue ${u.nom} !`);}catch(e){}
   try{addAudit('LOGIN','Connexion','Connexion de '+u.nom+' ('+u.role+')',null,null);}catch(e){}
+  setTimeout(()=>{try{checkAndAlertLocationRetards();}catch(e){}},2000); // Vérifier les retards
   try{logConnexionDetaille(u);}catch(e){}
   setTimeout(()=>{try{initPresence();}catch(e){}},1000);
   if(u.role==='admin') setTimeout(()=>{try{checkGdriveAutoBackup();}catch(e){}},3000);
