@@ -2977,7 +2977,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
+    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
   }catch(e){}
 }
 
@@ -3424,7 +3424,7 @@ function switcherBoutique(bid){
     _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
     majBoutiqueUI();
     try{
-      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
+      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
     }catch(e){console.error('Erreur rafraîchissement page :',e);}
   }
   // Vendeur/Caissier avec plusieurs boutiques : peut switcher entre ses boutiques
@@ -3531,7 +3531,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',locations:'🪑 Locations',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3593,7 +3593,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -9034,6 +9034,132 @@ function factureLocationChaise(locId){
   const w = window.open();
   w.document.write(html);
   w.print();
+}
+
+// ─── DASHBOARD LOCATIONS (ADMIN) ───
+function rLocations(){
+  if(!S.locations_chaises) S.locations_chaises = [];
+  if(!S.boutiques) S.boutiques = [];
+  
+  const stock = getStockChaises();
+  const alertes = checkLocationAlertes();
+  const toutes_locations = S.locations_chaises || [];
+  const locations_actives = toutes_locations.filter(l => l.statut === 'En location');
+  const locations_retournees = toutes_locations.filter(l => l.statut === 'Retourné');
+  
+  // Statistiques
+  const revenus_total = toutes_locations.reduce((sum, l) => sum + (l.montant || 0), 0);
+  const revenus_retournes = locations_retournees.reduce((sum, l) => sum + (l.montant || 0), 0);
+  const taux_occupation = stock.total > 0 ? Math.round((stock.loues / stock.total) * 100) : 0;
+  
+  // Clients uniques
+  const clients_uniques = new Set(toutes_locations.map(l => l.client)).size;
+  const client_top = toutes_locations
+    .reduce((acc, l) => { acc[l.client] = (acc[l.client] || 0) + 1; return acc; }, {});
+  const top_client = Object.entries(client_top)
+    .sort((a, b) => b[1] - a[1])[0];
+  
+  document.getElementById('content').innerHTML = `
+    <p class="st" style="color:var(--teal)">🪑 Dashboard Locations — Vue d'ensemble</p>
+    
+    <!-- ALERTES EN RETARD -->
+    ${alertes.enRetard.length > 0 ? `
+      <div style="background:#ffe6e6;border:2px solid var(--red);border-radius:8px;padding:16px;margin-bottom:20px">
+        <p style="margin:0 0 12px 0;font-weight:700;color:var(--red)">⚠️ ${alertes.enRetard.length} LOCATION(S) EN RETARD</p>
+        <div style="display:grid;gap:8px">
+          ${alertes.enRetard.map(l => `
+            <div style="background:white;padding:12px;border-radius:4px;display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong>${l.client}</strong> - ${l.qte} chaises (${l.montant} FCFA)
+                <div style="font-size:11px;color:#666">Retour prévu: ${l.date_retour_prevue}</div>
+              </div>
+              <button class="btn btn-sm" onclick="returnChaises(${l.id}); rLocations();" style="background:var(--red);color:white">✓ Marquer retour</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+    
+    <!-- STATISTIQUES -->
+    <div class="g4" style="margin-bottom:20px">
+      <div class="card">
+        <div class="ct">Chaises en location</div>
+        <div class="mv" style="color:var(--orange)">${stock.loues}/${stock.total}</div>
+        <div style="font-size:12px;color:var(--text3)">Occupation: ${taux_occupation}%</div>
+      </div>
+      <div class="card">
+        <div class="ct">Revenus total</div>
+        <div class="mv" style="color:var(--green)">${F(revenus_total)}</div>
+        <div style="font-size:12px;color:var(--text3)">Retournés: ${F(revenus_retournes)}</div>
+      </div>
+      <div class="card">
+        <div class="ct">Clients</div>
+        <div class="mv" style="color:var(--blue)">${clients_uniques}</div>
+        <div style="font-size:12px;color:var(--text3)">Top: ${top_client ? top_client[0] + ' (' + top_client[1] + 'x)' : '—'}</div>
+      </div>
+      <div class="card">
+        <div class="ct">Alertes</div>
+        <div class="mv" style="color:var(--red)">${alertes.enRetard.length}</div>
+        <div style="font-size:12px;color:var(--text3)">${alertes.urgent.length} urgent, ${alertes.bientot.length} bientôt</div>
+      </div>
+    </div>
+    
+    <!-- LOCATIONS ACTIVES -->
+    <p class="st">📍 Locations actives (${locations_actives.length})</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Client</th><th>Boutique</th><th>Qté</th><th>Début</th><th>Retour</th><th>Montant</th><th>Alerte</th><th>Actions</th></tr></thead>
+      <tbody>
+        ${locations_actives.length === 0 
+          ? '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">Aucune location active</td></tr>'
+          : (()=>{
+            const alertes_check = checkLocationAlertes();
+            const ordonnees = [...alertes_check.enRetard, ...alertes_check.urgent, ...alertes_check.bientot, ...locations_actives.filter(l => !l._alerte)];
+            return ordonnees.map(l => {
+              const boutique = (S.boutiques || []).find(b => b.id === l.bid);
+              const bgColor = l._alerte ? (l._alerte.type === 'retard' ? '#ffe6e6' : l._alerte.type === 'urgent' ? '#fff3e0' : '#fffbe6') : '';
+              const badgeColor = l._alerte ? l._alerte.couleur : 'var(--amber)';
+              const badgeTexte = l._alerte ? (l._alerte.type === 'retard' ? '⚠️ RETARD' : l._alerte.type === 'urgent' ? '🔴 URGENT' : '⏰ BIENTÔT') : 'En cours';
+              return `<tr style="background:${bgColor}">
+                <td style="font-weight:600">${l.client}</td>
+                <td><small>${boutique ? boutique.nom : '—'}</small></td>
+                <td style="text-align:center;font-weight:700">${l.qte}</td>
+                <td style="font-size:11px">${l.date_debut}</td>
+                <td style="font-size:11px;font-weight:${l._alerte?'700':''};color:${l._alerte?l._alerte.couleur:''}">${l.date_retour_prevue}</td>
+                <td style="text-align:right;font-weight:600">${F(l.montant)}</td>
+                <td><span class="badge" style="background:${badgeColor};color:white;font-size:11px">${badgeTexte}${l._alerte?' '+l._alerte.texte:''}</span></td>
+                <td style="font-size:12px"><div style="display:flex;gap:4px">
+                  <button class="btn-icon btn-xs" onclick="returnChaises(${l.id}); rLocations();" title="Retour">✓</button>
+                  <button class="btn-icon btn-xs" onclick="imprimerReceuLocationChaise(${l.id})" title="Reçu">📄</button>
+                  <button class="btn-icon btn-xs" onclick="factureLocationChaise(${l.id})" title="Facture">🖨️</button>
+                </div></td>
+              </tr>`;
+            }).join('');
+          })()}
+      </tbody>
+    </table></div>
+    
+    <!-- LOCATIONS RETOURNÉES -->
+    <p class="st" style="margin-top:30px">✅ Locations retournées (${locations_retournees.length})</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Client</th><th>Boutique</th><th>Qté</th><th>Début</th><th>Retourné</th><th style="text-align:right">Montant</th><th></th></tr></thead>
+      <tbody>
+        ${locations_retournees.length === 0
+          ? '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucun retour enregistré</td></tr>'
+          : locations_retournees.slice().reverse().map(l => {
+            const boutique = (S.boutiques || []).find(b => b.id === l.bid);
+            return `<tr>
+              <td style="font-weight:600">${l.client}</td>
+              <td><small>${boutique ? boutique.nom : '—'}</small></td>
+              <td style="text-align:center">${l.qte}</td>
+              <td style="font-size:11px">${l.date_debut}</td>
+              <td style="font-size:11px">${l.date_retour_reel}</td>
+              <td style="text-align:right;font-weight:600;color:var(--green)">${F(l.montant)}</td>
+              <td><button class="btn-icon btn-xs" onclick="deleteLocationChaise(${l.id}); rLocations();" style="color:var(--red)" title="Supprimer">✕</button></td>
+            </tr>`;
+          }).join('')}
+      </tbody>
+    </table></div>
+  `;
 }
 
 // ─── SERVICES ───
