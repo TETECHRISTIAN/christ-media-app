@@ -3354,21 +3354,6 @@ function switcherBoutique(bid){
     toast('⛔ Vous ne pouvez switcher que si vous avez plusieurs boutiques');
   }
 }
-      vente:rVente,services:rServices,achats:rAchats,stock:rStock,
-      clients:rClients,fournisseurs:rFour,depenses:rDep,
-      tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,
-      inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,
-      comptes:rComptes,devis:rDevis,planning:rPlanning,
-      calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,
-      limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,
-      caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,
-      depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,
-      rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,
-      bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
-  }catch(e){}
-  const b = getBoutiqueActive();
-  toast(`🏪 Boutique : ${b.emoji} ${b.nom}`);
-}
 
 // Met à jour l'affichage du switcher dans la sidebar
 function majBoutiqueUI(){
