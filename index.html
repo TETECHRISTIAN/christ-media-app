@@ -8880,10 +8880,12 @@ function rServices(){
   const locChaises = (S.locations_chaises||[]).filter(l=>(!l.bid&&bid==defaultBid)||l.bid==bid);
   const stock = getStockChaises();
   const revenus_locations = locChaises.filter(l=>l.statut==='Retourné').reduce((s,l)=>s+l.montant,0);
+  const boutique_actuelle = (S.boutiques||[]).find(b => b.id === bid);
+  const est_studio = boutique_actuelle && (boutique_actuelle.nom.includes('STUDIO') || boutique_actuelle.nom.includes('studio'));
   
   document.getElementById('content').innerHTML=`
-    ${bid==defaultBid?`
-      <p class="st" style="color:var(--teal)">🪑 Location de Chaises — CHRIST MEDIA STUDIO</p>
+    ${est_studio?`
+      <p class="st" style="color:var(--teal)">🪑 Location de Chaises — ${boutique_actuelle.nom}</p>
       <div class="g3" style="margin-bottom:16px">
         <div class="card"><div class="ct">Total chaises</div><div class="mv">${stock.total}</div></div>
         <div class="card"><div class="ct">En location</div><div class="mv" style="color:var(--amber)">${stock.loues}</div></div>
