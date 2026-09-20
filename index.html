@@ -8780,6 +8780,42 @@ function getStockChaises(){
   return { total: STOCK_CHAISES_INITIAL, loues: totalLoues, dispo: dispo, actives: actives };
 }
 
+function buildLocationFormHTML(){
+  initCatalogIfEmpty();
+  let html = '';
+  const catalog = S.locations_catalog || [];
+  
+  html += '<p style="margin:0 0 12px 0;font-weight:600">+ Nouvelle location</p>';
+  html += '<div style="background:var(--bg2);border-radius:8px;padding:16px;margin-bottom:16px">';
+  html += '<input type="text" id="loc_client" placeholder="Nom client" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">';
+  html += '<div style="background:white;border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px">';
+  html += '<p style="margin:0 0 12px 0;font-weight:600;font-size:13px">Sélectionner articles :</p>';
+  
+  catalog.forEach(art => {
+    const stock_info = getStockArticle(art.id);
+    const dispo = stock_info ? stock_info.dispo : 0;
+    html += '<div style="display:grid;grid-template-columns:30px 1fr 80px auto;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#fafafa;border-radius:4px">';
+    html += '<input type="checkbox" id="art_' + art.id + '" value="' + art.id + '" style="cursor:pointer">';
+    html += '<label for="art_' + art.id + '" style="cursor:pointer;font-size:13px"><strong>' + art.nom + '</strong> (' + art.prix + 'F) — Dispo: <span style="color:var(--green);font-weight:700">' + dispo + '</span></label>';
+    html += '<input type="number" id="qty_' + art.id + '" min="0" max="' + dispo + '" value="1" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center" onchange="calcTotalLocation()">';
+    html += '<span id="mt_' + art.id + '" style="font-weight:600;color:var(--teal);min-width:60px;text-align:right">' + art.prix + 'F</span>';
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  html += '<div style="background:#f0f9ff;border-left:3px solid var(--blue);padding:10px;margin-bottom:12px;border-radius:4px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+  html += '<span style="font-weight:600">MONTANT TOTAL :</span>';
+  html += '<span id="total_location" style="font-size:18px;font-weight:700;color:var(--blue)">0 FCFA</span>';
+  html += '</div></div>';
+  html += '<input type="text" id="loc_notes" placeholder="Notes (optionnel)" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">';
+  html += '<button class="btn btn-success" onclick="createLocationFromUI(); rServices();" style="width:100%;padding:12px;font-weight:600">Créer location</button>';
+  html += '</div>';
+  
+  setTimeout(() => { calcTotalLocation(); }, 100);
+  return html;
+}
+
 function calcTotalLocation(){
   let total = 0;
   const catalog = S.locations_catalog || [];
@@ -9372,36 +9408,7 @@ function rServices(){
       <div style="background:var(--surface2);padding:16px;border-radius:8px;margin-bottom:20px">
         <p style="margin:0 0 12px 0;font-weight:600">+ Nouvelle location</p>
         <div style="background:var(--bg2);border-radius:8px;padding:16px;margin-bottom:16px">
-          <input type="text" id="loc_client" placeholder="Nom client" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">
-          
-          <div style="background:white;border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px">
-            <p style="margin:0 0 12px 0;font-weight:600;font-size:13px">Sélectionner articles :</p>
-            ${(()=>{
-              return (S.locations_catalog || []).map(art => {
-                const stock_info = getStockArticle(art.id);
-                const dispo = stock_info ? stock_info.dispo : 0;
-                return '<div style="display:grid;grid-template-columns:30px 1fr 80px auto;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#fafafa;border-radius:4px">' +
-                  '<input type="checkbox" id="art_' + art.id + '" value="' + art.id + '" style="cursor:pointer">' +
-                  '<label for="art_' + art.id + '" style="cursor:pointer;font-size:13px">' +
-                  '<strong>' + art.nom + '</strong> (' + art.prix + 'F) — Dispo: <span style="color:var(--green);font-weight:700">' + dispo + '</span>' +
-                  '</label>' +
-                  '<input type="number" id="qty_' + art.id + '" min="0" max="' + dispo + '" value="1" style="padding:6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center" onchange="calcTotalLocation()">' +
-                  '<span id="mt_' + art.id + '" style="font-weight:600;color:var(--teal);min-width:60px;text-align:right">' + art.prix + 'F</span>' +
-                  '</div>';
-              }).join('');
-            })()}
-          </div>
-          
-          <div style="background:#f0f9ff;border-left:3px solid var(--blue);padding:10px;margin-bottom:12px;border-radius:4px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-weight:600">MONTANT TOTAL :</span>
-              <span id="total_location" style="font-size:18px;font-weight:700;color:var(--blue)">0 FCFA</span>
-            </div>
-          </div>
-          
-          <input type="text" id="loc_notes" placeholder="Notes (optionnel)" style="padding:10px;border:1px solid var(--border);border-radius:4px;width:100%;margin-bottom:12px;box-sizing:border-box">
-          
-          <button class="btn btn-success" onclick="createLocationFromUI(); rServices();" style="width:100%;padding:12px;font-weight:600">Créer location</button>
+          ${buildLocationFormHTML()}
         </div>
       
       <p class="st">📍 Locations actives (${stock.actives.length})</p>
