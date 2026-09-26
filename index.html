@@ -156,6 +156,9 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+/* FIX ResizeObserver loop — Chart.js responsive causes infinite resize */
+canvas{max-width:100%;height:auto !important}
+[id*="chart"]{width:100% !important;max-height:400px !important}
 :root{
   --bg:#f0f2f7;--surface:#ffffff;--surface2:#f4f5f9;--surface3:#e8eaf0;
   --text:#111827;--text2:#4b5563;--text3:#9ca3af;
@@ -6561,9 +6564,9 @@ function rRap(){
     const cs=document.getElementById('chart-secteurs');
     const cd=document.getElementById('chart-dep');
     const cm=document.getElementById('chart-modes');
-    if(cs) chartSecteurs=new Chart(cs,{type:'doughnut',data:{labels:cats,datasets:[{data:vCats,backgroundColor:['#f8e8f0','#e8edf5','#e0f5f1'],borderColor:['#8b2252','#0f1f3d','#0b6b5c'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
-    if(cd) chartDep=new Chart(cd,{type:'bar',data:{labels:depCats,datasets:[{data:depMts,backgroundColor:'#fbeaea',borderColor:'#b02828',borderWidth:2,borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}},grid:{display:false}},x:{ticks:{font:{size:9}}}}}});
-    if(cm) new Chart(cm,{type:'pie',data:{labels:modes,datasets:[{data:vModes,backgroundColor:['#e8edf5','#e0f5f1','#f8e8f0','#f0ebf8'],borderColor:['#0f1f3d','#0b6b5c','#8b2252','#5b3a8f'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
+    if(cs) chartSecteurs=new Chart(cs,{type:'doughnut',data:{labels:cats,datasets:[{data:vCats,backgroundColor:['#f8e8f0','#e8edf5','#e0f5f1'],borderColor:['#8b2252','#0f1f3d','#0b6b5c'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
+    if(cd) chartDep=new Chart(cd,{type:'bar',data:{labels:depCats,datasets:[{data:depMts,backgroundColor:'#fbeaea',borderColor:'#b02828',borderWidth:2,borderRadius:4}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}},grid:{display:false}},x:{ticks:{font:{size:9}}}}}});
+    if(cm) new Chart(cm,{type:'pie',data:{labels:modes,datasets:[{data:vModes,backgroundColor:['#e8edf5','#e0f5f1','#f8e8f0','#f0ebf8'],borderColor:['#0f1f3d','#0b6b5c','#8b2252','#5b3a8f'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
   },100);
 }
 
@@ -6743,7 +6746,7 @@ function rBilanMensuel(){
           {label:'Résultat',data:hist6.map(h=>h.resultat),type:'line',borderColor:'#1a3a5c',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#1a3a5c',order:1}
         ]
       },
-      options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}},scales:{y:{ticks:{font:{size:9},callback:v=>v>=1000?Math.round(v/1000)+'k':v},grid:{color:'rgba(0,0,0,0.04)'}},x:{ticks:{font:{size:10}}}}}
+      options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}},scales:{y:{ticks:{font:{size:9},callback:v=>v>=1000?Math.round(v/1000)+'k':v},grid:{color:'rgba(0,0,0,0.04)'}},x:{ticks:{font:{size:10}}}}}
     });
   },100);
 }
