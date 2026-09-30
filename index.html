@@ -12764,8 +12764,20 @@ function savePayerGroupeFournisseur(idsStr, nomFour){
     if(!a.tranches) a.tranches=[];
     a.tranches.push({id:genId(),date,mt:versement,cid,notes});
     if(paye+versement>=a.mt) a.statut='Payé';
+    a.ts=Date.now(); // pour que la fusion multi-appareils garde ce changement
     resteMt-=versement;
   });
+
+  // Mettre à jour aussi le solde direct du fournisseur (sinon « achats » et « solde » s'écartent)
+  const montantApplique=mt-resteMt;
+  const fidG=(achats.find(a=>a.fid!=null)||{}).fid;
+  const fG=(fidG!=null&&montantApplique>0)?getFournisseursActifs().find(x=>x.id==fidG):null;
+  if(fG){
+    const avantG=fG.dette||0;
+    fG.dette=Math.max(0,avantG-montantApplique);
+    if(!fG.historiquePaiementsFour) fG.historiquePaiementsFour=[];
+    fG.historiquePaiementsFour.push({id:genId(),date,montantPaye:montantApplique,avant:avantG,apres:fG.dette,compte:nomCompte(cid),cid,note:notes,ts:Date.now()});
+  }
 
   saveData();closeModal();rDettes();
   toast(`✅ ${F(mt)} réglé sur ${achats.length} achat(s) de ${nomFour}${resteMt>0?' — surplus conservé':''}`);
