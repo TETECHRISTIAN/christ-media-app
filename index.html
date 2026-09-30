@@ -7056,6 +7056,8 @@ function saveReglementDette(fid){
   });
   S.depenses.push({id:depId,date:dateP,four:f.nom,cat:'Règlement dette',mt,mode:nomCompte(cid_d),cid:cid_d,notes:`Règlement dette — ${f.nom}${note?' · '+note:''}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
   debiterCompte(cid_d,mt);
+  // Synchronise les lignes d'achats « À payer » avec le nouveau solde (évite l'écart entre les deux onglets)
+  try{ reconcilierDette(fid,true); }catch(e){ console.warn('[DETTES] Réconciliation auto ignorée:',e); }
   saveData();closeModal();
   toast(`✅ ${F(mt)} payé · Reste : ${F(apresDette)}${apresDette===0?' — Compte soldé !':''}`);
   if(currentPage==='dettes') rDettes(); else rTresorerie();
@@ -7073,10 +7075,10 @@ function resteAchat(a){
   const paye = a.tranches ? a.tranches.reduce((s,t)=>s+(+t.mt||0),0) : 0;
   return Math.max(0, (+a.mt||0) - paye);
 }
-function reconcilierDette(fid){
+function reconcilierDette(fid,silencieux){
   const f=S.fournisseurs&&getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const achatsF=S.achats.filter(a=>a.fid==fid && a.statut==='À payer' && !a._deleted);
-  if(achatsF.length===0) return toast('ℹ️ Aucun achat "À payer" pour ce fournisseur');
+  if(achatsF.length===0) return silencieux?0:toast('ℹ️ Aucun achat "À payer" pour ce fournisseur');
 
   achatsF.sort((a,b)=>{
     const da=(a.date||'')+' '+(a.heure||''), db=(b.date||'')+' '+(b.heure||'');
@@ -7087,7 +7089,7 @@ function reconcilierDette(fid){
   const totalOuvert=achatsF.reduce((s,a)=>s+resteAchat(a),0);
   const realDette=f.dette||0;
   let toClose=totalOuvert-realDette;
-  if(toClose<=0) return toast('✅ Déjà cohérent — aucun ajustement nécessaire');
+  if(toClose<=0) return silencieux?0:toast('✅ Déjà cohérent — aucun ajustement nécessaire');
 
   let nbSoldes=0, montantReconcilie=0;
   for(const a of achatsF){
@@ -7106,6 +7108,8 @@ function reconcilierDette(fid){
     }
     a.ts=Date.now();
   }
+  // Mode silencieux (appel automatique depuis saveReglementDette) : l'appelant sauvegarde et rafraîchit
+  if(silencieux) return nbSoldes;
   saveData();
   toast(`🔄 Réconciliation "${f.nom}" : ${nbSoldes} achat(s) soldé(s) · ${F(montantReconcilie)} régularisé(s)`);
   if(currentPage==='dettes') rDettes();
