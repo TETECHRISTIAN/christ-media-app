@@ -19682,8 +19682,44 @@ function renderLiveFeed(){
 
 // ─── Revenus par article (section Live, pour la date affichée) ───
 function renderRevArticleLive(ventesAuj){
+  window._liveArtData = ventesAuj || [];
+  if(!window._liveArtScope) window._liveArtScope = 'toutes';
+  const sc = window._liveArtScope;
+  const btn = (id,label) => '<button id="live-art-scope-'+id+'" onclick="setLiveArtScope(\''+id+'\')" style="border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(sc===id?'var(--navy)':'var(--surface2)')+';color:'+(sc===id?'#fff':'var(--text2)')+'">'+label+'</button>';
+  return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">'+
+      btn('toutes','Toutes boutiques')+btn('boutique','Boutique active')+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:6px 10px;margin-bottom:10px">'+
+      '<span style="font-size:13px;color:var(--text3)">🔎</span>'+
+      '<input type="text" id="live-art-search" placeholder="Rechercher un article..." oninput="renderRevArticleLiveList()" style="border:none;background:none;font-family:inherit;font-size:13px;color:var(--text);flex:1;outline:none">'+
+      '<button onclick="const e=document.getElementById(\'live-art-search\');e.value=\'\';e.focus();renderRevArticleLiveList()" title="Effacer" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--text3)">✕</button>'+
+    '</div>'+
+    '<div id="live-art-list">'+buildRevArticleLiveList()+'</div>';
+}
+
+function setLiveArtScope(sc){
+  window._liveArtScope = sc;
+  ['toutes','boutique'].forEach(id => {
+    const b = document.getElementById('live-art-scope-'+id);
+    if(!b) return;
+    b.style.background = (sc===id) ? 'var(--navy)' : 'var(--surface2)';
+    b.style.color = (sc===id) ? '#fff' : 'var(--text2)';
+  });
+  renderRevArticleLiveList();
+}
+
+function renderRevArticleLiveList(){
+  const el = document.getElementById('live-art-list');
+  if(el) el.innerHTML = buildRevArticleLiveList();
+}
+
+function buildRevArticleLiveList(){
+  const needle = ((document.getElementById('live-art-search')||{}).value||'').trim().toLowerCase();
+  const bid = getBid();
+  let ventes = (window._liveArtData||[]).filter(v => v.statut==='Payé');
+  if(window._liveArtScope==='boutique') ventes = ventes.filter(v => (v.bid||1) == bid);
   const map = {};
-  (ventesAuj||[]).filter(v => v.statut==='Payé').forEach(v => {
+  ventes.forEach(v => {
     if(v._type==='service'){
       const nom = '⭐ ' + (v.nom_service||v.nom_article||'Service');
       if(!map[nom]) map[nom] = {nom, qte:0, ca:0};
@@ -19702,8 +19738,9 @@ function renderRevArticleLive(ventesAuj){
       map[nom].ca += ca;
     });
   });
-  const rows = Object.values(map).sort((a,b) => b.ca - a.ca);
-  if(rows.length === 0) return '<div class="empty"><p>Aucune vente encaissée</p></div>';
+  let rows = Object.values(map).sort((a,b) => b.ca - a.ca);
+  if(needle) rows = rows.filter(r => r.nom.toLowerCase().includes(needle));
+  if(rows.length === 0) return '<div class="empty"><p>'+(needle?'Aucun article trouvé':'Aucune vente encaissée')+'</p></div>';
   const totalCA = rows.reduce((s,r) => s + r.ca, 0);
   const totalQte = rows.reduce((s,r) => s + r.qte, 0);
   const maxCA = rows[0].ca || 1;
