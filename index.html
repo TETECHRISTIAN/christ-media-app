@@ -8,153 +8,119 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Christ Media">
-<title>Christ Media — All-in-One V11</title>
+<title>Christ Media — All-in-One V11.2</title>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     DIAGNOSTIC + FILET DE SECOURS CDN — ajouté pour que l'application
-     ne reste plus jamais bloquée en silence sur un écran blanc/vide.
-     N'affecte AUCUNE logique métier existante.
-
-     Fonctionnement :
-     1) Si un script critique (Chart.js / ZXing / JsBarcode / Firebase)
-        échoue à charger, on retente automatiquement via un CDN alternatif.
-     2) Le panneau de diagnostic ne s'affiche QUE si le CDN alternatif
-        échoue aussi (ou s'il n'y a pas d'alternative) — donc jamais pour
-        une simple ressource secondaire (ex: police Google indisponible).
-     3) Filet de sécurité final à 15s si le script principal de l'appli
-        n'a toujours pas fini de se charger, quelle qu'en soit la cause.
-     ═══════════════════════════════════════════════════════════════ -->
+<!-- Démarrage V2 : dépendances asynchrones avec délais limités et CDN de secours.
+     Firebase Database est chargé après Firebase App. Les fonctions locales
+     restent accessibles sans CDN. Aucun effacement du stockage utilisateur. -->
 <script>
+// Démarrage V2 : aucune bibliothèque distante ne bloque le parseur HTML.
 (function(){
-  var _cmErrors = [];
-  var _cmPanelShown = false;
-
-  // CDN alternatif pour chaque ressource critique. Clé = fragment d'URL
-  // du script principal, valeur = URL de secours sur un autre CDN.
-  var _cmFallbacks = {
-    'cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js':
-      'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js',
-    'cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js':
-      'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
-    'cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js':
-      'https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
-    'www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js':
-      'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.js',
-    'www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js':
-      'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.js'
-  };
-  var _cmCriticalHosts = ['cdnjs.cloudflare.com','unpkg.com','cdn.jsdelivr.net','gstatic.com'];
-
-  function cmShowPanel(){
-    if(_cmPanelShown) return;
-    _cmPanelShown = true;
-    var d = document.createElement('div');
-    d.id = 'cm-boot-diag';
-    d.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0f1f3d;color:#fff;'
-      + 'font-family:monospace;font-size:13px;padding:20px;overflow:auto;line-height:1.6';
-    d.innerHTML = '<div style="font-size:18px;font-weight:bold;margin-bottom:12px">⚠️ Christ Media — Problème de chargement</div>'
-      + '<div style="margin-bottom:14px">L\'application n\'a pas pu démarrer correctement. Détails techniques ci-dessous '
-      + '(faites une capture d\'écran et envoyez-la pour diagnostic) :</div>'
-      + '<div id="cm-boot-diag-list" style="background:#000;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-word"></div>'
-      + '<div style="margin-top:16px;font-size:12px;color:#aab">Causes possibles : connexion internet instable/coupée, '
-      + 'ressource bloquée par le réseau (Chart.js / Firebase / ZXing / JsBarcode / polices Google), cache du navigateur '
-      + 'corrompu. Essayez : 1) vérifier la connexion internet 2) recharger la page (tirer vers le bas ou Ctrl+F5) '
-      + '3) vider le cache du navigateur.</div>'
-      + '<button onclick="location.reload(true)" style="margin-top:16px;padding:10px 18px;background:#fff;color:#0f1f3d;'
-      + 'border:none;border-radius:8px;font-weight:bold;cursor:pointer">🔄 Recharger la page</button>';
-    document.documentElement.appendChild(d);
-    cmRenderList();
-  }
-
-  function cmRenderList(){
-    var list = document.getElementById('cm-boot-diag-list');
-    if(!list) return;
-    var lines = _cmErrors.length ? _cmErrors.slice() : ['(aucune erreur JS détectée pour le moment — le script principal met peut-être juste du temps à charger)'];
-    lines.push('—');
-    lines.push('User-Agent: ' + navigator.userAgent);
-    lines.push('En ligne: ' + navigator.onLine);
-    lines.push('Heure: ' + new Date().toString());
-    list.textContent = lines.join('\n');
-  }
-
-  window.addEventListener('error', function(e){
-    if(e && e.target && e.target.tagName === 'SCRIPT' && e.target.src){
-      var src = e.target.src;
-      var isCritical = _cmCriticalHosts.some(function(h){ return src.indexOf(h) !== -1; });
-      var alreadyFallback = e.target.getAttribute('data-cm-fallback-tried');
-
-      if(isCritical && !alreadyFallback){
-        // 1ère tentative échouée sur ce script → on essaie un CDN alternatif
-        // en silence, sans encore afficher le panneau.
-        for(var key in _cmFallbacks){
-          if(src.indexOf(key) !== -1){
-            _cmErrors.push('⚠️ ' + src + ' inaccessible → tentative via CDN alternatif : ' + _cmFallbacks[key]);
-            var s = document.createElement('script');
-            s.src = _cmFallbacks[key];
-            s.setAttribute('data-cm-fallback-tried', '1');
-            s.onerror = function(){
-              _cmErrors.push('❌ Le CDN alternatif a échoué aussi.');
-              cmShowPanel();
-            };
-            document.head.appendChild(s);
-            return;
-          }
-        }
-        // Pas d'alternative connue pour ce script → on affiche directement.
-        _cmErrors.push('❌ Échec de chargement du script (aucun secours disponible) : ' + src);
-        cmShowPanel();
-        return;
+  window.cmMainLoaded=false;
+  window.cmDependencyStatus={};
+  document.addEventListener('DOMContentLoaded',function(){
+    var font=document.createElement('link');font.rel='stylesheet';
+    font.href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap';document.head.appendChild(font);
+  },{once:true});
+  var errors=[];
+  function notice(message,fatal){
+    function draw(){
+      var id=fatal?'cm-boot-diag':'cm-network-notice';
+      var box=document.getElementById(id);
+      if(!box){
+        box=document.createElement('div');box.id=id;box.setAttribute('role','alert');
+        box.style.cssText='position:fixed;bottom:12px;left:12px;right:12px;z-index:999999;padding:14px;border-radius:8px;background:#fff3cd;color:#513e00;font:14px sans-serif;box-shadow:0 2px 12px #0003;white-space:pre-wrap';
+        document.documentElement.appendChild(box);
       }
-      if(isCritical && alreadyFallback){
-        // Le CDN alternatif lui-même a échoué (géré aussi par son propre onerror
-        // ci-dessus, ce bloc est une sécurité supplémentaire).
-        _cmErrors.push('❌ Échec de chargement du script (secours inclus) : ' + src);
-        cmShowPanel();
-        return;
-      }
-      _cmErrors.push('❌ Échec de chargement du script : ' + src);
-      return;
+      box.textContent=message+' ';
+      var button=document.createElement('button');
+      button.textContent=fatal?'Recharger':'Fermer';
+      button.onclick=function(){if(fatal)location.reload();else box.remove();};
+      box.appendChild(button);
     }
-    // Ressources non-script (police, image, feuille de style...) : on note
-    // l'info pour le diagnostic mais on n'affiche PAS le panneau bloquant,
-    // car l'appli peut souvent fonctionner sans (ex: police de secours).
-    if(e && (e.message || e.filename)){
-      _cmErrors.push('❌ Erreur JS : ' + e.message + (e.filename ? (' (' + e.filename + ':' + e.lineno + ')') : ''));
-      cmShowPanel();
+    draw();
+  }
+  window.cmBootNotice=notice;
+  window.addEventListener('error',function(e){
+    if(e.target && e.target.tagName==='SCRIPT') return; // traité par le chargeur
+    if(e.message){
+      errors.push(e.message);
+      if(!window.cmMainLoaded) notice('Erreur de démarrage : '+e.message+' — Vos données locales sont conservées.',true);
+      else console.error('[Christ Media]',e.message);
     }
-  }, true);
-
-  window.addEventListener('unhandledrejection', function(e){
-    _cmErrors.push('❌ Promesse rejetée non gérée : ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
-    cmShowPanel();
+  },true);
+  window.addEventListener('unhandledrejection',function(e){
+    var message=String(e.reason&&e.reason.message||e.reason);
+    console.error('[Christ Media] Promesse rejetée :',message);
+    if(!window.cmMainLoaded)notice('Erreur de démarrage : '+message,true);
   });
-
-  // Filet de sécurité final : si après 15s le script principal n'a toujours
-  // pas fini de se charger (fonction afficherDiag jamais définie), on
-  // affiche le panneau même sans erreur JS explicite captée (ex: script
-  // CDN qui reste bloqué en "pending" sans jamais déclencher onerror).
-  setTimeout(function(){
-    if(typeof window.afficherDiag !== 'function'){
-      _cmErrors.push('⏱️ Le script principal de l\'application n\'a pas terminé son chargement après 15 secondes.');
-      cmShowPanel();
+  function attempt(url,ready){
+    return new Promise(function(resolve){
+      if(ready()){resolve(true);return;}
+      var script=document.createElement('script'),done=false;
+      var timer=setTimeout(function(){finish(false);},4000);
+      function finish(ok){
+        if(done)return;done=true;clearTimeout(timer);
+        script.onload=script.onerror=null;
+        if(!ok)script.remove();
+        resolve(ok);
+      }
+      script.async=true;script.src=url;
+      script.onload=function(){finish(ready());};script.onerror=function(){finish(false);};
+      document.head.appendChild(script);
+    });
+  }
+  async function load(name,urls,ready){
+    for(var i=0;i<urls.length;i++){
+      if(await attempt(urls[i],ready)){window.cmDependencyStatus[name]='ready';return true;}
     }
-  }, 15000);
+    window.cmDependencyStatus[name]='unavailable';return false;
+  }
+  var charts=load('Chart',[
+    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'
+  ],function(){return typeof window.Chart==='function';});
+  var scanner=load('ZXing',[
+    'https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js',
+    'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js'
+  ],function(){return typeof window.ZXing!=='undefined';});
+  var barcode=load('JsBarcode',[
+    'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
+    'https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'
+  ],function(){return typeof window.JsBarcode==='function';});
+  // Le SDK database est chargé APRÈS le SDK app, y compris en secours.
+  window.cmFirebaseReady=load('FirebaseApp',[
+    'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
+    'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.js'
+  ],function(){return !!(window.firebase&&window.firebase.initializeApp);}).then(function(ok){
+    if(!ok)return false;
+    return load('FirebaseDatabase',[
+      'https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js',
+      'https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.js'
+    ],function(){return !!(window.firebase&&typeof window.firebase.database==='function');});
+  });
+  Promise.all([charts,scanner,barcode,window.cmFirebaseReady]).then(function(results){
+    if(results.some(function(ok){return !ok;}))notice('Certaines fonctions en ligne sont indisponibles. Les données locales sont conservées. Rechargez la page quand la connexion est rétablie.',false);
+  });
+  setTimeout(function(){
+    if(!window.cmMainLoaded)notice('Le démarrage reste incomplet. Rechargez la page ; ne supprimez pas les données du navigateur.'+(errors.length?' '+errors.join(' / '):''),true);
+  },15000);
 })();
 </script>
 
 <!-- ZXing basculé vers jsdelivr : unpkg.com s'est révélé inaccessible sur
      certains réseaux (confirmé par le diagnostic ci-dessus). jsdelivr est
      déjà utilisé pour JsBarcode et fonctionne de façon fiable ici. -->
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+
+
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,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">
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+/* Polices distantes chargées après le démarrage ; fontes système en secours. */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 /* FIX ResizeObserver loop — Chart.js responsive causes infinite resize */
 canvas{max-width:100%;height:auto !important}
@@ -3166,6 +3132,8 @@ if(document.readyState==='loading'){
 }
 
 async function startFirebaseSync(){
+  // Attente bornée du SDK ; sinon démarrage local existant.
+  if(window.cmFirebaseReady) await window.cmFirebaseReady;
   const ok=await initFirebase();
   if(ok){
     if(navigator.onLine){
@@ -6595,9 +6563,9 @@ function rRap(){
     const cs=document.getElementById('chart-secteurs');
     const cd=document.getElementById('chart-dep');
     const cm=document.getElementById('chart-modes');
-    if(cs) chartSecteurs=new Chart(cs,{type:'doughnut',data:{labels:cats,datasets:[{data:vCats,backgroundColor:['#f8e8f0','#e8edf5','#e0f5f1'],borderColor:['#8b2252','#0f1f3d','#0b6b5c'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
-    if(cd) chartDep=new Chart(cd,{type:'bar',data:{labels:depCats,datasets:[{data:depMts,backgroundColor:'#fbeaea',borderColor:'#b02828',borderWidth:2,borderRadius:4}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}},grid:{display:false}},x:{ticks:{font:{size:9}}}}}});
-    if(cm) new Chart(cm,{type:'pie',data:{labels:modes,datasets:[{data:vModes,backgroundColor:['#e8edf5','#e0f5f1','#f8e8f0','#f0ebf8'],borderColor:['#0f1f3d','#0b6b5c','#8b2252','#5b3a8f'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
+    if(cs && typeof Chart!=='undefined') chartSecteurs=new Chart(cs,{type:'doughnut',data:{labels:cats,datasets:[{data:vCats,backgroundColor:['#f8e8f0','#e8edf5','#e0f5f1'],borderColor:['#8b2252','#0f1f3d','#0b6b5c'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
+    if(cd && typeof Chart!=='undefined') chartDep=new Chart(cd,{type:'bar',data:{labels:depCats,datasets:[{data:depMts,backgroundColor:'#fbeaea',borderColor:'#b02828',borderWidth:2,borderRadius:4}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}},grid:{display:false}},x:{ticks:{font:{size:9}}}}}});
+    if(cm && typeof Chart!=='undefined') new Chart(cm,{type:'pie',data:{labels:modes,datasets:[{data:vModes,backgroundColor:['#e8edf5','#e0f5f1','#f8e8f0','#f0ebf8'],borderColor:['#0f1f3d','#0b6b5c','#8b2252','#5b3a8f'],borderWidth:2}]},options:{responsive:false,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}}}});
   },100);
 }
 
@@ -6767,7 +6735,7 @@ function rBilanMensuel(){
   setTimeout(()=>{
     if(chartBilanEvol){chartBilanEvol.destroy();chartBilanEvol=null;}
     const ce=document.getElementById('chart-bilan-evol');
-    if(ce) chartBilanEvol=new Chart(ce,{
+    if(ce && typeof Chart!=='undefined') chartBilanEvol=new Chart(ce,{
       type:'bar',
       data:{
         labels:hist6.map(h=>h.label),
@@ -26346,6 +26314,9 @@ function majBadgeApprobations(){
   if(n>0){ badge.textContent = n>9?'9+':n; badge.style.display='inline-block'; }
   else { badge.style.display='none'; }
 }
+
+// Marqueur posé après l'exécution du script principal (pas une simple déclaration).
+window.cmMainLoaded=true;
 </script>
 
 <!-- ─── CALCULATRICE FLOTTANTE ─── -->
