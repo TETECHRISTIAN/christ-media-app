@@ -14100,8 +14100,8 @@ function rCaisseGlobal(){
   (S.transferts||[]).forEach(t=>{
     const de=t.de!=null?t.de:t.cidSrc, vers=t.vers!=null?t.vers:t.cidDst;
     if(!t.date||!t.mt) return;
-    if(cashIds.has(String(de))){const a=comptes.find(c=>String(c.id)===String(de));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:-t.mt});}
-    if(cashIds.has(String(vers))){const a=comptes.find(c=>String(c.id)===String(vers));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:+t.mt});}
+    if(cashIds.has(String(de))){const a=comptes.find(c=>String(c.id)===String(de));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:-t.mt,k:'t'});}
+    if(cashIds.has(String(vers))){const a=comptes.find(c=>String(c.id)===String(vers));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:+t.mt,k:'t'});}
   });
 
   const today=D();
@@ -14114,30 +14114,36 @@ function rCaisseGlobal(){
 
   const cartes=bouts.map(b=>{
     const sold=solde(b.id);
-    const ent=ev.filter(e=>e.b==b.id&&e.d===today&&e.mt>0).reduce((t,e)=>t+e.mt,0);
-    const sor=ev.filter(e=>e.b==b.id&&e.d===today&&e.mt<0).reduce((t,e)=>t-e.mt,0);
+    const ent=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
+    const tr=ev.filter(e=>e.b==b.id&&e.d===today&&e.k==='t').reduce((t,e)=>t+e.mt,0);
+    const sor=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
     const accsB=cashAccs.filter(c=>accBid(c)==b.id);
     const nb=accsB.length;
     const last=(S.clotures_caisse||[]).filter(x=>x.bid==b.id).sort((a,b2)=>b2.ts-a.ts)[0];
-    return {b,sold,ent,sor,ouv:sold-(ent-sor),nb,accsB,last};
+    return {b,sold,ent,sor,tr,ouv:sold-(ent-sor+tr),nb,accsB,last};
   });
   const totSold=cartes.reduce((t,x)=>t+x.sold,0);
   const totEnt=cartes.reduce((t,x)=>t+x.ent,0);
   const totSor=cartes.reduce((t,x)=>t+x.sor,0);
+  const totTr=cartes.reduce((t,x)=>t+x.tr,0);
 
   const jours=[];
   for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);jours.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));}
   const lignes=jours.map(day=>{
     const cols=bouts.map(b=>({b,fin:solde(b.id)-after(b.id,day),net:mvt(b.id,day,day),cl:clot(b.id,day)}));
-    return {day,cols,fin:cols.reduce((t,x)=>t+x.fin,0),net:cols.reduce((t,x)=>t+x.net,0)};
+    const dj=ev.filter(e=>e.d===day);
+    const ven=dj.filter(e=>e.k!=='t'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
+    const dep=dj.filter(e=>e.k!=='t'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
+    const trf=dj.filter(e=>e.k==='t').reduce((t,e)=>t+e.mt,0);
+    return {day,cols,ven,dep,trf,fin:cols.reduce((t,x)=>t+x.fin,0),net:cols.reduce((t,x)=>t+x.net,0)};
   });
 
   document.getElementById('content').innerHTML=`
     <div class="card" style="border-left:3px solid var(--teal);padding:20px;margin-bottom:20px">
       <div class="ct">💵 Liquide en caisse — toutes boutiques (maintenant)</div>
       <div class="mv" style="color:var(--teal);font-size:30px">${fmt(totSold)}</div>
-      <div class="ms" style="font-size:13px;margin-top:6px">Total à l'ouverture : <b>${fmt(totSold-(totEnt-totSor))}</b> → Total maintenant / fin de journée : <b>${fmt(totSold)}</b></div>
-      <div class="ms">Entrées aujourd'hui : <b style="color:var(--green)">+${F(totEnt)}</b> · Sorties : <b style="color:var(--red)">-${F(totSor)}</b></div>
+      <div class="ms" style="font-size:13px;margin-top:6px">Aujourd'hui : ventes <b style="color:var(--green)">${F(totEnt)}</b> − dépenses <b style="color:var(--red)">${F(totSor)}</b> = <b style="color:${col(totEnt-totSor)}">${fmt(totEnt-totSor)}</b> de reste du jour</div>
+      <div class="ms" style="font-size:13px">Ouverture <b>${fmt(totSold-(totEnt-totSor+totTr))}</b> + reste du jour ${totTr?'+ transferts <b>'+fmt(totTr)+'</b> ':''}= <b>${fmt(totSold)}</b> en caisse</div>
     </div>
 
     <p class="st">Aujourd'hui, boutique par boutique</p>
@@ -14146,19 +14152,22 @@ function rCaisseGlobal(){
         <div class="ct">${x.b.nom||x.b.id}</div>
         <div class="mv" style="color:${col(x.sold)}">${fmt(x.sold)}</div>
         <div class="ms">Ouverture ≈ ${fmt(x.ouv)}</div>
-        <div class="ms"><span style="color:var(--green)">+${F(x.ent)}</span> · <span style="color:var(--red)">-${F(x.sor)}</span></div>
+        <div class="ms">Ventes <span style="color:var(--green)">+${F(x.ent)}</span> · Dépenses <span style="color:var(--red)">-${F(x.sor)}</span>${x.tr?' · Transferts '+(x.tr>0?'+':'')+F(x.tr):''}</div>
         <div class="ms" style="margin-top:4px">${x.nb?x.accsB.map(a=>a.nom+' : '+F(a.solde||0)).join(' · '):'<span style="color:var(--red)">Aucun compte « Vente … » pour cette boutique</span>'}</div>
         <div class="ms">${x.last?`Dernière clôture ${fmtD(x.last.date)} : compté ${F(x.last.cash_compte)} (écart ${x.last.ecart>=0?'+':''}${F(x.last.ecart)})`:'Aucune clôture enregistrée'}</div>
       </div>`).join('')}
     </div>
 
-    <p class="st">Liquide jour par jour — 30 derniers jours (fin de journée)</p>
+    <p class="st">Liquidité restante jour par jour — 30 derniers jours</p>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th><th>Total ouverture</th><th>Mouvement net</th><th>Total fin de journée</th>${bouts.map(b=>`<th>${b.nom||b.id}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Date</th><th>Ouverture</th><th style="color:var(--green)">+ Ventes</th><th style="color:var(--red)">− Dépenses</th><th>= Reste du jour</th><th>Transferts</th><th>Liquidité fin de journée</th>${bouts.map(b=>`<th>${b.nom||b.id}</th>`).join('')}</tr></thead>
       <tbody>${lignes.map(l=>`<tr${l.day===today?' style="background:var(--surface2)"':''}>
         <td style="font-weight:600;white-space:nowrap">${fmtD(l.day)}${l.day===today?' · auj.':''}</td>
         <td>${fmt(l.fin-l.net)}</td>
-        <td style="color:${col(l.net)}">${l.net>=0?'+':''}${F(l.net)}</td>
+        <td style="color:var(--green)">${F(l.ven)}</td>
+        <td style="color:var(--red)">${F(l.dep)}</td>
+        <td style="font-weight:600;color:${col(l.ven-l.dep)}">${(l.ven-l.dep)>=0?'+':''}${F(l.ven-l.dep)}</td>
+        <td style="color:var(--text3)">${l.trf?((l.trf>0?'+':'')+F(l.trf)):'—'}</td>
         <td style="font-weight:700">${fmt(l.fin)}</td>
         ${l.cols.map(x=>`<td>${fmt(x.fin)}<div style="font-size:10px;color:var(--text3)">${x.net?((x.net>0?'+':'')+F(x.net)):''}${x.cl?` · compté ${F(x.cl.cash_compte)}`:''}</div></td>`).join('')}
       </tr>`).join('')}</tbody></table></div>
