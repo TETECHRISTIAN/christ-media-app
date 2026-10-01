@@ -14065,7 +14065,7 @@ function rCaisseGlobal(){
   const defBid=bouts[0]?.id||1;
   const comptes=S.comptes||[];
   const accBid=c=>c.bid||defBid;
-  const cashAccs=comptes.filter(c=>c.type==='Espèces'&&!c.bloque);
+  const cashAccs=comptes.filter(c=>/^vente\s+/i.test((c.nom||'').trim())&&!c.bloque);
   const cashIds=new Set(cashAccs.map(c=>String(c.id)));
   // retrouve le compte espèces d'une opération
   const resolve=(cid,mode,bid)=>{
@@ -14116,9 +14116,10 @@ function rCaisseGlobal(){
     const sold=solde(b.id);
     const ent=ev.filter(e=>e.b==b.id&&e.d===today&&e.mt>0).reduce((t,e)=>t+e.mt,0);
     const sor=ev.filter(e=>e.b==b.id&&e.d===today&&e.mt<0).reduce((t,e)=>t-e.mt,0);
-    const nb=cashAccs.filter(c=>accBid(c)==b.id).length;
+    const accsB=cashAccs.filter(c=>accBid(c)==b.id);
+    const nb=accsB.length;
     const last=(S.clotures_caisse||[]).filter(x=>x.bid==b.id).sort((a,b2)=>b2.ts-a.ts)[0];
-    return {b,sold,ent,sor,ouv:sold-(ent-sor),nb,last};
+    return {b,sold,ent,sor,ouv:sold-(ent-sor),nb,accsB,last};
   });
   const totSold=cartes.reduce((t,x)=>t+x.sold,0);
   const totEnt=cartes.reduce((t,x)=>t+x.ent,0);
@@ -14145,7 +14146,7 @@ function rCaisseGlobal(){
         <div class="mv" style="color:${col(x.sold)}">${fmt(x.sold)}</div>
         <div class="ms">Ouverture ≈ ${fmt(x.ouv)}</div>
         <div class="ms"><span style="color:var(--green)">+${F(x.ent)}</span> · <span style="color:var(--red)">-${F(x.sor)}</span></div>
-        <div class="ms" style="margin-top:4px">${x.nb?x.nb+' compte(s) Espèces':'<span style="color:var(--red)">Aucun compte de type Espèces</span>'}</div>
+        <div class="ms" style="margin-top:4px">${x.nb?x.accsB.map(a=>a.nom+' : '+F(a.solde||0)).join(' · '):'<span style="color:var(--red)">Aucun compte « Vente … » pour cette boutique</span>'}</div>
         <div class="ms">${x.last?`Dernière clôture ${fmtD(x.last.date)} : compté ${F(x.last.cash_compte)} (écart ${x.last.ecart>=0?'+':''}${F(x.last.ecart)})`:'Aucune clôture enregistrée'}</div>
       </div>`).join('')}
     </div>
@@ -14160,7 +14161,7 @@ function rCaisseGlobal(){
         ${l.cols.map(x=>`<td>${fmt(x.fin)}<div style="font-size:10px;color:var(--text3)">${x.net?((x.net>0?'+':'')+F(x.net)):''}${x.cl?` · compté ${F(x.cl.cash_compte)}`:''}</div></td>`).join('')}
       </tr>`).join('')}</tbody></table></div>
 
-    <p style="font-size:11px;color:var(--text3);margin-top:12px">ℹ️ Le liquide actuel est la somme des comptes de type « Espèces » (hors comptes bloqués) de chaque boutique. Les soldes des jours passés sont reconstitués à partir de ce solde en retirant les mouvements postérieurs (ventes, acomptes, services, revenus, dépenses, achats, transferts). Ils sont indicatifs : un ajustement manuel de solde ou une opération sans compte renseigné n'apparaît pas. Pour la valeur réelle d'un jour, comparez avec « compté » (Clôture de Caisse).</p>`;
+    <p style="font-size:11px;color:var(--text3);margin-top:12px">ℹ️ Le liquide actuel est la somme des seuls comptes de vente (ceux dont le nom commence par « Vente ») de chaque boutique, hors comptes bloqués ; banques et comptes de particuliers sont exclus. Les soldes des jours passés sont reconstitués à partir de ce solde en retirant les mouvements postérieurs (ventes, acomptes, services, revenus, dépenses, achats, transferts). Ils sont indicatifs : un ajustement manuel de solde ou une opération sans compte renseigné n'apparaît pas. Pour la valeur réelle d'un jour, comparez avec « compté » (Clôture de Caisse).</p>`;
 }
 
 function filtrerFlux(type){
