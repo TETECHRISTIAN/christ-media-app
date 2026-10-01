@@ -1270,6 +1270,7 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v1.2M8 10.3v1.2M5.5 7a2.5 2.5 0 0 1 5 0c0 1.4-1.5 2-2.5 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
       Gestion des dettes
     </div>
+    <div class="ni admin-only" data-page="annuler_retablir" onclick="nav(this,'annuler_retablir')"><span style="font-size:18px;width:16px">↶</span> Annuler / Rétablir</div>
     <div class="ni" data-page="flux" onclick="nav(this,'flux')">
       <svg viewBox="0 0 16 16" fill="none"><path d="M1 8h14M8 1v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"/><path d="M2 11l3-3 3 2 4-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Flux financier
@@ -2177,6 +2178,7 @@ async function loadFromFirebase(){
 // Collections séparées : chaque tableau est écrit indépendamment
 // → deux vendeurs actifs en même temps ne s'écrasent plus
 const FB_COLLECTIONS=[
+  'undo_tombstones',
   // Core commerce
   'ventes','achats','stock','clients','fournisseurs',
   'depenses','revenus','charges','comptes','transferts','dettes',
@@ -2367,6 +2369,7 @@ async function absorberPendingFirebase(deferCleanup){
               // (avec un warning) plutôt que de faire planter toute la zone.
               try {
                 if(!item || item.id == null) return;
+                if((S.undo_tombstones||[]).some(m=>m.collection===col&&String(m.recordId)===String(item.id)&&Number(m.ts||0)>=Number(item.ts||0)))return;
                 const key = String(item.id);
                 if(!existingIds.has(key)){
                   S[col].push(item);
@@ -2865,6 +2868,11 @@ function fusionnerDonnees(local, remote){
         const existing = map.get(key);
         const itemTs = tsOf(item);
         const existingTs = tsOf(existing);
+        // A confirmed undo/redo may legitimately reopen a paid debt or reduce stock.
+        if(existing._cmUndoRev || item._cmUndoRev){
+          if(itemTs>existingTs)map.set(key,item);
+          return;
+        }
         // Règle anti-régression paiement : 'Payé' ne peut jamais être écrasé par 'À payer'
         // même si les timestamps sont identiques (cas de sync multi-appareils)
         const STATUTS_FINALS = ['Payé','Soldé'];
@@ -2897,6 +2905,8 @@ function fusionnerDonnees(local, remote){
   if(_soldesToProteger.size > 0 && Array.isArray(result.comptes)){
     result.comptes = result.comptes.map(c => {
       if(c && c.id != null && _soldesToProteger.has(String(c.id))){
+        const old=(local.comptes||[]).find(x=>String(x.id)===String(c.id));
+        if(c._cmUndoRev && Number(c.ts||0)>Number(old?.ts||0))return c;
         return Object.assign({}, c, { solde: _soldesToProteger.get(String(c.id)) });
       }
       return c; // Nouveau compte venant du remote : garder tel quel
@@ -2921,7 +2931,7 @@ function fusionnerDonnees(local, remote){
     mergedUsers.unshift({id:1,nom:'Christian',role:'admin',pin:'1234',email:'christmedia176@gmail.com',password:'admin1234',emoji:'👑',actif:true,boutique_id:null});
   }
   result.utilisateurs = mergedUsers;
-  return result;
+  return cmUndoPrune(result);
 }
 
 function appliquerEtatFusionne(merged){
@@ -2955,7 +2965,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
+    ({annuler_retablir:rAnnulerRetablir,dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
   }catch(e){}
 }
 
@@ -3038,6 +3048,10 @@ function _fusionnerCollection(col, fbArr){
       if(localItem._deleted && tsOf(localItem) >= tsOf(fbItem)) return;
       const fbTs = tsOf(fbItem);
       const localTs = tsOf(localItem);
+      if(localItem._cmUndoRev || fbItem._cmUndoRev){
+        if(fbTs>localTs)map.set(k,fbItem);
+        return;
+      }
       if(fbTs > localTs){
         // Pour le stock : protéger ea contre la régression
         if(col === 'stock'){
@@ -3056,7 +3070,7 @@ function _fusionnerCollection(col, fbArr){
       // Si fbTs <= localTs : on garde le local (plus récent ou même timestamp)
     }
   });
-  return Array.from(map.values()).filter(x => !x._deleted);
+  return Array.from(map.values()).filter(x => !x._deleted && !(S.undo_tombstones||[]).some(m=>m.collection===col&&String(m.recordId)===String(x.id)&&Number(m.ts||0)>=Number(x.ts||0)));
 }
 
 // ─── ANDROID SAFE REALTIME (MULTI-COLLECTIONS) ───
@@ -3404,7 +3418,7 @@ function switcherBoutique(bid){
     _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
     majBoutiqueUI();
     try{
-      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
+      ({annuler_retablir:rAnnulerRetablir,dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
     }catch(e){console.error('Erreur rafraîchissement page :',e);}
   }
   // Vendeur/Caissier avec plusieurs boutiques : peut switcher entre ses boutiques
@@ -3511,8 +3525,8 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',locations:'🪑 Locations',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',flux_global:'🏪 Flux — toutes boutiques',caisse_global:'💵 Caisse espèces — toutes boutiques',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
-const actionsMap={
+const titles={annuler_retablir:'Annuler / Rétablir',dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',locations:'🪑 Locations',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',flux_global:'🏪 Flux — toutes boutiques',caisse_global:'💵 Caisse espèces — toutes boutiques',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
+const actionsMap={annuler_retablir:()=>'',
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
   transactions:()=>'',
@@ -3573,7 +3587,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
+  ({annuler_retablir:rAnnulerRetablir,dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,caisse_global:rCaisseGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -11726,7 +11740,7 @@ function majBadgeUtilisateur(){
 // ─── PERMISSIONS PAR RÔLE ───
 const PERMISSIONS = {
   admin: {
-    pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
+    pages: ['annuler_retablir','dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
             'dettes','flux','flux_global','caisse_global','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
@@ -12006,7 +12020,7 @@ function appliquerMenusVisibles(){
     const page=el.getAttribute('data-page');
     // Ne pas cacher les menus déjà cachés par les droits
     if(S.session&&S.session.role!=='admin')return;
-    el.style.display=visible.includes(page)?'':'none';
+    el.style.display=(page==='annuler_retablir'||visible.includes(page))?'':'none';
   });
 }
 
@@ -26672,6 +26686,225 @@ function majBadgeApprobations(){
   if(n>0){ badge.textContent = n>9?'9+':n; badge.style.display='inline-block'; }
   else { badge.style.display='none'; }
 }
+
+// ─── ANNULER / RÉTABLIR : opérations locales enregistrées ───
+const CM_UNDO_KEY='cm_action_history_v1';
+const cmUndo={ready:false,baseline:null,entries:[],redo:[],depth:0,suppress:false,busy:false,pending:0,event:null,lastGroup:null,warning:'',tabChanged:false};
+const cmUndoExcluded=new Set(['audit','historique','historique_prix','journal_entries','undo_tombstones']);
+function cmUndoKeys(){return [...FB_COLLECTIONS.filter(k=>!cmUndoExcluded.has(k)),'parametres','objectifs_par_boutique'];}
+function cmUndoClone(x){return x==null?x:JSON.parse(JSON.stringify(x));}
+function cmUndoCanonical(x){
+  if(Array.isArray(x))return x.map(cmUndoCanonical);
+  if(x&&typeof x==='object'){
+    const out={};
+    Object.keys(x).sort().forEach(k=>{if(!['ts','updatedAt','date_ts','_cmUndoRev'].includes(k))out[k]=cmUndoCanonical(x[k]);});
+    return out;
+  }
+  return x;
+}
+function cmUndoEqual(a,b){return JSON.stringify(cmUndoCanonical(a??null))===JSON.stringify(cmUndoCanonical(b??null));}
+function cmUndoSnapshot(data){
+  const snap={};cmUndoKeys().forEach(k=>{if(data[k]!==undefined)snap[k]=cmUndoClone(data[k]);});return snap;
+}
+function cmUndoEntityArray(a){return Array.isArray(a)&&a.every(x=>x&&typeof x==='object'&&x.id!=null)&&new Set(a.map(x=>String(x.id))).size===a.length;}
+function cmUndoDiff(before,after){
+  const patches=[];
+  cmUndoKeys().forEach(col=>{
+    const a=before[col],b=after[col];
+    if(cmUndoEntityArray(a??[])&&cmUndoEntityArray(b??[])){
+      const A=new Map((a||[]).filter(x=>!x._deleted).map(x=>[String(x.id),x]));
+      const B=new Map((b||[]).filter(x=>!x._deleted).map(x=>[String(x.id),x]));
+      new Set([...A.keys(),...B.keys()]).forEach(id=>{if(!cmUndoEqual(A.get(id),B.get(id)))patches.push({col,kind:'record',id,before:A.get(id)||null,after:B.get(id)||null});});
+    }else if(!cmUndoEqual(a,b))patches.push({col,kind:'value',before:a??null,after:b??null});
+  });
+  return patches;
+}
+function cmUndoPersist(){
+  while(cmUndo.entries.length+cmUndo.redo.length>50){if(cmUndo.entries.length)cmUndo.entries.shift();else cmUndo.redo.shift();}
+  let payload=JSON.stringify({v:1,entries:cmUndo.entries,redo:cmUndo.redo});
+  while(payload.length>700000&&cmUndo.entries.length+cmUndo.redo.length>1){
+    if(cmUndo.entries.length)cmUndo.entries.shift();else cmUndo.redo.shift();
+    payload=JSON.stringify({v:1,entries:cmUndo.entries,redo:cmUndo.redo});
+  }
+  if(payload.length>700000){
+    cmUndo.warning='Cette opération dépasse la capacité de l’historique. Le retour en arrière précédent a été réinitialisé.';
+    cmUndo.entries=[];cmUndo.redo=[];
+    payload=JSON.stringify({v:1,entries:[],redo:[]});
+    toast('⚠️ Opération trop volumineuse pour le retour en arrière',6000);
+  }
+  try{localStorage.setItem(CM_UNDO_KEY,payload);}catch(e){
+    cmUndo.warning='L’historique reste disponible dans cette session seulement : le stockage du navigateur est plein ou indisponible.';
+    try{localStorage.removeItem(CM_UNDO_KEY);}catch(_){}
+    toast('⚠️ Historique non conservé après fermeture : stockage indisponible',6000);
+  }
+}
+function cmUndoRecord(){
+  if(!cmUndo.ready||cmUndo.suppress||window._modeDemo)return;
+  const next=cmUndoSnapshot(S),patches=cmUndoDiff(cmUndo.baseline,next);
+  cmUndo.baseline=next;
+  if(!patches.length)return;
+  const ev=cmUndo.event;
+  const page=typeof currentPage==='string'?currentPage:'dashboard';
+  const label=(titles[page]||page)+(ev?.label?' — '+ev.label:' — Modification enregistrée');
+  const last=cmUndo.entries[cmUndo.entries.length-1];
+  if(ev&&last&&cmUndo.lastGroup===ev.id&&!cmUndo.redo.length){
+    const map=new Map(last.patches.map(p=>[p.col+'|'+p.kind+'|'+(p.id||''),p]));
+    patches.forEach(p=>{const key=p.col+'|'+p.kind+'|'+(p.id||'');const old=map.get(key);map.set(key,old?{...p,before:old.before}:p);});
+    last.patches=[...map.values()].filter(p=>!cmUndoEqual(p.before,p.after));
+    if(!last.patches.length)cmUndo.entries.pop();
+  }else{
+    cmUndo.entries.push({id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),date:new Date().toISOString(),label,user:S.session?.nom||'Utilisateur',bid:getBid(),patches});
+  }
+  cmUndo.lastGroup=ev?.id||null;cmUndo.redo=[];cmUndoPersist();
+}
+function cmUndoCurrent(p,data=S){
+  if(p.kind==='record')return (data[p.col]||[]).find(x=>x&&!x._deleted&&String(x.id)===p.id)||null;
+  return data[p.col]??null;
+}
+function cmUndoConflicts(entry,redo){
+  return entry.patches.filter(p=>!cmUndoKeys().includes(p.col)||!cmUndoEqual(cmUndoCurrent(p),redo?p.before:p.after));
+}
+function cmUndoPrune(data){
+  const marks=data.undo_tombstones||[];
+  marks.forEach(m=>{
+    if(cmUndoKeys().includes(m.collection)&&Array.isArray(data[m.collection])){
+      data[m.collection]=data[m.collection].filter(x=>!x||String(x.id)!==String(m.recordId)||Number(x.ts||0)>Number(m.ts||0));
+    }
+  });
+  return data;
+}
+function cmUndoApplyPatches(data,entry,redo){
+  let ts=Date.now();
+  entry.patches.forEach(p=>{const cur=cmUndoCurrent(p,data);ts=Math.max(ts,Number(cur?.ts||0)+1,Number(p.before?.ts||0)+1,Number(p.after?.ts||0)+1);});
+  (data.undo_tombstones||[]).forEach(m=>{ts=Math.max(ts,Number(m.ts||0)+1);});
+  for(const p of entry.patches){
+    const value=cmUndoClone(redo?p.after:p.before);
+    if(p.kind==='record'){
+      const arr=data[p.col]||(data[p.col]=[]),i=arr.findIndex(x=>String(x.id)===p.id);
+      if(value===null){
+        if(i>=0)arr.splice(i,1);
+        const id=p.col+':'+p.id;
+        const marks=data.undo_tombstones||(data.undo_tombstones=[]);
+        const mark={id,collection:p.col,recordId:p.id,ts};
+        const j=marks.findIndex(m=>m.id===id);if(j>=0)marks[j]=mark;else marks.push(mark);
+      }else{
+        value.ts=ts;value._cmUndoRev=ts;
+        if(i>=0)arr[i]=value;else arr.push(value);
+      }
+    }else if(value===null){delete data[p.col];}else{data[p.col]=value;}
+  }
+  data.version=ts;
+  return data;
+}
+function cmUndoEsc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const cmUndoNames={ventes:'Ventes',stock:'Stock',comptes:'Comptes',achats:'Achats',fournisseurs:'Fournisseurs',depenses:'Dépenses',dettesPerso:'Emprunts et prêts',dettesAchats:'Dettes achats',transferts:'Transferts',revenus:'Revenus',ventes_services:'Ventes de services',parametres:'Paramètres',clients:'Clients'};
+function cmUndoSummary(entry){
+  const counts={};entry.patches.forEach(p=>counts[p.col]=(counts[p.col]||0)+1);
+  return Object.entries(counts).map(([k,n])=>cmUndoEsc(cmUndoNames[k]||k)+' : '+n).join(' · ');
+}
+function cmUndoDetails(entry,redo){
+  return entry.patches.map(p=>{
+    const from=redo?p.before:p.after,to=redo?p.after:p.before;
+    const name=to?.nom||from?.nom||to?.client||from?.client||to?.personne||from?.personne||to?.four||from?.four||p.id||'';
+    const fields=['solde','mt','montant','dette','rembourse','qv','ea','si','statut','montantPaye'];
+    const changes=fields.filter(k=>!cmUndoEqual(from?.[k],to?.[k])&&(from?.[k]!=null||to?.[k]!=null)).map(k=>cmUndoEsc(k)+' : '+cmUndoEsc(from?.[k]??'—')+' → '+cmUndoEsc(to?.[k]??'—'));
+    return `<li style="margin:8px 0"><b>${cmUndoEsc(cmUndoNames[p.col]||p.col)} ${cmUndoEsc(name)}</b> — ${to===null?'retirer':from===null?'restaurer':'modifier'}${changes.length?'<br>'+changes.join(' · '):''}</li>`;
+  }).join('');
+}
+function cmUndoPreview(redo){
+  if(S.session?.role!=='admin')return toast('🔒 Retour en arrière réservé à l’administrateur');
+  const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];if(!entry)return;
+  if(cmUndo.pending)return toast('⏳ Attendez la fin de l’enregistrement avant de revenir en arrière.');
+  if(cmUndo.tabChanged)return toast('⚠️ Des données ont changé dans un autre onglet. Rechargez cette page avant de continuer.',6000);
+  const conflicts=cmUndoConflicts(entry,redo);
+  modal(`<div class="mft">${redo?'Rétablir':'Annuler'} la dernière action</div><p><b>${cmUndoEsc(entry.label)}</b></p><p style="margin:10px 0">${cmUndoEsc(entry.user)} · ${cmUndoEsc(new Date(entry.date).toLocaleString('fr-FR'))}</p>
+    ${conflicts.length?'<p style="color:var(--red)">Action bloquée : des données liées ont changé depuis cette opération. Aucun solde ni stock ne sera écrasé.</p>':'<p>Les éléments suivants seront restaurés ensemble :</p>'}
+    <ul style="padding-left:20px;max-height:300px;overflow:auto;font-size:12px">${cmUndoDetails(entry,redo)}</ul>
+    <div class="mff"><button class="btn" onclick="closeModal()">Fermer sans modifier</button>${conflicts.length?'':`<button class="btn btn-primary" onclick="cmUndoExecute(${!!redo},'${entry.id}')">Confirmer ${redo?'le rétablissement':'l’annulation'}</button>`}</div>`);
+}
+async function cmUndoExecute(redo,id){
+  if(S.session?.role!=='admin'||cmUndo.busy||cmUndo.pending||cmUndo.tabChanged||window._modeDemo)return;
+  const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];
+  if(!entry||entry.id!==id)return toast('⚠️ L’historique a changé. Rouvrez la confirmation.');
+  if(cmUndoConflicts(entry,redo).length)return toast('⚠️ Données modifiées depuis cette action : retour en arrière bloqué.',6000);
+  try{
+    const disk=JSON.parse(localStorage.getItem('christmedia_v2')||'null');
+    if(disk&&!cmUndoEqual(cmUndoSnapshot(disk),cmUndoSnapshot(S)))return toast('⚠️ Données non enregistrées ou modifiées dans un autre onglet. Rechargez la page.',6000);
+  }catch(e){return toast('❌ Impossible de vérifier la sauvegarde locale');}
+  const next=cmUndoApplyPatches(cmUndoClone(S),entry,redo);
+  // Validate the entire local save before touching in-memory balances.
+  try{localStorage.setItem('christmedia_v2',JSON.stringify(cleanDataForStorage(next)));}
+  catch(e){return toast('❌ Stockage indisponible : aucune annulation effectuée',6000);}
+  cmUndo.busy=true;cmUndo.suppress=true;
+  S=next;list.pop();(redo?cmUndo.entries:cmUndo.redo).push(entry);cmUndo.lastGroup=null;
+  cmUndo.baseline=cmUndoSnapshot(S);cmUndoPersist();
+  closeModal();
+  try{
+    if(typeof addAudit==='function')addAudit('UPDATE','Retour en arrière',(redo?'Rétablissement : ':'Annulation : ')+entry.label,{actionId:entry.id},null);
+    const saving=saveData();
+    cmUndo.suppress=false;
+    if(currentPage==='annuler_retablir')rAnnulerRetablir();
+    await saving;
+    toast(redo?'✅ Action rétablie':'✅ Action annulée — données liées restaurées');
+  }finally{
+    cmUndo.suppress=false;cmUndo.busy=false;cmUndo.baseline=cmUndoSnapshot(S);
+    try{majBoutiqueUI();majLogo();}catch(e){}
+    if(currentPage==='annuler_retablir')rAnnulerRetablir();
+  }
+}
+function rAnnulerRetablir(){
+  const el=document.getElementById('content');
+  if(S.session?.role!=='admin'){el.innerHTML='<div class="card">Accès réservé à l’administrateur.</div>';return;}
+  el.innerHTML=`<div class="card" style="margin-bottom:16px;border-left:4px solid var(--navy)"><h3 style="margin-bottom:10px">↶ Annuler / Rétablir</h3>
+    <p style="font-size:13px;line-height:1.6">Revenez sur vos dernières modifications enregistrées : ventes, paiements de dettes, achats, dépenses, transferts, stocks et autres données de gestion. Les comptes et les éléments liés sont restaurés ensemble, dans l’ordre inverse des actions.</p>
+    <p style="font-size:12px;color:var(--text2);margin-top:10px">Historique de ce navigateur, toutes boutiques : jusqu’à 50 étapes selon l’espace disponible. Il commence avec cette version. Une nouvelle modification supprime la possibilité de rétablir les actions annulées.</p>
+    <p style="font-size:12px;color:var(--text2);margin-top:8px">Ce retour en arrière corrige les données de l’application. Il ne rappelle pas un paiement bancaire réel, un message envoyé ou une impression. Les connexions, droits d’accès, notes privées, réinitialisations et fichiers externes ne sont pas concernés.</p>
+    ${cmUndo.pending?'<p style="margin-top:10px">⏳ Enregistrement en cours…</p>':''}
+    ${cmUndo.warning?`<p style="color:var(--amber);margin-top:10px">${cmUndoEsc(cmUndo.warning)}</p>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn btn-primary" onclick="cmUndoPreview(false)" ${!cmUndo.entries.length||cmUndo.busy||cmUndo.pending?'disabled':''}>↶ Annuler la dernière action</button><button class="btn" onclick="cmUndoPreview(true)" ${!cmUndo.redo.length||cmUndo.busy||cmUndo.pending?'disabled':''}>↷ Rétablir la dernière annulation</button></div>
+    </div>
+    ${cmUndo.redo.length?`<div class="card" style="margin-bottom:12px">Prochaine action à rétablir : <b>${cmUndoEsc(cmUndo.redo[cmUndo.redo.length-1].label)}</b></div>`:''}
+    <p class="st">Actions enregistrées (${cmUndo.entries.length})</p>
+    ${cmUndo.entries.length?cmUndo.entries.slice().reverse().map((e,i)=>`<div class="card" style="margin-bottom:10px"><div style="font-weight:600">${i===0?'Dernière action · ':''}${cmUndoEsc(e.label)}</div><div style="font-size:12px;color:var(--text2);margin-top:5px">${cmUndoEsc(new Date(e.date).toLocaleString('fr-FR'))} · ${cmUndoEsc(e.user)} · Boutique ${cmUndoEsc(e.bid)}</div><div style="font-size:12px;margin-top:7px">${cmUndoSummary(e)}</div></div>`).join(''):'<div class="card">Aucune action à annuler pour le moment. Les prochaines modifications enregistrées apparaîtront ici.</div>'}`;
+}
+function cmUndoInit(){
+  try{
+    const history=JSON.parse(localStorage.getItem(CM_UNDO_KEY)||'null');
+    const valid=e=>e&&typeof e.id==='string'&&/^[a-z0-9-]+$/.test(e.id)&&Array.isArray(e.patches)&&e.patches.every(p=>cmUndoKeys().includes(p.col)&&['record','value'].includes(p.kind));
+    if(history?.v===1){cmUndo.entries=(history.entries||[]).filter(valid).slice(-50);cmUndo.redo=(history.redo||[]).filter(valid).slice(-50);}
+  }catch(e){cmUndo.warning='L’ancien historique de retour en arrière est illisible. Vos données de gestion sont conservées.';}
+  cmUndo.baseline=cmUndoSnapshot(S);cmUndo.ready=true;
+  document.addEventListener('click',e=>{
+    const b=e.target.closest?.('button,[onclick]');if(!b)return;
+    const ev={id:Math.random().toString(36),label:(b.getAttribute('title')||b.textContent||'').trim().replace(/\s+/g,' ').slice(0,90)};
+    cmUndo.event=ev;setTimeout(()=>{if(cmUndo.event===ev)cmUndo.event=null;},0);
+  },true);
+  window.addEventListener('storage',e=>{if(e.key==='christmedia_v2'||e.key===CM_UNDO_KEY)cmUndo.tabChanged=true;});
+}
+const cmUndoSaveData=saveData;
+saveData=function(){
+  if(window._modeDemo)return cmUndoSaveData.apply(this,arguments);
+  cmUndoRecord();cmUndo.depth++;
+  try{
+    const result=cmUndoSaveData.apply(this,arguments);
+    if(result&&typeof result.then==='function'){
+      cmUndo.pending++;
+      const done=()=>{cmUndo.pending--;if(currentPage==='annuler_retablir')rAnnulerRetablir();};
+      result.then(done,done);
+    }
+    return result;
+  }finally{cmUndo.depth--;}
+
+};
+const cmUndoSaveLocal=saveLocal;
+saveLocal=function(data){
+  if(!window._modeDemo)cmUndoPrune(data);
+  const result=cmUndoSaveLocal.apply(this,arguments);
+  if(cmUndo.ready&&!window._modeDemo){cmUndo.baseline=cmUndoSnapshot(data);if(!cmUndo.depth)cmUndo.lastGroup=null;}
+  return result;
+};
+cmUndoInit();
+// ─── FIN ANNULER / RÉTABLIR ───
 
 // Marqueur posé après l'exécution du script principal (pas une simple déclaration).
 window.cmMainLoaded=true;
