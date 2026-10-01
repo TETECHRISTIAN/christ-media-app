@@ -8615,7 +8615,7 @@ function rTransactions(){
   const deps=(isRecherche?(S.depenses||[]):(getDepensesBoutique(bid))).filter(filterFn);
   const revs=(S.revenus||[]).filter(filterFn);
   const svcs=(S.ventes_services||[]).filter(filterFn);
-  const transferts=(S.transferts||[]).filter(filterFn);
+  const transferts=transfertsActifs().filter(filterFn);
 
   const totalVentes=ventes.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   const totalAPercevoir=ventes.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0);
@@ -10354,7 +10354,7 @@ function getComptesBoutique(bid){
 // ─── AVANCES INTER-BOUTIQUES ───
 // Calcule, pour chaque paire de boutiques, le solde net des avances non remboursées.
 function getSoldesInterBoutiques(){
-  const transferts = (S.transferts||[]).filter(t=>t.avance && !t.rembourse);
+  const transferts = transfertsActifs().filter(t=>t.avance && !t.rembourse);
   const paires = {};
   transferts.forEach(t=>{
     const de = S.comptes.find(c=>c.id==t.de);
@@ -10374,7 +10374,7 @@ function getSoldesInterBoutiques(){
 }
 function getAvancesEnCours(bid){
   bid = bid || getBid();
-  return (S.transferts||[]).filter(t=>{
+  return transfertsActifs().filter(t=>{
     if(!t.avance || t.rembourse)return false;
     const de=S.comptes.find(c=>c.id==t.de);
     const vers=S.comptes.find(c=>c.id==t.vers);
@@ -10510,11 +10510,7 @@ function rComptes(){
   const soldeBloques   = comptesBloqués.reduce((s,c)=>s+c.solde,0);
   const totalSoldes    = comptesB.reduce((s,c)=>s+c.solde,0);
   // Transferts impliquant cette boutique
-  const transfertsB = (S.transferts||[]).filter(t=>{
-    const de=S.comptes.find(c=>c.id==t.de);
-    const vers=S.comptes.find(c=>c.id==t.vers);
-    return (de&&de.bid==bid)||(vers&&vers.bid==bid);
-  });
+  const transfertsB = (S.transferts||[]).filter(t=>!t._deleted&&transfertDansBoutique(t,bid));
   // Autres boutiques pour transfert inter-boutiques
   const autresBoutiques = (S.boutiques||[]).filter(b=>b.id!=bid);
 
@@ -10611,15 +10607,15 @@ function rComptes(){
       <thead><tr><th>Date</th><th>De</th><th>Vers</th><th>Montant</th><th>Notes</th><th>Statut</th><th></th></tr></thead>
       <tbody>${transfertsB.length===0?'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Aucun transfert</td></tr>':
         transfertsB.slice().reverse().map(t=>{
-          const de=S.comptes.find(c=>c.id==t.de);
-          const vers=S.comptes.find(c=>c.id==t.vers);
+          const de=S.comptes.find(c=>c.id==(t.de??t.cidSrc));
+          const vers=S.comptes.find(c=>c.id==(t.vers??t.cidDst));
           const deB=(S.boutiques||[]).find(b=>b.id==(de?.bid));
           const versB=(S.boutiques||[]).find(b=>b.id==(vers?.bid));
           const interBoutique = de&&vers&&de.bid!=vers.bid;
-          const statut = !interBoutique ? '<span style="color:var(--text3);font-size:11px">—</span>'
+          const statut = t.annule ? '<span style="color:var(--text3);font-size:11px">↩ Annulé — soldes corrigés</span>' : !interBoutique ? '<span style="color:var(--text3);font-size:11px">—</span>'
             : t.avance ? (t.rembourse ? '<span style="color:var(--green);font-size:11px;font-weight:600">✅ Remboursée</span>' : '<span style="color:var(--red);font-size:11px;font-weight:600">🔄 Avance en cours</span>')
             : '<span style="color:var(--text3);font-size:11px">Définitif</span>';
-          const btnMarquer = (interBoutique && t.avance && !t.rembourse) ? `<button class="btn-icon btn-sm" onclick="marquerAvanceRembourse(${t.id})" title="Marquer comme remboursée" style="color:var(--green)">✔</button>` : '';
+          const btnMarquer = (!t.annule && interBoutique && t.avance && !t.rembourse) ? `<button class="btn-icon btn-sm" onclick="marquerAvanceRembourse(${t.id})" title="Marquer comme remboursée" style="color:var(--green)">✔</button>` : '';
           return`<tr${interBoutique?' style="background:var(--navy-bg)"':''}>
             <td>${fmtD(t.date)}</td>
             <td class="tdm">${de?`${deB&&interBoutique?deB.emoji+' ':''}${de.nom}`:'?'}</td>
@@ -10627,7 +10623,7 @@ function rComptes(){
             <td style="font-weight:600">${F(t.mt)}</td>
             <td style="color:var(--text3)">${t.notes||'—'}</td>
             <td>${statut}</td>
-            <td><div class="td-actions">${btnMarquer}<button class="btn-icon btn-sm" onclick="delTransfert(${t.id})" style="color:var(--red)">✕</button></div></td>
+            <td><div class="td-actions">${btnMarquer}${!t.annule&&peutGererHistoriqueFlux()?`<button class="btn btn-sm" onclick="delTransfert(${t.id})" style="color:var(--red)">↩ Annuler le transfert</button>`:''}</div></td>
           </tr>`;}).join('')}
       </tbody></table></div>`;
 }
@@ -10913,17 +10909,43 @@ function confirmerDeplacerCompte(cid){
   toast(`✅ Compte "${c.nom}" déplacé vers ${nouvelleBoutique.nom}`);
   rComptes();
 }
+function transfertsActifs(){
+  return (S.transferts||[]).filter(t=>t&&!t._deleted&&!t.annule);
+}
+function transfertDansBoutique(t,bid){
+  const def=(S.boutiques||[])[0]?.id||1;
+  const comptes=(S.comptes||[]).filter(c=>c.id==(t.de??t.cidSrc)||c.id==(t.vers??t.cidDst));
+  return comptes.length?comptes.some(c=>(c.bid||def)==bid):(t.bid||def)==bid;
+}
+function annulerTransfertFlux(index){
+  const view=window._fluxHistoryView;
+  if(!view||view.bid!=getBid())return rFlux();
+  const row=view.rows[index];
+  if(row?.type==='Transfert')return delTransfert(row.source.id);
+}
 function delTransfert(id){
-  if(!confirm('Annuler ce transfert ? Les soldes seront restaurés.'))return;
-  const t=S.transferts.find(t=>t.id==id);
-  if(t){
-    const de=S.comptes.find(c=>c.id==t.de);
-    const vers=S.comptes.find(c=>c.id==t.vers);
-    if(de)de.solde+=t.mt;
-    if(vers)vers.solde-=t.mt;
-  }
-  S.transferts=S.transferts.filter(t=>t.id!=id);
-  saveData();toast('↩️ Transfert annulé');(currentPage==='transactions'?rTransactions:rComptes)();
+  if(!peutGererHistoriqueFlux())return toast('❌ Annulation réservée aux administrateurs et superviseurs');
+  const t=(S.transferts||[]).find(t=>t.id==id);
+  if(!t||t._deleted||t.annule)return toast('ℹ️ Ce transfert est déjà annulé ou introuvable');
+  const de=(S.comptes||[]).find(c=>c.id==(t.de??t.cidSrc)&&!c._deleted);
+  const vers=(S.comptes||[]).find(c=>c.id==(t.vers??t.cidDst)&&!c._deleted);
+  const mt=Number(t.mt);
+  if(!de||!vers||de===vers)return toast('❌ Annulation impossible : vérifiez les deux comptes du transfert');
+  if(!transfertDansBoutique(t,getBid()))return toast('❌ Ce transfert ne concerne pas la boutique active');
+  const soldeDe=Number(de.solde),soldeVers=Number(vers.solde);
+  if(!Number.isFinite(mt)||mt<=0||!Number.isFinite(soldeDe)||!Number.isFinite(soldeVers))return toast('❌ Montant ou solde invalide : aucune modification effectuée');
+  const nouveauDe=soldeDe+mt,nouveauVers=soldeVers-mt;
+  if(!Number.isFinite(nouveauDe)||!Number.isFinite(nouveauVers))return toast('❌ Montants hors limites');
+  if(!confirm(`Annuler ce transfert de ${F(mt)} ?\n\nCompte d’origine « ${de.nom} » : +${F(mt)} → ${F(nouveauDe)}\nCompte destinataire « ${vers.nom} » : −${F(mt)} → ${F(nouveauVers)}\n${nouveauVers<0?'\nAttention : le compte destinataire deviendra négatif.\n':''}\nConfirmer la correction des deux soldes ?`))return;
+  // Mark before saving to prevent a second click from reversing twice.
+  const ts=Math.max(Date.now(),(Number(t.ts)||0)+1,(Number(de.ts)||0)+1,(Number(vers.ts)||0)+1);
+  de.solde=nouveauDe;vers.solde=nouveauVers;
+  de.ts=ts;vers.ts=ts;
+  t.annule=true;t.annuleLe=new Date().toISOString();t.annulePar=S.session?.nom||'';t.ts=ts;
+  t.soldesAnnulation={deAvant:soldeDe,deApres:nouveauDe,versAvant:soldeVers,versApres:nouveauVers};
+  saveData();
+  toast('↩️ Transfert annulé : compte d’origine recrédité et compte destinataire débité');
+  (currentPage==='flux'?rFlux:currentPage==='transactions'?rTransactions:rComptes)();
 }
 
 // ─── DEVIS CLIENTS ───
@@ -13864,7 +13886,7 @@ function rFlux(){
     if(type==='Tout'||type==='Revenu') (S.revenus||[]).filter(isMine).forEach(r=>h.push({source:r,key:'operation',date:r.date,type:'Revenu',label:r.desc||'',montant:r.mt,sens:'+',couleur:'var(--teal)',compte:r.cid?nomCompte(r.cid):r.mode||'—'}));
     if(type==='Tout'||type==='Dépense') depensesB.forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Dépense',label:d.four+' · '+d.cat,montant:d.mt,sens:'-',couleur:'var(--red)',compte:d.cid?nomCompte(d.cid):d.mode||'—'}));
     if(type==='Tout'||type==='Achat') fluxPaiementsAchats(achatsB).forEach(a=>{const art=ga(a.aid);const f=gf(a.fid);h.push({source:S.achats.find(x=>x.id==a.achatId),key:a._fluxPaymentKey||'operation',date:a.date,type:'Achat',label:(f?f.nom:'')+(art?' · '+art.nom:''),montant:a.mt,sens:'-',couleur:'var(--purple)',compte:a.cid?nomCompte(a.cid):a.mode||'—'});});
-    if(type==='Tout'||type==='Transfert') (S.transferts||[]).filter(isMine).forEach(t=>h.push({source:t,key:'operation',date:t.date,type:'Transfert',label:nomCompte(t.de)+' → '+nomCompte(t.vers),montant:t.mt,sens:'⇄',couleur:'var(--navy)',compte:nomCompte(t.de)}));
+    if(type==='Tout'||type==='Transfert') transfertsActifs().filter(t=>transfertDansBoutique(t,bid)).forEach(t=>h.push({source:t,key:'operation',date:t.date,type:'Transfert',label:nomCompte(t.de??t.cidSrc)+' → '+nomCompte(t.vers??t.cidDst),montant:t.mt,sens:'⇄',couleur:'var(--navy)',compte:nomCompte(t.de??t.cidSrc)}));
     if(type==='Tout'||type==='Emprunt') (S.dettesPerso||[]).filter(isMine).filter(d=>d.typeDette==='emprunter').forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Emprunt',label:d.personne,montant:d.montant,sens:'+',couleur:'var(--amber)',compte:d.cid?nomCompte(d.cid):'—'}));
     if(type==='Tout'||type==='Prêt') (S.dettesPerso||[]).filter(isMine).filter(d=>d.typeDette==='preter').forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Prêt',label:d.personne,montant:d.montant,sens:'-',couleur:'var(--pink)',compte:d.cid?nomCompte(d.cid):'—'}));
     return h.filter(x=>x.source&&!x.source._deleted).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
@@ -13872,7 +13894,7 @@ function rFlux(){
   window._fluxFiltre=window._fluxFiltre||'Tout';
   const tousFlux=buildHist('Tout');
   const peutEffacer=peutGererHistoriqueFlux();
-  const historique=buildHist(window._fluxFiltre).filter(x=>!x.source._fluxHidden?.[x.key]);
+  const historique=buildHist(window._fluxFiltre).filter(x=>window._fluxAfficherMasques||!x.source._fluxHidden?.[x.key]);
   window._fluxHistoryView={bid,rows:historique,all:tousFlux};
   const nbMasques=tousFlux.filter(x=>x.source._fluxHidden?.[x.key]).length;
   const renderHist=(h)=>h.length===0?`<tr><td colspan="${peutEffacer?6:5}" style="text-align:center;padding:20px;color:var(--text3)">Aucune opération</td></tr>`:
@@ -13882,7 +13904,7 @@ function rFlux(){
       <td class="tdm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.label}</td>
       <td><span class="badge bb" style="font-size:10px">${x.compte}</span></td>
       <td style="font-weight:700;color:${x.sens==='+'?'var(--green)':x.sens==='-'?'var(--red)':'var(--navy)'};white-space:nowrap">${x.sens==='+'?'+':x.sens==='-'?'-':''}${F(x.montant)}</td>
-      ${peutEffacer?`<td><button class="btn btn-sm" style="color:var(--red)" onclick="effacerHistoriqueFlux(${i})" aria-label="Effacer cette ligne de l’historique">🗑️ Effacer</button></td>`:''}
+      ${peutEffacer?`<td><div style="display:flex;gap:6px;flex-wrap:wrap">${x.type==='Transfert'?`<button class="btn btn-sm" style="color:var(--red)" onclick="annulerTransfertFlux(${i})">↩ Annuler le transfert</button>`:''}${x.source._fluxHidden?.[x.key]?'<span class="badge">Masqué</span>':`<button class="btn btn-sm" onclick="effacerHistoriqueFlux(${i})">Masquer</button>`}</div></td>`:''}
     </tr>`).join('')+(h.length>100?`<tr><td colspan="${peutEffacer?6:5}" style="text-align:center;padding:10px;color:var(--text3);font-size:12px">… ${h.length-100} opérations supplémentaires</td></tr>`:'');
 
   document.getElementById('content').innerHTML=`
@@ -13971,10 +13993,11 @@ function rFlux(){
       </tbody></table></div>
 
     <p class="st" style="margin-top:24px">📋 Historique des opérations</p>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Effacer retire uniquement les lignes de cet historique. Les opérations, les stocks et les soldes sont conservés.</p>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Pour corriger un envoi erroné, cliquez sur « Annuler le transfert » : le compte d’origine sera recrédité et le destinataire débité. « Masquer » change uniquement l’affichage.</p>
     ${peutEffacer?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="btn btn-sm" style="color:var(--red)" onclick="effacerHistoriqueFlux()" ${historique.length?'':'disabled'}>🗑️ Effacer l’historique${window._fluxFiltre==='Tout'?'':' filtré'} (${historique.length})</button>
-      <button class="btn btn-sm" onclick="restaurerHistoriqueFlux()" ${nbMasques?'':'disabled'}>↩ Restaurer l’historique (${nbMasques})</button>
+      <button class="btn btn-sm" style="color:var(--red)" onclick="effacerHistoriqueFlux()" ${historique.length?'':'disabled'}>Masquer l’historique${window._fluxFiltre==='Tout'?'':' filtré'} (${historique.length})</button>
+      <button class="btn btn-sm" onclick="restaurerHistoriqueFlux()" ${nbMasques?'':'disabled'}>Réafficher l’historique (${nbMasques})</button>
+      <button class="btn btn-sm" onclick="window._fluxAfficherMasques=!window._fluxAfficherMasques;rFlux()">${window._fluxAfficherMasques?'Cacher les lignes masquées':'Afficher les lignes masquées'}</button>
     </div>`:''}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
       ${['Tout','Vente','Revenu','Dépense','Achat','Transfert','Emprunt','Prêt'].map(t=>`
@@ -14140,7 +14163,7 @@ function rCaisseGlobal(){
   (S.revenus||[]).filter(r=>!r._deleted).forEach(r=>add(r.date,r.cid,r.mode,r.bid,+r.mt||0,1));
   (S.depenses||[]).filter(d=>!d._deleted).forEach(d=>add(d.date,d.cid,d.mode,d.bid,+d.mt||0,-1));
   bouts.forEach(b=>fluxPaiementsAchats(getAchatsBoutique(b.id)).forEach(a=>add(a.date,a.cid,a.mode,b.id,+a.mt||0,-1)));
-  (S.transferts||[]).forEach(t=>{
+  transfertsActifs().forEach(t=>{
     const de=t.de!=null?t.de:t.cidSrc, vers=t.vers!=null?t.vers:t.cidDst;
     if(!t.date||!t.mt) return;
     if(cashIds.has(String(de))){const a=comptes.find(c=>String(c.id)===String(de));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:-t.mt,k:'t'});}
@@ -24319,7 +24342,7 @@ function rBilanJour(){
   const deps = getDepensesBoutique(bid).filter(d=>d.date===jour);
   const sals = (S.salaires||[]).filter(s=>s.date===jour);
   const avances = (S.avances_employe||[]).filter(a=>a.date===jour);
-  const transferts = (S.transferts||[]).filter(t=>t.date===jour);
+  const transferts = transfertsActifs().filter(t=>t.date===jour);
 
   // ── Totaux ──
   const totalEntrees = ventes.reduce((s,v)=>s+v.mt,0)
