@@ -1274,6 +1274,10 @@ body.dark th{background:var(--surface3)}
       <svg viewBox="0 0 16 16" fill="none"><path d="M1 8h14M8 1v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"/><path d="M2 11l3-3 3 2 4-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Flux financier
     </div>
+    <div class="ni admin-only superviseur-ok" data-page="flux_global" onclick="nav(this,'flux_global')">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="6" height="10" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="3" width="6" height="10" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M3 10l1.5-2 1.5 1M11 10l1.5-2 1.5 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Flux toutes boutiques
+    </div>
     <div class="ni" data-page="limites" onclick="nav(this,'limites')">
       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="10" width="3" height="5" rx="1" fill="currentColor" opacity=".4"/><rect x="6" y="6" width="3" height="9" rx="1" fill="currentColor" opacity=".6"/><rect x="11" y="2" width="3" height="13" rx="1" fill="currentColor"/><path d="M1 9h14" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2 2"/></svg>
       Limites dépenses
@@ -2947,7 +2951,7 @@ function rafraichirPageCourante(){
   // Re-appliquer boutique_active de la session admin avant chaque rafraîchissement
   if(S.session?.boutique_active) S.boutique_active = S.session.boutique_active;
   try{
-    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
+    ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations})[currentPage]();
   }catch(e){}
 }
 
@@ -3396,7 +3400,7 @@ function switcherBoutique(bid){
     _ignorerTimer = setTimeout(()=>{ _ignorerProchainUpdate = false; }, 10000);
     majBoutiqueUI();
     try{
-      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
+      ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[currentPage]();
     }catch(e){console.error('Erreur rafraîchissement page :',e);}
   }
   // Vendeur/Caissier avec plusieurs boutiques : peut switcher entre ses boutiques
@@ -3503,7 +3507,7 @@ function toast(msg,dur=2200){
 }
 
 // ─── NAVIGATION ───
-const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',locations:'🪑 Locations',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
+const titles={dashboard:'Tableau de bord',objectifs:'Objectifs & KPIs',transactions:'Transactions',vente:'Ventes',services:'Services',locations:'🪑 Locations',achats:'Achats',stock:'Gestion du Stock',clients:'Clients',fournisseurs:'Fournisseurs',depenses:'Dépenses',tresorerie:'Trésorerie & Santé financière',revenus:'Revenus & Charges',rapports:'Rapports & Analyses',inventaire:"Rapport d'inventaire",historique:'Historique des mouvements',workspace:'Espace de travail',comptes:'Comptes & Transferts',devis:'Devis clients',planning:'Planification',calculatrice:'Calculatrice',parametres:'Paramètres',dettes:'Gestion des dettes',flux:'Flux financier',flux_global:'🏪 Flux — toutes boutiques',limites:'Limites de dépenses',modeles:"Modèles d'opération",agenda:'Opérations suivantes',journal:'Journal privé',caisse:'Rapport de caisse',stats:'Statistiques vendeurs',promos:'Promotions & Réductions',commandes:'Commandes fournisseurs',depots:'Stock multi-dépôt',fidelite:'Programme de fidélité',audit:"Journal d'audit",live:'🔴 Live — Ventes en temps réel',rh:'RH & Salaires',comptabilite:'Comptabilité & Bilan',kpis:'KPIs & Rentabilité',fourni_avance:'Fournisseurs Pro',bilan_jour:'Bilan Journalier',coach:'🎓 Coach Financier',cloture_caisse:'💰 Clôture de Caisse',comparaison:'🏪 Comparaison boutiques',rapport_mensuel:'📋 Rapport mensuel',obj_article:'🎯 Objectifs articles',rev_article:'📦 Revenus par article',hist_clotures:'📒 Historique des clôtures',relances:'📱 Relances clients',calc_commande:'🧮 Calculateur de commande',crm:'🤝 Pipeline CRM — Opportunités',projets:'🎬 Projets & Prestations',materiel:'📷 Parc Matériel',contrats:'✍️ Contrats & Signatures',approbations:'✅ Demandes d\u2019approbation',apprentis:'🎓 Apprentis & Formation'};
 const actionsMap={
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
@@ -3565,7 +3569,7 @@ function nav(el,page){
   if(_presenceId&&fbReady&&db){
     db.ref('christmedia/presence/'+_presenceId+'/page').set(page).catch(()=>{});
   }
-  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
+  ({dashboard:rDash,objectifs:rObjectifs,transactions:rTransactions,vente:rVente,services:rServices,locations:rLocations,achats:rAchats,stock:rStock,clients:rClients,fournisseurs:rFour,depenses:rDep,tresorerie:rTresorerie,revenus:rRevenus,rapports:rRap,inventaire:rInventaire,historique:rHistorique,workspace:rWorkspace,comptes:rComptes,devis:rDevis,planning:rPlanning,calculatrice:rCalc,parametres:rParametres,dettes:rDettes,flux:rFlux,flux_global:rFluxGlobal,limites:rLimites,modeles:rModeles,agenda:rAgenda,journal:rJournal,caisse:rCaisse,stats:rStats,promos:rPromos,commandes:rCommandes,depots:rDepots,fidelite:rFidelite,audit:rAudit,live:rLive,rh:rRH,comptabilite:rComptabilite,kpis:rKPIs,fourni_avance:rFourniAvance,bilan_jour:rBilanJour,coach:rCoach,cloture_caisse:rClotureCaisse,comparaison:rComparaison,rapport_mensuel:rRapportMensuel,obj_article:rObjArticle,rev_article:rRevArticle,hist_clotures:rHistClotures,relances:rRelances,calc_commande:rCalcCommande,crm:rCRM,projets:rProjets,materiel:rMateriel,contrats:rContrats,approbations:rApprobations,apprentis:rApprentis})[page]();
   closeMobileSidebar();
   document.getElementById('mn-dropdown').classList.remove('open');
   showQuickBar(page);
@@ -3606,6 +3610,7 @@ const QB_PAGES = [
   {page:'devis',        emoji:'📝', label:'Devis',         labelCourt:'Devis'},
   {page:'objectifs',    emoji:'🎯', label:'Objectifs',     labelCourt:'Objectifs'},
   {page:'flux',         emoji:'🔄', label:'Flux financier',labelCourt:'Flux'},
+  {page:'flux_global',  emoji:'🏪', label:'Flux — toutes boutiques',labelCourt:'Flux global'},
   {page:'limites',      emoji:'🛑', label:'Limites dép.',  labelCourt:'Limites'},
   {page:'modeles',      emoji:'📋', label:'Modèles',       labelCourt:'Modèles'},
   {page:'agenda',       emoji:'📅', label:'Agenda',        labelCourt:'Agenda'},
@@ -11691,7 +11696,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','workspace','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
+            'dettes','flux','flux_global','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
     label: '👑 Administrateur',
     couleur: '#f5c060'
   },
@@ -11709,7 +11714,7 @@ const PERMISSIONS = {
     pages: ['dashboard','objectifs','transactions','vente','services','achats','stock','clients',
             'fournisseurs','depenses','tresorerie','revenus','rapports','inventaire','historique',
             'comptes','devis','planning','calculatrice','parametres',
-            'dettes','flux','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
+            'dettes','flux','flux_global','limites','modeles','agenda','journal','caisse','stats','promos','commandes','depots','fidelite','audit','live','rh','comptabilite','kpis','fourni_avance','bilan_jour','coach','cloture_caisse','comparaison','rapport_mensuel','obj_article','rev_article','hist_clotures','relances','calc_commande','crm','projets','materiel','contrats','approbations','apprentis'],
     label: '👁️ Superviseur',
     couleur: '#7ec8e3'
   },
@@ -13933,6 +13938,120 @@ function rFlux(){
       <tbody>${renderHist(historique)}</tbody>
     </table></div>`;
   updateLoanSim();
+}
+
+// ─── MODULE : FLUX FINANCIER — TOUTES BOUTIQUES (consolidé mois / année) ───
+function rFluxGlobal(){
+  const bouts=S.boutiques||[];
+  const defBid=bouts[0]?.id||1;
+  const mine=(x,bid)=>x.bid==bid||(!x.bid&&bid==defBid);
+  const data=bouts.map(b=>{
+    const bid=b.id;const ev=[];
+    getVentesBoutique(bid).filter(v=>v.statut==='Payé'&&v.date).forEach(v=>ev.push({d:v.date,k:'ventes',mt:+v.mt||0}));
+    (S.ventes_services||[]).filter(v=>!v._deleted&&mine(v,bid)&&v.date).forEach(v=>{
+      const mt=v.statut==='Payé'?(+v.mt||0):(+v.avance||0);
+      if(mt) ev.push({d:v.date,k:'services',mt});
+    });
+    (S.revenus||[]).filter(r=>!r._deleted&&mine(r,bid)&&r.date).forEach(r=>ev.push({d:r.date,k:'revenus',mt:+r.mt||0}));
+    getDepensesBoutique(bid).filter(d=>d.date).forEach(d=>ev.push({d:d.date,k:'depenses',mt:+d.mt||0}));
+    fluxPaiementsAchats(getAchatsBoutique(bid)).filter(a=>a.date).forEach(a=>ev.push({d:a.date,k:'achats',mt:+a.mt||0}));
+    return {b,ev};
+  });
+  const agg=(ev,prefix)=>{
+    const r={ventes:0,services:0,revenus:0,depenses:0,achats:0};
+    ev.forEach(e=>{if(e.d.startsWith(prefix)) r[e.k]+=e.mt;});
+    r.ent=r.ventes+r.services+r.revenus;r.sor=r.depenses+r.achats;r.net=r.ent-r.sor;
+    return r;
+  };
+  const sum=(arr)=>arr.reduce((t,r)=>{Object.keys(r).forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{});
+  const allEv=data.flatMap(x=>x.ev);
+  const curY=String(new Date().getFullYear());
+  const yearsSet=new Set([curY]);
+  allEv.forEach(e=>{const y=e.d.slice(0,4);if(/^\d{4}$/.test(y)) yearsSet.add(y);});
+  const years=[...yearsSet].sort();
+  if(!window._fluxGYear||!yearsSet.has(window._fluxGYear)) window._fluxGYear=curY;
+  const Y=window._fluxGYear;
+  const nomM=i=>new Date(+Y,i,1).toLocaleDateString('fr-FR',{month:'long'});
+  const col=v=>v>=0?'var(--green)':'var(--red)';
+  const sg=v=>(v>=0?'+':'')+F(v);
+
+  const parB=data.map(x=>({nom:x.b.nom||x.b.id,...agg(x.ev,Y)}));
+  const tot=sum(parB);
+  const moisEcoules=(Y===curY)?(new Date().getMonth()+1):12;
+  const moyNet=tot.net/moisEcoules;
+  const mois=[...Array(12).keys()].map(i=>{
+    const pre=Y+'-'+String(i+1).padStart(2,'0');
+    const lignes=data.map(x=>agg(x.ev,pre));
+    return {i,pre,lignes,t:sum(lignes)};
+  });
+  const parAn=years.map(y=>{
+    const lignes=data.map(x=>agg(x.ev,y));
+    return {y,lignes,t:sum(lignes)};
+  });
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+      <span style="font-size:12px;color:var(--text3);margin-right:4px">Année :</span>
+      ${years.map(y=>`<button class="btn btn-sm" onclick="window._fluxGYear='${y}';rFluxGlobal()" style="${y===Y?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${y}</button>`).join('')}
+    </div>
+    <div class="g4" style="margin-bottom:20px">
+      <div class="card" style="border-left:3px solid var(--green)"><div class="ct">Entrées ${Y} (toutes boutiques)</div><div class="mv" style="color:var(--green)">${F(tot.ent)}</div></div>
+      <div class="card" style="border-left:3px solid var(--red)"><div class="ct">Sorties ${Y}</div><div class="mv" style="color:var(--red)">${F(tot.sor)}</div></div>
+      <div class="card" style="border-left:3px solid var(--navy)"><div class="ct">Flux net ${Y}</div><div class="mv" style="color:${col(tot.net)}">${sg(tot.net)}</div></div>
+      <div class="card" style="border-left:3px solid var(--teal)"><div class="ct">Flux net moyen / mois</div><div class="mv" style="color:${col(moyNet)}">${sg(Math.round(moyNet))}</div><div class="ms">sur ${moisEcoules} mois</div></div>
+    </div>
+
+    <p class="st">Ce que chaque boutique apporte — ${Y}</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Boutique</th><th>Ventes</th><th>Services</th><th>Autres revenus</th><th style="color:var(--green)">Entrées</th><th>Dépenses</th><th>Achats payés</th><th style="color:var(--red)">Sorties</th><th>Flux net</th><th>Net / mois</th></tr></thead>
+      <tbody>
+        ${parB.map(r=>`<tr>
+          <td style="font-weight:700">${r.nom}</td>
+          <td>${F(r.ventes)}</td><td>${F(r.services)}</td><td>${F(r.revenus)}</td>
+          <td style="color:var(--green);font-weight:600">${F(r.ent)}</td>
+          <td>${F(r.depenses)}</td><td>${F(r.achats)}</td>
+          <td style="color:var(--red);font-weight:600">${F(r.sor)}</td>
+          <td style="font-weight:700;color:${col(r.net)}">${sg(r.net)}</td>
+          <td style="color:${col(r.net)}">${sg(Math.round(r.net/moisEcoules))}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--surface2);font-weight:700">
+          <td>TOTAL</td><td>${F(tot.ventes)}</td><td>${F(tot.services)}</td><td>${F(tot.revenus)}</td>
+          <td style="color:var(--green)">${F(tot.ent)}</td><td>${F(tot.depenses)}</td><td>${F(tot.achats)}</td>
+          <td style="color:var(--red)">${F(tot.sor)}</td>
+          <td style="color:${col(tot.net)}">${sg(tot.net)}</td>
+          <td style="color:${col(moyNet)}">${sg(Math.round(moyNet))}</td>
+        </tr>
+      </tbody></table></div>
+
+    <p class="st" style="margin-top:24px">Mois par mois — ${Y} (flux net par boutique)</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Mois</th><th style="color:var(--green)">Entrées</th><th style="color:var(--red)">Sorties</th><th>Flux net</th>${data.map(x=>`<th>Net ${x.b.nom||x.b.id}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${mois.map(m=>`<tr>
+          <td style="font-weight:600;text-transform:capitalize">${nomM(m.i)}</td>
+          <td style="color:var(--green)">${F(m.t.ent)}</td>
+          <td style="color:var(--red)">${F(m.t.sor)}</td>
+          <td style="font-weight:700;color:${col(m.t.net)}">${sg(m.t.net)}</td>
+          ${m.lignes.map(l=>`<td style="color:${col(l.net)}">${sg(l.net)}</td>`).join('')}
+        </tr>`).join('')}
+        <tr style="background:var(--surface2);font-weight:700">
+          <td>TOTAL ${Y}</td><td style="color:var(--green)">${F(tot.ent)}</td><td style="color:var(--red)">${F(tot.sor)}</td>
+          <td style="color:${col(tot.net)}">${sg(tot.net)}</td>
+          ${parB.map(r=>`<td style="color:${col(r.net)}">${sg(r.net)}</td>`).join('')}
+        </tr>
+      </tbody></table></div>
+
+    <p class="st" style="margin-top:24px">Année par année</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Année</th><th style="color:var(--green)">Entrées</th><th style="color:var(--red)">Sorties</th><th>Flux net</th>${data.map(x=>`<th>Net ${x.b.nom||x.b.id}</th>`).join('')}</tr></thead>
+      <tbody>${parAn.map(a=>`<tr>
+        <td style="font-weight:700">${a.y}</td>
+        <td style="color:var(--green)">${F(a.t.ent)}</td><td style="color:var(--red)">${F(a.t.sor)}</td>
+        <td style="font-weight:700;color:${col(a.t.net)}">${sg(a.t.net)}</td>
+        ${a.lignes.map(l=>`<td style="color:${col(l.net)}">${sg(l.net)}</td>`).join('')}
+      </tr>`).join('')}</tbody></table></div>
+
+    <p style="font-size:11px;color:var(--text3);margin-top:12px">ℹ️ Entrées = ventes payées + services (payés ou avances) + autres revenus. Sorties = dépenses + paiements d'achats. Les transferts entre comptes et les prêts/emprunts ne sont pas comptés.</p>`;
 }
 
 function filtrerFlux(type){
