@@ -26689,7 +26689,7 @@ function majBadgeApprobations(){
 
 // ─── ANNULER / RÉTABLIR : opérations locales enregistrées ───
 const CM_UNDO_KEY='cm_action_history_v1';
-const cmUndo={ready:false,baseline:null,entries:[],redo:[],depth:0,suppress:false,busy:false,pending:0,event:null,lastGroup:null,warning:'',tabChanged:false};
+const cmUndo={loading:true,historyDB:null,storageMode:'indexeddb',storageStatus:'loading',storageRevision:0,storagePending:0,storageQueue:Promise.resolve(),ready:false,baseline:null,entries:[],redo:[],depth:0,suppress:false,busy:false,pending:0,event:null,lastGroup:null,warning:'',tabChanged:false};
 const cmUndoExcluded=new Set(['audit','historique','historique_prix','journal_entries','undo_tombstones']);
 function cmUndoKeys(){return [...FB_COLLECTIONS.filter(k=>!cmUndoExcluded.has(k)),'parametres','objectifs_par_boutique'];}
 function cmUndoClone(x){return x==null?x:JSON.parse(JSON.stringify(x));}
@@ -26719,25 +26719,121 @@ function cmUndoDiff(before,after){
   });
   return patches;
 }
+// Historique indépendant de localStorage : évite de concurrencer les données métier.
+function cmUndoRefreshStorage(){
+  if(typeof currentPage==='string'&&currentPage==='annuler_retablir')rAnnulerRetablir();
+}
+function cmUndoOpenDB(){
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB)return reject(new Error('IndexedDB indisponible'));
+    let done=false;
+    const timer=setTimeout(()=>finish(new Error('Ouverture du stockage expirée')),5000);
+    function finish(error,db){
+      if(done){if(db)db.close();return;}
+      done=true;clearTimeout(timer);error?reject(error):resolve(db);
+    }
+    let request;
+    try{request=window.indexedDB.open('christmedia_action_history',1);}catch(e){finish(e);return;}
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('history'))request.result.createObjectStore('history');};
+    request.onsuccess=()=>{
+      const db=request.result;
+      db.onversionchange=()=>{db.close();if(cmUndo.historyDB===db)cmUndo.historyDB=null;};
+      finish(null,db);
+    };
+    request.onerror=()=>finish(request.error||new Error('Stockage inaccessible'));
+    request.onblocked=()=>finish(new Error('Stockage occupé par un autre onglet'));
+  });
+}
+function cmUndoReadDB(db){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction('history','readonly');let value=null;
+    const req=tx.objectStore('history').get('current');req.onsuccess=()=>{value=req.result||null;};
+    tx.oncomplete=()=>resolve(value);
+    tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Lecture du stockage impossible'));
+  });
+}
+function cmUndoWriteDB(payload){
+  return new Promise((resolve,reject)=>{
+    const tx=cmUndo.historyDB.transaction('history','readwrite');
+    const store=tx.objectStore('history');let nextRevision=0,conflict=false;
+    const req=store.get('current');
+    req.onsuccess=()=>{
+      const previous=req.result?.revision||0;
+      if(previous!==cmUndo.storageRevision){conflict=true;tx.abort();return;}
+      nextRevision=previous+1;
+      store.put({revision:nextRevision,payload},'current');
+    };
+    tx.oncomplete=()=>{cmUndo.storageRevision=nextRevision;resolve();};
+    tx.onerror=tx.onabort=()=>{
+      if(conflict){cmUndo.tabChanged=true;reject(new Error('Un autre onglet a modifié cet historique. Rechargez cette page.'));}
+      else reject(tx.error||new Error('Enregistrement de l’historique impossible'));
+    };
+  });
+}
+function cmUndoValidateHistory(history){
+  if(!history)return {v:1,entries:[],redo:[]};
+  if(history.v!==1||!Array.isArray(history.entries)||!Array.isArray(history.redo))throw new Error('Historique incompatible');
+  const valid=e=>e&&typeof e.id==='string'&&/^[a-z0-9-]+$/.test(e.id)&&Array.isArray(e.patches)&&e.patches.every(p=>cmUndoKeys().includes(p.col)&&['record','value'].includes(p.kind));
+  if(!history.entries.every(valid)||!history.redo.every(valid))throw new Error('Historique illisible');
+  return history;
+}
+async function cmUndoLoadHistory(){
+  let legacy=null,record=null;
+  try{
+    cmUndo.legacyRaw=localStorage.getItem(CM_UNDO_KEY);
+    if(cmUndo.legacyRaw)legacy=cmUndoValidateHistory(JSON.parse(cmUndo.legacyRaw));
+  }catch(e){cmUndo.warning='L’ancien historique est illisible. Les données de gestion sont conservées.';}
+  try{
+    cmUndo.historyDB=await cmUndoOpenDB();
+    record=await cmUndoReadDB(cmUndo.historyDB);
+    if(record)cmUndoValidateHistory(record.payload);
+    cmUndo.storageRevision=record?.revision||0;
+  }catch(e){
+    if(cmUndo.historyDB){cmUndo.historyDB.close();cmUndo.historyDB=null;}
+    record=null;cmUndo.storageMode='local';
+  }
+  const useLegacy=legacy&&(!record||Number(legacy.savedAt||0)>Number(record.payload.savedAt||0));
+  const saved=useLegacy?legacy:record?.payload;
+  const newEntries=cmUndo.entries;
+  if(saved){
+    cmUndo.entries=[...saved.entries,...newEntries].slice(-50);
+    cmUndo.redo=newEntries.length?[]:saved.redo.slice(-50);
+    cmUndo.savedAt=Number(saved.savedAt)||0;
+  }
+  cmUndo.loading=false;
+  cmUndo.storageStatus='saved';
+  if(cmUndo.historyDB)cmUndo.storageMode='indexeddb';
+  if(newEntries.length||useLegacy||!record)await cmUndoPersist();
+  cmUndoRefreshStorage();
+}
 function cmUndoPersist(){
   while(cmUndo.entries.length+cmUndo.redo.length>50){if(cmUndo.entries.length)cmUndo.entries.shift();else cmUndo.redo.shift();}
-  let payload=JSON.stringify({v:1,entries:cmUndo.entries,redo:cmUndo.redo});
-  while(payload.length>700000&&cmUndo.entries.length+cmUndo.redo.length>1){
-    if(cmUndo.entries.length)cmUndo.entries.shift();else cmUndo.redo.shift();
-    payload=JSON.stringify({v:1,entries:cmUndo.entries,redo:cmUndo.redo});
-  }
-  if(payload.length>700000){
-    cmUndo.warning='Cette opération dépasse la capacité de l’historique. Le retour en arrière précédent a été réinitialisé.';
-    cmUndo.entries=[];cmUndo.redo=[];
-    payload=JSON.stringify({v:1,entries:[],redo:[]});
-    toast('⚠️ Opération trop volumineuse pour le retour en arrière',6000);
-  }
-  try{localStorage.setItem(CM_UNDO_KEY,payload);}catch(e){
-    cmUndo.warning='L’historique reste disponible dans cette session seulement : le stockage du navigateur est plein ou indisponible.';
-    try{localStorage.removeItem(CM_UNDO_KEY);}catch(_){}
-    toast('⚠️ Historique non conservé après fermeture : stockage indisponible',6000);
-  }
+  if(cmUndo.loading)return;
+  cmUndo.savedAt=Math.max(Date.now(),(cmUndo.savedAt||0)+1);
+  // Copy now: subsequent clicks must never mutate an already queued save.
+  const payload=cmUndoClone({v:1,savedAt:cmUndo.savedAt,entries:cmUndo.entries,redo:cmUndo.redo});
+  cmUndo.storagePending++;cmUndo.storageStatus='writing';
+  cmUndo.storageQueue=cmUndo.storageQueue.then(async()=>{
+    if(cmUndo.tabChanged)throw new Error('Un autre onglet a modifié les données. Rechargez cette page.');
+    if(cmUndo.historyDB){
+      await cmUndoWriteDB(payload);
+      // Remove only the migrated copy, and only AFTER the IndexedDB commit.
+      try{if(cmUndo.legacyRaw&&localStorage.getItem(CM_UNDO_KEY)===cmUndo.legacyRaw){localStorage.removeItem(CM_UNDO_KEY);cmUndo.legacyRaw=null;}}catch(e){}
+    }else{
+      localStorage.setItem(CM_UNDO_KEY,JSON.stringify(payload));
+    }
+    cmUndo.warning='';cmUndo.storageStatus='saved';
+  }).catch(e=>{
+    cmUndo.storageStatus='memory';
+    cmUndo.warning=cmUndo.tabChanged?'Un autre onglet a modifié les données. Rechargez cette page avant de continuer.':'Les dernières actions restent dans cette session seulement : leur enregistrement a échoué. Ne fermez pas cette page avant d’avoir terminé vos corrections.';
+  }).then(()=>{
+    cmUndo.storagePending--;
+    if(cmUndo.storagePending)cmUndo.storageStatus='writing';
+    cmUndoRefreshStorage();
+  });
+  return cmUndo.storageQueue;
 }
+
 function cmUndoRecord(){
   if(!cmUndo.ready||cmUndo.suppress||window._modeDemo)return;
   const next=cmUndoSnapshot(S),patches=cmUndoDiff(cmUndo.baseline,next);
@@ -26814,6 +26910,7 @@ function cmUndoDetails(entry,redo){
 function cmUndoPreview(redo){
   if(S.session?.role!=='admin')return toast('🔒 Retour en arrière réservé à l’administrateur');
   const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];if(!entry)return;
+  if(cmUndo.loading)return toast('⏳ Chargement de l’historique en cours…');
   if(cmUndo.pending)return toast('⏳ Attendez la fin de l’enregistrement avant de revenir en arrière.');
   if(cmUndo.tabChanged)return toast('⚠️ Des données ont changé dans un autre onglet. Rechargez cette page avant de continuer.',6000);
   const conflicts=cmUndoConflicts(entry,redo);
@@ -26823,7 +26920,7 @@ function cmUndoPreview(redo){
     <div class="mff"><button class="btn" onclick="closeModal()">Fermer sans modifier</button>${conflicts.length?'':`<button class="btn btn-primary" onclick="cmUndoExecute(${!!redo},'${entry.id}')">Confirmer ${redo?'le rétablissement':'l’annulation'}</button>`}</div>`);
 }
 async function cmUndoExecute(redo,id){
-  if(S.session?.role!=='admin'||cmUndo.busy||cmUndo.pending||cmUndo.tabChanged||window._modeDemo)return;
+  if(S.session?.role!=='admin'||cmUndo.busy||cmUndo.pending||cmUndo.loading||cmUndo.tabChanged||window._modeDemo)return;
   const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];
   if(!entry||entry.id!==id)return toast('⚠️ L’historique a changé. Rouvrez la confirmation.');
   if(cmUndoConflicts(entry,redo).length)return toast('⚠️ Données modifiées depuis cette action : retour en arrière bloqué.',6000);
@@ -26860,19 +26957,15 @@ function rAnnulerRetablir(){
     <p style="font-size:12px;color:var(--text2);margin-top:10px">Historique de ce navigateur, toutes boutiques : jusqu’à 50 étapes selon l’espace disponible. Il commence avec cette version. Une nouvelle modification supprime la possibilité de rétablir les actions annulées.</p>
     <p style="font-size:12px;color:var(--text2);margin-top:8px">Ce retour en arrière corrige les données de l’application. Il ne rappelle pas un paiement bancaire réel, un message envoyé ou une impression. Les connexions, droits d’accès, notes privées, réinitialisations et fichiers externes ne sont pas concernés.</p>
     ${cmUndo.pending?'<p style="margin-top:10px">⏳ Enregistrement en cours…</p>':''}
-    ${cmUndo.warning?`<p style="color:var(--amber);margin-top:10px">${cmUndoEsc(cmUndo.warning)}</p>`:''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn btn-primary" onclick="cmUndoPreview(false)" ${!cmUndo.entries.length||cmUndo.busy||cmUndo.pending?'disabled':''}>↶ Annuler la dernière action</button><button class="btn" onclick="cmUndoPreview(true)" ${!cmUndo.redo.length||cmUndo.busy||cmUndo.pending?'disabled':''}>↷ Rétablir la dernière annulation</button></div>
+    <p role="status" style="font-size:12px;margin-top:10px;color:${cmUndo.storageStatus==='saved'?'var(--green)':'var(--text2)'}">${cmUndo.loading?'Chargement de l’historique…':cmUndo.storageStatus==='writing'?'Enregistrement de l’historique…':cmUndo.storageStatus==='saved'?'✓ Historique enregistré sur cet appareil':'⚠ Historique non enregistré après fermeture'}</p>
+    ${cmUndo.warning?`<p style="color:var(--amber);margin-top:10px">${cmUndoEsc(cmUndo.warning)}</p>${!cmUndo.tabChanged?'<button class="btn btn-sm" onclick="cmUndoPersist()">Réessayer l’enregistrement</button>':''}`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn btn-primary" onclick="cmUndoPreview(false)" ${!cmUndo.entries.length||cmUndo.busy||cmUndo.pending||cmUndo.loading?'disabled':''}>↶ Annuler la dernière action</button><button class="btn" onclick="cmUndoPreview(true)" ${!cmUndo.redo.length||cmUndo.busy||cmUndo.pending||cmUndo.loading?'disabled':''}>↷ Rétablir la dernière annulation</button></div>
     </div>
     ${cmUndo.redo.length?`<div class="card" style="margin-bottom:12px">Prochaine action à rétablir : <b>${cmUndoEsc(cmUndo.redo[cmUndo.redo.length-1].label)}</b></div>`:''}
     <p class="st">Actions enregistrées (${cmUndo.entries.length})</p>
     ${cmUndo.entries.length?cmUndo.entries.slice().reverse().map((e,i)=>`<div class="card" style="margin-bottom:10px"><div style="font-weight:600">${i===0?'Dernière action · ':''}${cmUndoEsc(e.label)}</div><div style="font-size:12px;color:var(--text2);margin-top:5px">${cmUndoEsc(new Date(e.date).toLocaleString('fr-FR'))} · ${cmUndoEsc(e.user)} · Boutique ${cmUndoEsc(e.bid)}</div><div style="font-size:12px;margin-top:7px">${cmUndoSummary(e)}</div></div>`).join(''):'<div class="card">Aucune action à annuler pour le moment. Les prochaines modifications enregistrées apparaîtront ici.</div>'}`;
 }
 function cmUndoInit(){
-  try{
-    const history=JSON.parse(localStorage.getItem(CM_UNDO_KEY)||'null');
-    const valid=e=>e&&typeof e.id==='string'&&/^[a-z0-9-]+$/.test(e.id)&&Array.isArray(e.patches)&&e.patches.every(p=>cmUndoKeys().includes(p.col)&&['record','value'].includes(p.kind));
-    if(history?.v===1){cmUndo.entries=(history.entries||[]).filter(valid).slice(-50);cmUndo.redo=(history.redo||[]).filter(valid).slice(-50);}
-  }catch(e){cmUndo.warning='L’ancien historique de retour en arrière est illisible. Vos données de gestion sont conservées.';}
   cmUndo.baseline=cmUndoSnapshot(S);cmUndo.ready=true;
   document.addEventListener('click',e=>{
     const b=e.target.closest?.('button,[onclick]');if(!b)return;
@@ -26880,6 +26973,7 @@ function cmUndoInit(){
     cmUndo.event=ev;setTimeout(()=>{if(cmUndo.event===ev)cmUndo.event=null;},0);
   },true);
   window.addEventListener('storage',e=>{if(e.key==='christmedia_v2'||e.key===CM_UNDO_KEY)cmUndo.tabChanged=true;});
+  cmUndo.initPromise=cmUndoLoadHistory();
 }
 const cmUndoSaveData=saveData;
 saveData=function(){
@@ -26905,6 +26999,7 @@ saveLocal=function(data){
 };
 cmUndoInit();
 // ─── FIN ANNULER / RÉTABLIR ───
+
 
 // Marqueur posé après l'exécution du script principal (pas une simple déclaration).
 window.cmMainLoaded=true;
