@@ -4251,7 +4251,8 @@ function fluxPaiementsAchats(achats){
         const mt=positif(t.mt);
         // Une date absente ne doit pas être remplacée par la date d'achat.
         if(mt) flux.push({...a,mt,date:t.date||'',heure:t.heure||'',
-          cid:t.cid||a.cid,mode:t.mode||a.mode,statut:'Payé',achatId:a.id});
+          cid:t.cid||a.cid,mode:t.mode||a.mode,statut:'Payé',achatId:a.id,
+          _fluxPaymentKey:'tranche:'+String(t.id??a.tranches.indexOf(t))});
       }
     } else if(a.statut==='Payé' && !/Réconcilié \(payé via règlement groupé\)/i.test(a.notes||'')){
       const mt=positif(a.mt??a.total);
@@ -13800,6 +13801,33 @@ function executerReconstructionExcel(fid){
 }
 // ─── MODULE : FLUX FINANCIER ───
 // ════════════════════════════════════════════════════
+// Effacement réversible de l’affichage, conservé avec les données synchronisées.
+function peutGererHistoriqueFlux(){
+  return ['admin','superviseur'].includes(S.session?.role);
+}
+function modifierHistoriqueFlux(index,restaurer){
+  if(!peutGererHistoriqueFlux()) return toast('❌ Action réservée aux administrateurs et superviseurs');
+  const view=window._fluxHistoryView;
+  if(!view || view.bid!=getBid()) return rFlux();
+  const rows=restaurer?view.all.filter(x=>x.source._fluxHidden?.[x.key]):
+    (index===undefined?view.rows:[view.rows[index]]).filter(Boolean);
+  if(!rows.length) return;
+  const question=restaurer?
+    `Restaurer les ${rows.length} lignes effacées de l’historique de cette boutique ?`:
+    `Effacer ${rows.length} ligne(s) de l’historique de cette boutique ? Les opérations et les soldes seront conservés. Vous pourrez restaurer cet historique.`;
+  if(!confirm(question)) return;
+  const ts=Date.now();
+  rows.forEach(x=>{
+    x.source._fluxHidden={...(x.source._fluxHidden||{}),[x.key]:!restaurer};
+    x.source.ts=Math.max(ts,(Number(x.source.ts)||0)+1);
+  });
+  saveData();
+  rFlux();
+  toast(restaurer?'✅ Historique restauré':'✅ Historique effacé — restauration disponible');
+}
+function effacerHistoriqueFlux(index){modifierHistoriqueFlux(index,false);}
+function restaurerHistoriqueFlux(){modifierHistoriqueFlux(undefined,true);}
+
 function rFlux(){
   const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
@@ -13832,25 +13860,30 @@ function rFlux(){
   // Historique unifié
   const buildHist=(type)=>{
     const h=[];
-    if(type==='Tout'||type==='Vente') ventesB.filter(v=>v.statut==='Payé').forEach(v=>h.push({date:v.date,type:'Vente',label:v.client||'Client',montant:v.mt,sens:'+',couleur:'var(--green)',compte:v.cid?nomCompte(v.cid):v.mode||'—'}));
-    if(type==='Tout'||type==='Revenu') (S.revenus||[]).forEach(r=>h.push({date:r.date,type:'Revenu',label:r.desc||'',montant:r.mt,sens:'+',couleur:'var(--teal)',compte:r.cid?nomCompte(r.cid):r.mode||'—'}));
-    if(type==='Tout'||type==='Dépense') S.depenses.forEach(d=>h.push({date:d.date,type:'Dépense',label:d.four+' · '+d.cat,montant:d.mt,sens:'-',couleur:'var(--red)',compte:d.cid?nomCompte(d.cid):d.mode||'—'}));
-    if(type==='Tout'||type==='Achat') fluxPaiementsAchats(achatsB).forEach(a=>{const art=ga(a.aid);const f=gf(a.fid);h.push({date:a.date,type:'Achat',label:(f?f.nom:'')+(art?' · '+art.nom:''),montant:a.mt,sens:'-',couleur:'var(--purple)',compte:a.cid?nomCompte(a.cid):a.mode||'—'});});
-    if(type==='Tout'||type==='Transfert') (S.transferts||[]).forEach(t=>h.push({date:t.date,type:'Transfert',label:nomCompte(t.de)+' → '+nomCompte(t.vers),montant:t.mt,sens:'⇄',couleur:'var(--navy)',compte:nomCompte(t.de)}));
-    if(type==='Tout'||type==='Emprunt') (S.dettesPerso||[]).filter(d=>d.typeDette==='emprunter').forEach(d=>h.push({date:d.date,type:'Emprunt',label:d.personne,montant:d.montant,sens:'+',couleur:'var(--amber)',compte:d.cid?nomCompte(d.cid):'—'}));
-    if(type==='Tout'||type==='Prêt') (S.dettesPerso||[]).filter(d=>d.typeDette==='preter').forEach(d=>h.push({date:d.date,type:'Prêt',label:d.personne,montant:d.montant,sens:'-',couleur:'var(--pink)',compte:d.cid?nomCompte(d.cid):'—'}));
-    return h.sort((a,b)=>b.date.localeCompare(a.date));
+    if(type==='Tout'||type==='Vente') ventesB.filter(v=>v.statut==='Payé').forEach(v=>h.push({source:v,key:'operation',date:v.date,type:'Vente',label:v.client||'Client',montant:v.mt,sens:'+',couleur:'var(--green)',compte:v.cid?nomCompte(v.cid):v.mode||'—'}));
+    if(type==='Tout'||type==='Revenu') (S.revenus||[]).filter(isMine).forEach(r=>h.push({source:r,key:'operation',date:r.date,type:'Revenu',label:r.desc||'',montant:r.mt,sens:'+',couleur:'var(--teal)',compte:r.cid?nomCompte(r.cid):r.mode||'—'}));
+    if(type==='Tout'||type==='Dépense') depensesB.forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Dépense',label:d.four+' · '+d.cat,montant:d.mt,sens:'-',couleur:'var(--red)',compte:d.cid?nomCompte(d.cid):d.mode||'—'}));
+    if(type==='Tout'||type==='Achat') fluxPaiementsAchats(achatsB).forEach(a=>{const art=ga(a.aid);const f=gf(a.fid);h.push({source:S.achats.find(x=>x.id==a.achatId),key:a._fluxPaymentKey||'operation',date:a.date,type:'Achat',label:(f?f.nom:'')+(art?' · '+art.nom:''),montant:a.mt,sens:'-',couleur:'var(--purple)',compte:a.cid?nomCompte(a.cid):a.mode||'—'});});
+    if(type==='Tout'||type==='Transfert') (S.transferts||[]).filter(isMine).forEach(t=>h.push({source:t,key:'operation',date:t.date,type:'Transfert',label:nomCompte(t.de)+' → '+nomCompte(t.vers),montant:t.mt,sens:'⇄',couleur:'var(--navy)',compte:nomCompte(t.de)}));
+    if(type==='Tout'||type==='Emprunt') (S.dettesPerso||[]).filter(isMine).filter(d=>d.typeDette==='emprunter').forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Emprunt',label:d.personne,montant:d.montant,sens:'+',couleur:'var(--amber)',compte:d.cid?nomCompte(d.cid):'—'}));
+    if(type==='Tout'||type==='Prêt') (S.dettesPerso||[]).filter(isMine).filter(d=>d.typeDette==='preter').forEach(d=>h.push({source:d,key:'operation',date:d.date,type:'Prêt',label:d.personne,montant:d.montant,sens:'-',couleur:'var(--pink)',compte:d.cid?nomCompte(d.cid):'—'}));
+    return h.filter(x=>x.source&&!x.source._deleted).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   };
   window._fluxFiltre=window._fluxFiltre||'Tout';
-  const historique=buildHist(window._fluxFiltre);
-  const renderHist=(h)=>h.length===0?'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">Aucune opération</td></tr>':
-    h.slice(0,100).map(x=>`<tr>
+  const tousFlux=buildHist('Tout');
+  const peutEffacer=peutGererHistoriqueFlux();
+  const historique=buildHist(window._fluxFiltre).filter(x=>!x.source._fluxHidden?.[x.key]);
+  window._fluxHistoryView={bid,rows:historique,all:tousFlux};
+  const nbMasques=tousFlux.filter(x=>x.source._fluxHidden?.[x.key]).length;
+  const renderHist=(h)=>h.length===0?`<tr><td colspan="${peutEffacer?6:5}" style="text-align:center;padding:20px;color:var(--text3)">Aucune opération</td></tr>`:
+    h.slice(0,100).map((x,i)=>`<tr>
       <td style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)">${fmtD(x.date)}</td>
       <td><span style="font-size:11px;font-weight:600;color:${x.couleur}">${x.type}</span></td>
       <td class="tdm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.label}</td>
       <td><span class="badge bb" style="font-size:10px">${x.compte}</span></td>
       <td style="font-weight:700;color:${x.sens==='+'?'var(--green)':x.sens==='-'?'var(--red)':'var(--navy)'};white-space:nowrap">${x.sens==='+'?'+':x.sens==='-'?'-':''}${F(x.montant)}</td>
-    </tr>`).join('')+(h.length>100?`<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text3);font-size:12px">… ${h.length-100} opérations supplémentaires</td></tr>`:'');
+      ${peutEffacer?`<td><button class="btn btn-sm" style="color:var(--red)" onclick="effacerHistoriqueFlux(${i})" aria-label="Effacer cette ligne de l’historique">🗑️ Effacer</button></td>`:''}
+    </tr>`).join('')+(h.length>100?`<tr><td colspan="${peutEffacer?6:5}" style="text-align:center;padding:10px;color:var(--text3);font-size:12px">… ${h.length-100} opérations supplémentaires</td></tr>`:'');
 
   document.getElementById('content').innerHTML=`
     <div class="g4" style="margin-bottom:20px">
@@ -13937,14 +13970,19 @@ function rFlux(){
         <tr style="background:var(--surface2);font-weight:700"><td>TOTAL</td><td style="color:var(--green)">${F(totalEntrees)}</td><td style="color:var(--red)">${F(totalSorties)}</td><td style="color:${totalEntrees-totalSorties>=0?'var(--green)':'var(--red)'}">${totalEntrees-totalSorties>=0?'+':''}${F(totalEntrees-totalSorties)}</td></tr>
       </tbody></table></div>
 
-    <p class="st" style="margin-top:24px">📋 Historique complet des opérations</p>
+    <p class="st" style="margin-top:24px">📋 Historique des opérations</p>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Effacer retire uniquement les lignes de cet historique. Les opérations, les stocks et les soldes sont conservés.</p>
+    ${peutEffacer?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-sm" style="color:var(--red)" onclick="effacerHistoriqueFlux()" ${historique.length?'':'disabled'}>🗑️ Effacer l’historique${window._fluxFiltre==='Tout'?'':' filtré'} (${historique.length})</button>
+      <button class="btn btn-sm" onclick="restaurerHistoriqueFlux()" ${nbMasques?'':'disabled'}>↩ Restaurer l’historique (${nbMasques})</button>
+    </div>`:''}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
       ${['Tout','Vente','Revenu','Dépense','Achat','Transfert','Emprunt','Prêt'].map(t=>`
         <button onclick="filtrerFlux('${t}')" class="btn btn-sm" style="${window._fluxFiltre===t?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${t}</button>
       `).join('')}
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th><th>Type</th><th>Libellé</th><th>Compte</th><th>Montant</th></tr></thead>
+      <thead><tr><th>Date</th><th>Type</th><th>Libellé</th><th>Compte</th><th>Montant</th>${peutEffacer?'<th>Action</th>':''}</tr></thead>
       <tbody>${renderHist(historique)}</tbody>
     </table></div>`;
   updateLoanSim();
