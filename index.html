@@ -14158,6 +14158,7 @@ function rCaisseGlobal(){
     }
     return null;
   };
+  const tontineIds=new Set(comptes.filter(c=>/tontine|carnet\s+scolaire/i.test(c.nom||'')).map(c=>String(c.id)));
   const ev=[];
   const add=(date,cid,mode,bid,mt,sens)=>{
     if(!date||!mt) return;
@@ -14180,7 +14181,7 @@ function rCaisseGlobal(){
   transfertsActifs().forEach(t=>{
     const de=t.de!=null?t.de:t.cidSrc, vers=t.vers!=null?t.vers:t.cidDst;
     if(!t.date||!t.mt) return;
-    if(cashIds.has(String(de))){const a=comptes.find(c=>String(c.id)===String(de));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:-t.mt,k:'t'});}
+    if(cashIds.has(String(de))){const a=comptes.find(c=>String(c.id)===String(de));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:-t.mt,k:(tontineIds.has(String(vers))?'tn':'t')});}
     if(cashIds.has(String(vers))){const a=comptes.find(c=>String(c.id)===String(vers));ev.push({d:String(t.date).slice(0,10),b:accBid(a),mt:+t.mt,k:'t'});}
   });
 
@@ -14207,31 +14208,34 @@ function rCaisseGlobal(){
 
   const cartes=bouts.map(b=>{
     const sold=solde(b.id);
-    const ent=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.k!=='a'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
+    const ent=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.k!=='a'&&e.k!=='tn'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
     const tr=ev.filter(e=>e.b==b.id&&e.d===today&&e.k==='t').reduce((t,e)=>t+e.mt,0);
     const aj=ev.filter(e=>e.b==b.id&&e.d===today&&e.k==='a').reduce((t,e)=>t+e.mt,0);
-    const sor=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.k!=='a'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
+    const tn=ev.filter(e=>e.b==b.id&&e.d===today&&e.k==='tn').reduce((t,e)=>t-e.mt,0);
+    const sor=ev.filter(e=>e.b==b.id&&e.d===today&&e.k!=='t'&&e.k!=='a'&&e.k!=='tn'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
     const accsB=cashAccs.filter(c=>accBid(c)==b.id);
     const nb=accsB.length;
     const last=(S.clotures_caisse||[]).filter(x=>x.bid==b.id).sort((a,b2)=>b2.ts-a.ts)[0];
-    return {b,sold,ent,sor,tr,aj,ouv:sold-(ent-sor+tr+aj),nb,accsB,last};
+    return {b,sold,ent,sor,tr,aj,tn,ouv:sold-(ent-sor+tr+aj-tn),nb,accsB,last};
   });
   const totSold=cartes.reduce((t,x)=>t+x.sold,0);
   const totEnt=cartes.reduce((t,x)=>t+x.ent,0);
   const totSor=cartes.reduce((t,x)=>t+x.sor,0);
   const totTr=cartes.reduce((t,x)=>t+x.tr,0);
   const totAj=cartes.reduce((t,x)=>t+x.aj,0);
+  const totTn=cartes.reduce((t,x)=>t+x.tn,0);
 
   const jours=[];
   for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);jours.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));}
   const lignes=jours.map(day=>{
     const cols=bouts.map(b=>({b,fin:solde(b.id)-after(b.id,day),net:mvt(b.id,day,day),cl:clot(b.id,day)}));
     const dj=ev.filter(e=>e.d===day);
-    const ven=dj.filter(e=>e.k!=='t'&&e.k!=='a'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
-    const dep=dj.filter(e=>e.k!=='t'&&e.k!=='a'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
+    const ven=dj.filter(e=>e.k!=='t'&&e.k!=='a'&&e.k!=='tn'&&e.mt>0).reduce((t,e)=>t+e.mt,0);
+    const dep=dj.filter(e=>e.k!=='t'&&e.k!=='a'&&e.k!=='tn'&&e.mt<0).reduce((t,e)=>t-e.mt,0);
     const trf=dj.filter(e=>e.k==='t').reduce((t,e)=>t+e.mt,0);
     const adj=dj.filter(e=>e.k==='a').reduce((t,e)=>t+e.mt,0);
-    return {day,cols,ven,dep,trf,adj,fin:cols.reduce((t,x)=>t+x.fin,0),net:cols.reduce((t,x)=>t+x.net,0)};
+    const ton=dj.filter(e=>e.k==='tn').reduce((t,e)=>t-e.mt,0);
+    return {day,cols,ven,dep,trf,adj,ton,fin:cols.reduce((t,x)=>t+x.fin,0),net:cols.reduce((t,x)=>t+x.net,0)};
   });
 
   document.getElementById('content').innerHTML=`
@@ -14239,7 +14243,7 @@ function rCaisseGlobal(){
       <div class="ct">💵 Liquide en caisse — toutes boutiques (maintenant)</div>
       <div class="mv" style="color:var(--teal);font-size:30px">${fmt(totSold)}</div>
       <div class="ms" style="font-size:13px;margin-top:6px">Aujourd'hui : ventes <b style="color:var(--green)">${F(totEnt)}</b> − dépenses <b style="color:var(--red)">${F(totSor)}</b> = <b style="color:${col(totEnt-totSor)}">${fmt(totEnt-totSor)}</b> de reste du jour</div>
-      <div class="ms" style="font-size:13px">Ouverture <b>${fmt(totSold-(totEnt-totSor+totTr+totAj))}</b> + reste du jour ${totTr?'+ transferts/emprunts <b>'+fmt(totTr)+'</b> ':''}${totAj?'+ ajustement de caisse <b>'+fmt(totAj)+'</b> ':''}= <b>${fmt(totSold)}</b> en caisse</div>
+      <div class="ms" style="font-size:13px">Ouverture <b>${fmt(totSold-(totEnt-totSor+totTr+totAj-totTn))}</b> + reste du jour ${totTr?'+ transferts/emprunts <b>'+fmt(totTr)+'</b> ':''}${totAj?'+ ajustement de caisse <b>'+fmt(totAj)+'</b> ':''}${totTn?'− tontine versée <b>'+fmt(totTn)+'</b> ':''}= <b>${fmt(totSold)}</b> en caisse</div>
     </div>
 
     <p class="st">Aujourd'hui, boutique par boutique</p>
@@ -14248,7 +14252,7 @@ function rCaisseGlobal(){
         <div class="ct">${x.b.nom||x.b.id}</div>
         <div class="mv" style="color:${col(x.sold)}">${fmt(x.sold)}</div>
         <div class="ms">Ouverture ≈ ${fmt(x.ouv)}</div>
-        <div class="ms">Ventes <span style="color:var(--green)">+${F(x.ent)}</span> · Dépenses <span style="color:var(--red)">-${F(x.sor)}</span>${x.tr?' · Transferts/emprunts '+(x.tr>0?'+':'')+F(x.tr):''}${x.aj?' · Ajustement '+(x.aj>0?'+':'')+F(x.aj):''}</div>
+        <div class="ms">Ventes <span style="color:var(--green)">+${F(x.ent)}</span> · Dépenses <span style="color:var(--red)">-${F(x.sor)}</span>${x.tr?' · Transferts/emprunts '+(x.tr>0?'+':'')+F(x.tr):''}${x.aj?' · Ajustement '+(x.aj>0?'+':'')+F(x.aj):''}${x.tn?' · Tontine −'+F(x.tn):''}</div>
         <div class="ms" style="margin-top:4px">${x.nb?x.accsB.map(a=>a.nom+' : '+F(a.solde||0)).join(' · '):'<span style="color:var(--red)">Aucun compte « Vente … » ni « … fonctionnement » pour cette boutique</span>'}</div>
         <div class="ms">${x.last?`Dernière clôture ${fmtD(x.last.date)} : compté ${F(x.last.cash_compte)} (écart ${x.last.ecart>=0?'+':''}${F(x.last.ecart)})`:'Aucune clôture enregistrée'}</div>
       </div>`).join('')}
@@ -14256,7 +14260,7 @@ function rCaisseGlobal(){
 
     <p class="st">Liquidité restante jour par jour — 30 derniers jours</p>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th><th>Ouverture</th><th style="color:var(--green)">+ Ventes</th><th style="color:var(--red)">− Dépenses</th><th>= Reste du jour</th><th>Transferts / emprunts</th><th>Ajustement de caisse</th><th>Liquidité fin de journée</th>${bouts.map(b=>`<th>${b.nom||b.id}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Date</th><th>Ouverture</th><th style="color:var(--green)">+ Ventes</th><th style="color:var(--red)">− Dépenses</th><th>= Reste du jour</th><th>Transferts / emprunts</th><th>Ajustement de caisse</th><th>Tontine versée</th><th>Liquidité fin de journée</th>${bouts.map(b=>`<th>${b.nom||b.id}</th>`).join('')}</tr></thead>
       <tbody>${lignes.map(l=>`<tr${l.day===today?' style="background:var(--surface2)"':''}>
         <td style="font-weight:600;white-space:nowrap">${fmtD(l.day)}${l.day===today?' · auj.':''}</td>
         <td>${fmt(l.fin-l.net)}</td>
@@ -14265,6 +14269,7 @@ function rCaisseGlobal(){
         <td style="font-weight:600;color:${col(l.ven-l.dep)}">${(l.ven-l.dep)>=0?'+':''}${F(l.ven-l.dep)}</td>
         <td style="color:var(--text3)">${l.trf?((l.trf>0?'+':'')+F(l.trf)):'—'}</td>
         <td style="color:${l.adj?'var(--amber)':'var(--text3)'};font-weight:${l.adj?'600':'400'}">${l.adj?((l.adj>0?'+':'')+F(l.adj)):'—'}</td>
+        <td style="color:${l.ton?'var(--red)':'var(--text3)'}">${l.ton?'−'+F(l.ton):'—'}</td>
         <td style="font-weight:700">${fmt(l.fin)}</td>
         ${l.cols.map(x=>`<td>${fmt(x.fin)}<div style="font-size:10px;color:var(--text3)">${x.net?((x.net>0?'+':'')+F(x.net)):''}${x.cl?` · compté ${F(x.cl.cash_compte)}`:''}</div></td>`).join('')}
       </tr>`).join('')}</tbody></table></div>
@@ -14278,7 +14283,7 @@ function rCaisseGlobal(){
       return `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Compte</th><th>Ancien solde</th><th>Nouveau solde</th><th>Écart</th><th>Origine</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap">${fmtD(x.date)} ${x.heure||''}</td><td>${x.compte||nomCompte(x.cid)}</td><td>${F(x.ancien)}</td><td>${F(x.nouveau)}</td><td style="font-weight:700;color:${(x.diff||0)>=0?'var(--green)':'var(--red)'}">${(x.diff||0)>=0?'+':''}${F(x.diff)}</td><td>${x.source==='cloture'?'Clôture de caisse':'Manuel'}</td></tr>`).join('')}<tr style="background:var(--surface2);font-weight:700"><td colspan="4">TOTAL des ajustements</td><td style="color:${tot>=0?'var(--green)':'var(--red)'}">${tot>=0?'+':''}${F(tot)}</td><td></td></tr></tbody></table></div>`;
     })()}
 
-    <p style="font-size:11px;color:var(--text3);margin-top:12px">ℹ️ Le liquide actuel est la somme des comptes de vente (nom commençant par « Vente ») et des comptes de fonds de fonctionnement (nom contenant « fonctionnement ») de chaque boutique, hors comptes bloqués ; banques et comptes de particuliers sont exclus. Un transfert entre un compte de vente et un compte de fonctionnement de la même boutique ne change pas la liquidité. Les soldes des jours passés sont reconstitués à partir de ce solde en retirant les mouvements postérieurs (ventes, acomptes, services, revenus, dépenses, achats, transferts). Ils sont indicatifs : un ajustement manuel de solde ou une opération sans compte renseigné n'apparaît pas. Pour la valeur réelle d'un jour, comparez avec « compté » (Clôture de Caisse).</p>`;
+    <p style="font-size:11px;color:var(--text3);margin-top:12px">ℹ️ Le liquide actuel est la somme des comptes de vente (nom commençant par « Vente ») et des comptes de fonds de fonctionnement (nom contenant « fonctionnement ») de chaque boutique, hors comptes bloqués ; banques et comptes de particuliers sont exclus. Un transfert entre un compte de vente et un compte de fonctionnement de la même boutique ne change pas la liquidité. L'argent versé au tontinier (transfert vers un compte « tontine » ou « Carnet Scolaire ») sort de la caisse : il est déduit de la liquidité et affiché dans la colonne « Tontine versée ». Les soldes des jours passés sont reconstitués à partir de ce solde en retirant les mouvements postérieurs (ventes, acomptes, services, revenus, dépenses, achats, transferts). Ils sont indicatifs : un ajustement manuel de solde ou une opération sans compte renseigné n'apparaît pas. Pour la valeur réelle d'un jour, comparez avec « compté » (Clôture de Caisse).</p>`;
 }
 
 function filtrerFlux(type){
@@ -17730,6 +17735,14 @@ function ajustementsManuelsJour(bid,day){
     return /^vente\s+/i.test(((c?c.nom:x.compte)||'').trim());
   }).reduce((t,x)=>t+(+x.diff||0),0);
 }
+// Argent versé au tontinier ce jour : transfert d'un compte « Vente … » de la boutique vers un compte tontine (il sort physiquement de la caisse)
+function tontineVerseeJour(bid,day){
+  const comptes=S.comptes||[];const def=(S.boutiques||[])[0]?.id||1;
+  const get=id=>comptes.find(k=>String(k.id)===String(id));
+  const isT=id=>{const c=get(id);return !!c&&/tontine|carnet\s+scolaire/i.test(c.nom||'');};
+  const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
+  return transfertsActifs().filter(t=>t.date&&String(t.date).slice(0,10)===day&&isV(t.de!=null?t.de:t.cidSrc)&&isT(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
+}
 function rClotureCaisse(){
   if(!S.clotures_caisse) S.clotures_caisse = [];
   const today = new Date().toISOString().slice(0,10);
@@ -17785,7 +17798,8 @@ function rClotureCaisse(){
 
   // ── Solde théorique ──
   const ajustJour = bid ? ajustementsManuelsJour(bid,today) : 0;
-  const soldeTheorique = soldeOuverture + totalVentes - totalDepenses + ajustJour;
+  const tontJour = bid ? tontineVerseeJour(bid,today) : 0;
+  const soldeTheorique = soldeOuverture + totalVentes - totalDepenses + ajustJour - tontJour;
 
   // ── Solde théorique TOUTES BOUTIQUES ──
   const boutiques = S.boutiques || [];
@@ -17801,7 +17815,7 @@ function rClotureCaisse(){
     const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsPayes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
     const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
     const bRevsTotal   = bRevs.reduce((s,r)=>s+r.mt,0);
-    const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal + ajustementsManuelsJour(b.id,today);
+    const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal + ajustementsManuelsJour(b.id,today) - tontineVerseeJour(b.id,today);
     totalTheorique += bSolde;
     return { nom: b.nom||b.name||b.id, solde: bSolde, ventes: bVentesTotal, deps: bDepsTotal, revs: bRevsTotal, ouverture: bOuverture };
   });
@@ -17846,7 +17860,7 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid ${soldeTheorique>=0?'var(--green)':'var(--red)'}">
         <div class="ct">Solde théorique</div>
         <div class="mv" style="color:${soldeTheorique>=0?'var(--green)':'var(--red)'}">${F(soldeTheorique)}</div>
-        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}</div>
+        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}${tontJour?' − tontine versée ('+F(tontJour)+')':''}</div>
       </div>
       <div class="card" style="border-left:3px solid var(--blue,#1976d2);background:var(--surface2)">
         <div class="ct">🏪 Total toutes boutiques</div>
@@ -18386,7 +18400,8 @@ function ouvrirModalCloture(){
   const soldeOuvertureBase2 = derniere ? derniere.solde_fermeture : 0;
   const soldeOuverture = (window._soldeOuvertureManuel != null) ? window._soldeOuvertureManuel : soldeOuvertureBase2;
   const ajustJour = bid ? ajustementsManuelsJour(bid,today) : 0;
-  const soldeTheorique = soldeOuverture + totalVentes - totalDepenses + ajustJour;
+  const tontJour = bid ? tontineVerseeJour(bid,today) : 0;
+  const soldeTheorique = soldeOuverture + totalVentes - totalDepenses + ajustJour - tontJour;
 
   // Vérifier si clôture déjà faite aujourd'hui
   const dejaFaite = historique.find(c=>c.date===today);
@@ -18425,6 +18440,8 @@ function ouvrirModalCloture(){
         <span style="color:var(--green)">+ Ventes encaissées</span>
         <span style="color:var(--green);font-weight:600">+${F(totalVentes)}</span>
       </div>
+      ${ajustJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--amber)">± Ajustement de compte</span><span style="color:var(--amber);font-weight:600">${ajustJour>0?'+':'-'}${F(Math.abs(ajustJour))}</span></div>`:''}
+      ${tontJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--red)">− Tontine versée</span><span style="color:var(--red);font-weight:600">-${F(tontJour)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2)">
         <span style="color:var(--red)">− Dépenses</span>
         <span style="color:var(--red);font-weight:600">-${F(totalDepenses)}</span>
