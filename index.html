@@ -13105,6 +13105,7 @@ function rembourserDette(id){
       <button class="btn btn-sm" style="background:var(--navy);color:#fff;width:100%;margin-top:4px" onclick="genAmortDette(${id})">📊 Générer le tableau</button>
     </div>`:''}
     ${hasAmort?`<button class="btn btn-sm" style="color:var(--navy);border-color:var(--navy);width:100%;margin-bottom:8px" onclick="closeModal();voirTableauAmort(${id})">📊 Voir tableau d'amortissement</button>`:''}
+    ${credit&&reste>0&&getComptesGarantie().length?`<button class="btn btn-sm" style="color:var(--purple);border-color:var(--purple);width:100%;margin-bottom:8px" onclick="closeModal();soldeAvecGarantie(${id})">🔒 Solder avec le fonds de garantie</button>`:''}
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
       <button class="btn btn-success" onclick="saveRembours(${id})">${d.typeDette==='emprunter'?'✅ Rembourser':'✅ Récupérer'}</button>
     </div>`);
@@ -13134,6 +13135,57 @@ function genAmortDette(id){
   closeModal();
   toast('✅ Tableau généré — '+duree+' versements de '+F(verse));
   voirTableauAmort(id);
+}
+// Règlement (total ou partiel) d'un crédit avec le fonds de garantie bloqué à la banque
+function soldeAvecGarantie(id){
+  const d=S.dettesPerso.find(x=>x.id==id);
+  if(!d||!isCreditFormel(d))return;
+  const gs=getComptesGarantie();
+  if(!gs.length)return toast('❌ Aucun compte « garantie » (renommez le compte du fonds de garantie)');
+  const resteCap=d.montant-(d.rembourse||0);
+  if(resteCap<=0)return toast('✅ Ce crédit est déjà soldé');
+  const g0=gs[0];
+  modal(`<div class="mft">🔒 Solder avec le fonds de garantie — ${d.personne}</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Capital restant dû</span><strong style="color:var(--red)">${F(resteCap)}</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Fonds de garantie disponible</span><strong style="color:var(--purple)" id="sg-solde">${F(+g0.solde||0)}</strong></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Compte de garantie</label><select class="fi" id="sg-cid" onchange="const c=S.comptes.find(x=>x.id==this.value);document.getElementById('sg-solde').textContent=F(+(c&&c.solde)||0)">${gs.map(c=>`<option value="${c.id}">${c.nom} — ${F(+c.solde||0)}</option>`).join('')}</select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Capital à solder</label><input class="fi" type="number" id="sg-cap" value="${Math.min(resteCap,Math.max(0,+g0.solde||0))}" min="1" max="${resteCap}"></div>
+      <div class="fg"><label class="fl">Intérêts / frais prélevés</label><input class="fi" type="number" id="sg-int" value="0" min="0"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Le compte de garantie est débité (capital + intérêts). Seuls les intérêts sont comptés comme dépense. Si le capital est entièrement couvert, le crédit passe à « Soldé ». Le reliquat éventuel du fonds reste sur son compte : récupérez-le ensuite par un transfert vers votre compte bancaire.</div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="saveSoldeGarantie(${id})">🔒 Confirmer</button>
+    </div>`);
+}
+function saveSoldeGarantie(id){
+  const d=S.dettesPerso.find(x=>x.id==id);
+  if(!d||!isCreditFormel(d))return;
+  const gid=document.getElementById('sg-cid').value;
+  const g=S.comptes.find(c=>c.id==gid);
+  if(!g)return toast('❌ Compte de garantie introuvable');
+  const capital=Math.round(+document.getElementById('sg-cap').value||0);
+  const interet=Math.max(0,Math.round(+document.getElementById('sg-int').value||0));
+  const resteCap=d.montant-(d.rembourse||0);
+  if(capital<=0)return toast('❌ Capital invalide');
+  if(capital>resteCap)return toast(`❌ Capital trop élevé : il reste ${F(resteCap)}`);
+  const mt=capital+interet;
+  if(mt>(+g.solde||0))return toast(`❌ Fonds de garantie insuffisant (${F(+g.solde||0)})`);
+  debiterCompte(gid,mt);
+  d.rembourse=(d.rembourse||0)+capital;
+  if(!S.depenses)S.depenses=[];
+  if(interet>0) S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Intérêts emprunt',mt:interet,mode:nomCompte(gid),cid:gid,notes:`Intérêts prélevés sur le fonds de garantie — ${d.personne}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+  if(!d.paiements)d.paiements=[];
+  d.paiements.push({id:genId(),date:D(),cid:gid,mt,capital,interet,garantie:true});
+  d.interetsPayes=(d.interetsPayes||0)+interet;
+  let cum=0;(d.echeancier||[]).forEach(e=>{cum+=(+e.capital||0);e.paye=(d.rembourse>=cum-1);});
+  if(d.rembourse>=d.montant){d.statut='Soldé';toast('✅ Crédit soldé avec le fonds de garantie !');}
+  else toast(`✅ ${F(capital)} de capital réglé · Reste: ${F(d.montant-d.rembourse)}`);
+  saveData();closeModal();rDettes();
 }
 function saveRembours(id){
   const d=S.dettesPerso.find(x=>x.id==id);if(!d)return;
