@@ -12629,7 +12629,7 @@ function rDettes(){
         <td class="tdm">${d.personne}</td>
         <td><span class="badge" style="background:${d.typeDette==='emprunter'?'var(--red-bg)':'var(--green-bg)'};color:${d.typeDette==='emprunter'?'var(--red)':'var(--green)'}">${d.typeDette==='emprunter'?'📥 Emprunt':'📤 Prêt'}</span></td>
         <td style="font-weight:600">${F(d.montant)}</td>
-        <td style="color:var(--green)">${F(d.rembourse||0)}</td>
+        <td style="color:var(--green)">${F(d.rembourse||0)}${isCreditFormel(d)&&(d.interetsPayes||0)>0?`<div style="font-size:10px;color:var(--amber)">+ ${F(d.interetsPayes)} d'intérêts</div>`:''}</td>
         <td style="color:var(--red);font-weight:600">${F(reste)}</td>
         <td><span class="badge bb">${compte?compte.nom:'—'}</span></td>
         <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:${d.typeDette==='emprunter'?'var(--amber)':'var(--teal)'};height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
@@ -13001,6 +13001,7 @@ function saveDettePerso(){
     echeance:derniereEch,
     taux,tauxPeriode,duree,freq,amortType,
     echeancier,
+    credit:(typeDette==='emprunter'&&duree>0),interetsPayes:0,paiements:[],
     notes:document.getElementById('dp-notes').value,
     statut:'En cours'
   });
@@ -13055,10 +13056,22 @@ function genEcheancier(capital, tauxSaisi, tauxPeriodeType, duree, freq, amortTy
   }
   return lignes;
 }
+// Crédit formel (banque / microfinance) : le remboursement se découpe en capital (pas une dépense) et intérêts (vraie charge)
+function isCreditFormel(d){
+  return !!d&&d.typeDette==='emprunter'&&(d.credit===true||(!d.sourceType&&Array.isArray(d.echeancier)&&d.echeancier.length>0&&(+d.taux||0)>0));
+}
+function majCapitalRb(){
+  const mt=+(document.getElementById('rb-mt')||{}).value||0;
+  const it=Math.min(mt,Math.max(0,+(document.getElementById('rb-int')||{}).value||0));
+  const el=document.getElementById('rb-cap');
+  if(el) el.textContent=F(mt-it);
+}
 function rembourserDette(id){
   const d=S.dettesPerso.find(x=>x.id==id);if(!d)return;
   const reste=d.montant-(d.rembourse||0);
   const hasAmort=d.echeancier&&d.echeancier.length>0;
+  const credit=isCreditFormel(d);
+  const nxt=credit?d.echeancier.find(e=>!e.paye):null;
   modal(`<div class="mft">${d.typeDette==='emprunter'?'💳 Rembourser':'💰 Récupérer'} — ${d.personne}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Total</span><strong>${F(d.montant)}</strong></div>
@@ -13066,9 +13079,14 @@ function rembourserDette(id){
       <div style="display:flex;justify-content:space-between"><span>Reste</span><strong style="color:var(--red)">${F(reste)}</strong></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="fl">Montant</label><input class="fi" type="number" id="rb-mt" value="${reste}" max="${reste}"></div>
+      <div class="fg"><label class="fl">${credit?'Montant payé à la banque':'Montant'}</label><input class="fi" type="number" id="rb-mt" value="${credit&&nxt?nxt.mensualite:reste}" ${credit?'oninput="majCapitalRb()"':`max="${reste}"`}></div>
       <div class="fg"><label class="fl">Compte</label>${selectComptes('rb-cid', d.cid||premierCompteId())}</div>
     </div>
+    ${credit?`<div class="fr">
+      <div class="fg"><label class="fl">dont intérêts (et frais)</label><input class="fi" type="number" id="rb-int" value="${nxt?nxt.interet:0}" min="0" oninput="majCapitalRb()"></div>
+      <div class="fg"><label class="fl">Capital remboursé</label><div style="padding:9px 0;font-weight:700;color:var(--purple)" id="rb-cap">${F(nxt?nxt.mensualite-nxt.interet:reste)}</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Seuls les intérêts sont comptés comme dépense ; le capital réduit la dette. Le prêt est soldé quand tout le capital est remboursé.</div>`:''}
     ${!hasAmort?`<div style="border:1px dashed var(--navy);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">📊 Générer un tableau d'amortissement</div>
       <div class="fr">
@@ -13117,11 +13135,29 @@ function saveRembours(id){
   const mt=+document.getElementById('rb-mt').value||0;
   const cid=document.getElementById('rb-cid').value;
   if(mt<=0)return toast('❌ Montant invalide');
-  d.rembourse=(d.rembourse||0)+mt;
+  const credit=isCreditFormel(d);
+  let capital=mt, interet=0;
+  if(credit){
+    interet=Math.min(mt,Math.max(0,Math.round(+(document.getElementById('rb-int')||{}).value||0)));
+    capital=mt-interet;
+    const resteCap=d.montant-(d.rembourse||0);
+    if(capital>resteCap) return toast(`❌ Capital trop élevé : il ne reste que ${F(resteCap)} de capital à rembourser`);
+  }
+  d.rembourse=(d.rembourse||0)+capital;
   if(d.typeDette==='emprunter'){
     debiterCompte(cid,mt);
     if(!S.depenses)S.depenses=[];
-    S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Remboursement emprunt',mt,mode:nomCompte(cid),cid,notes:`Remboursement emprunt — ${d.personne}`,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
+    const heureR=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    if(credit){
+      // Seuls les intérêts sont une charge ; le capital est suivi dans la dette
+      if(interet>0) S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Intérêts emprunt',mt:interet,mode:nomCompte(cid),cid,notes:`Intérêts — ${d.personne}`,heure:heureR,bid:getBid(),ts:Date.now()});
+      if(!d.paiements)d.paiements=[];
+      d.paiements.push({id:genId(),date:D(),cid,mt,capital,interet});
+      d.interetsPayes=(d.interetsPayes||0)+interet;
+      let cum=0;(d.echeancier||[]).forEach(e=>{cum+=(+e.capital||0);e.paye=(d.rembourse>=cum-1);});
+    } else {
+      S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Remboursement emprunt',mt,mode:nomCompte(cid),cid,notes:`Remboursement emprunt — ${d.personne}`,heure:heureR,bid:getBid(),ts:Date.now()});
+    }
   } else {
     crediterCompte(cid,mt);
   }
@@ -13212,9 +13248,14 @@ function voirTableauAmort(id){
         <div style="font-size:17px;font-weight:800;color:var(--navy)">${F(d.montant)}</div>
       </div>
       <div style="flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px 12px;min-width:140px">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Déjà remboursé</div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase">${isCreditFormel(d)?'Capital remboursé':'Déjà remboursé'}</div>
         <div style="font-size:17px;font-weight:800;color:var(--green)">${F(paye)}</div>
       </div>
+      ${isCreditFormel(d)?`<div style="flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px 12px;min-width:140px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Intérêts payés</div>
+        <div style="font-size:17px;font-weight:800;color:var(--amber)">${F(d.interetsPayes||0)}</div>
+        <div style="font-size:10px;color:var(--text3)">sur ${F(d.echeancier.reduce((t,e)=>t+(+e.interet||0),0))} prévus</div>
+      </div>`:''}
       <div style="flex:1;background:var(--surface2);border-radius:var(--rs);padding:10px 12px;min-width:140px">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Reste dû</div>
         <div style="font-size:17px;font-weight:800;color:var(--red)">${F(reste)}</div>
@@ -14216,6 +14257,13 @@ function rCaisseGlobal(){
     if(x.typeDette==='emprunter') ev.push({d:String(x.date).slice(0,10),b:accBid(a),mt:+x.montant,k:'t'});
     else if(x.typeDette==='preter') ev.push({d:String(x.date).slice(0,10),b:accBid(a),mt:-x.montant,k:'t'});
   });
+
+  // Remboursements de capital de crédit (hors dépenses) : sortie du compte débité
+  (S.dettesPerso||[]).filter(x=>!x._deleted&&Array.isArray(x.paiements)).forEach(x=>x.paiements.forEach(p=>{
+    if(!p||!p.date||!(+p.capital>0)||!cashIds.has(String(p.cid))) return;
+    const a=comptes.find(c=>String(c.id)===String(p.cid));
+    ev.push({d:String(p.date).slice(0,10),b:accBid(a),mt:-(+p.capital),k:'t'});
+  }));
 
   // Ajustements manuels de solde (écart de caisse : ventes non enregistrées, etc.)
   (S.ajustements_solde||[]).filter(x=>!x._deleted&&x.date&&(+x.diff||0)!==0&&cashIds.has(String(x.cid))).forEach(x=>{
