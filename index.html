@@ -26797,7 +26797,7 @@ async function cmUndoLoadHistory(){
   const newEntries=cmUndo.entries;
   if(saved){
     cmUndo.entries=[...saved.entries,...newEntries].slice(-50);
-    cmUndo.redo=newEntries.length?[]:saved.redo.slice(-50);
+    cmUndo.redo=saved.redo.slice(-50);
     cmUndo.savedAt=Number(saved.savedAt)||0;
   }
   cmUndo.loading=false;
@@ -26849,17 +26849,81 @@ function cmUndoRecord(){
     last.patches=[...map.values()].filter(p=>!cmUndoEqual(p.before,p.after));
     if(!last.patches.length)cmUndo.entries.pop();
   }else{
-    cmUndo.entries.push({id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),date:new Date().toISOString(),label,user:S.session?.nom||'Utilisateur',bid:getBid(),patches});
+    cmUndo.entries.push({id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),date:new Date().toISOString(),order:Math.max(Date.now(),(cmUndo.savedAt||0)+1),label,user:S.session?.nom||'Utilisateur',bid:getBid(),patches});
   }
-  cmUndo.lastGroup=ev?.id||null;cmUndo.redo=[];cmUndoPersist();
+  cmUndo.lastGroup=ev?.id||null;cmUndoPersist();
 }
 function cmUndoCurrent(p,data=S){
   if(p.kind==='record')return (data[p.col]||[]).find(x=>x&&!x._deleted&&String(x.id)===p.id)||null;
   return data[p.col]??null;
 }
-function cmUndoConflicts(entry,redo){
-  return entry.patches.filter(p=>!cmUndoKeys().includes(p.col)||!cmUndoEqual(cmUndoCurrent(p),redo?p.before:p.after));
+function cmUndoOrder(e){return Number(e.order)||Date.parse(e.date)||0;}
+function cmUndoMovement(e){
+  return e.patches.some(p=>['ventes','achats','ventes_services','depenses','revenus','transferts','dettesPerso','fournisseurs','salaires','avances_employe','locations_chaises','transferts_stock'].includes(p.col));
 }
+function cmUndoAdditive(p,key,entry){
+  return p.kind==='record'&&cmUndoMovement(entry)&&((p.col==='comptes'&&key==='solde')||(p.col==='stock'&&['qv','ea'].includes(key)));
+}
+function cmUndoNumber(value,p,key){
+  if(value==null&&p.col==='stock'&&['qv','ea'].includes(key))return 0;
+  return typeof value==='number'&&Number.isFinite(value)?value:NaN;
+}
+function cmUndoKnownBalance(p,key,entry,current,expected){
+  const active=new Set(cmUndo.entries.map(e=>e.id));
+  const related=[...cmUndo.entries,...cmUndo.redo].sort((a,b)=>cmUndoOrder(a)-cmUndoOrder(b)).flatMap(e=>e.patches.filter(q=>q.kind==='record'&&q.col===p.col&&q.id===p.id&&q.before&&q.after&&!cmUndoEqual(q.before[key],q.after[key])).map(q=>({e,q})));
+  // A later manual balance/stock reset is not a commutative money movement.
+  if(related.some(({e,q})=>active.has(e.id)&&cmUndoOrder(e)>cmUndoOrder(entry)&&!cmUndoAdditive(q,key,e)))return false;
+  if(current===expected)return true;
+  if(!related.length)return false;
+  const base=cmUndoNumber(related[0].q.before[key],p,key);
+  if(!Number.isFinite(base))return false;
+  let value=base;
+  for(const {e,q} of related){
+    if(!active.has(e.id))continue;
+    if(!cmUndoAdditive(q,key,e))return false;
+    const a=cmUndoNumber(q.before[key],q,key),b=cmUndoNumber(q.after[key],q,key);
+    if(!Number.isFinite(a)||!Number.isFinite(b))return false;
+    value+=b-a;
+  }
+  return Math.abs(value-current)<1e-8;
+}
+function cmUndoPlan(entry,redo){
+  const patches=[],conflicts=[];
+  const meta=new Set(['ts','updatedAt','date_ts','_cmUndoRev']);
+  for(const p of entry.patches){
+    if(!cmUndoKeys().includes(p.col)){conflicts.push({...p,reason:'Type de donnée non pris en charge.'});continue;}
+    const expected=redo?p.before:p.after,target=redo?p.after:p.before,current=cmUndoCurrent(p);
+    let next=cmUndoClone(current),reason='';
+    if(p.kind!=='record'||expected===null||target===null){
+      if(!cmUndoEqual(current,expected))reason='Cet élément a été modifié par une autre action.';
+      else next=cmUndoClone(target);
+    }else if(!current){reason='Cet élément n’existe plus.';}
+    else{
+      for(const key of new Set([...Object.keys(expected),...Object.keys(target)])){
+        if(meta.has(key)||cmUndoEqual(expected[key],target[key]))continue;
+        if(cmUndoAdditive(p,key,entry)){
+          const now=cmUndoNumber(current[key],p,key),from=cmUndoNumber(expected[key],p,key),to=cmUndoNumber(target[key],p,key);
+          if(![now,from,to].every(Number.isFinite)||!cmUndoKnownBalance(p,key,entry,now,from)){
+            reason='Le solde ou le stock a changé en dehors des opérations compatibles de cet historique.';break;
+          }
+          next[key]=now+(to-from);
+          if(!Number.isFinite(next[key])||(p.col==='stock'&&next[key]<0)){reason='Cette action rendrait les quantités de stock incohérentes.';break;}
+        }else{
+          if(!cmUndoEqual(current[key],expected[key])){reason='Une autre action a modifié « '+key+' ». Annulez d’abord cette action liée.';break;}
+          if(Object.prototype.hasOwnProperty.call(target,key))next[key]=cmUndoClone(target[key]);else delete next[key];
+        }
+      }
+      if(!reason&&p.col==='stock'){
+        const available=x=>Number(x.si||0)+Number(x.ea||0)-Number(x.qv||0);
+        if(available(next)<0&&available(next)<available(current))reason='Des articles de cet achat ont déjà été utilisés ou vendus. Le stock deviendrait négatif.';
+      }
+    }
+    if(reason)conflicts.push({...p,reason});
+    else patches.push({...p,before:cmUndoClone(redo?current:next),after:cmUndoClone(redo?next:current)});
+  }
+  return {patches,conflicts};
+}
+function cmUndoConflicts(entry,redo){return cmUndoPlan(entry,redo).conflicts;}
 function cmUndoPrune(data){
   const marks=data.undo_tombstones||[];
   marks.forEach(m=>{
@@ -26907,33 +26971,38 @@ function cmUndoDetails(entry,redo){
     return `<li style="margin:8px 0"><b>${cmUndoEsc(cmUndoNames[p.col]||p.col)} ${cmUndoEsc(name)}</b> — ${to===null?'retirer':from===null?'restaurer':'modifier'}${changes.length?'<br>'+changes.join(' · '):''}</li>`;
   }).join('');
 }
-function cmUndoPreview(redo){
+function cmUndoPreview(redo,id){
   if(S.session?.role!=='admin')return toast('🔒 Retour en arrière réservé à l’administrateur');
-  const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];if(!entry)return;
+  const list=redo?cmUndo.redo:cmUndo.entries,entry=id?list.find(e=>e.id===id):list[list.length-1];if(!entry)return;
   if(cmUndo.loading)return toast('⏳ Chargement de l’historique en cours…');
   if(cmUndo.pending)return toast('⏳ Attendez la fin de l’enregistrement avant de revenir en arrière.');
   if(cmUndo.tabChanged)return toast('⚠️ Des données ont changé dans un autre onglet. Rechargez cette page avant de continuer.',6000);
-  const conflicts=cmUndoConflicts(entry,redo);
-  modal(`<div class="mft">${redo?'Rétablir':'Annuler'} la dernière action</div><p><b>${cmUndoEsc(entry.label)}</b></p><p style="margin:10px 0">${cmUndoEsc(entry.user)} · ${cmUndoEsc(new Date(entry.date).toLocaleString('fr-FR'))}</p>
-    ${conflicts.length?'<p style="color:var(--red)">Action bloquée : des données liées ont changé depuis cette opération. Aucun solde ni stock ne sera écrasé.</p>':'<p>Les éléments suivants seront restaurés ensemble :</p>'}
-    <ul style="padding-left:20px;max-height:300px;overflow:auto;font-size:12px">${cmUndoDetails(entry,redo)}</ul>
+  const plan=cmUndoPlan(entry,redo),conflicts=plan.conflicts;
+  cmUndo.selection={id:entry.id,redo:!!redo,patches:cmUndoClone(plan.patches)};
+  modal(`<div class="mft">${redo?'Rétablir':'Annuler'} cette action</div><p><b>${cmUndoEsc(entry.label)}</b></p><p style="margin:10px 0">${cmUndoEsc(entry.user)} · ${cmUndoEsc(new Date(entry.date).toLocaleString('fr-FR'))}</p>
+    ${conflicts.length?`<p style="color:var(--red)">Cette action dépend d’autres modifications :</p><ul style="padding-left:20px;color:var(--red)">${conflicts.map(p=>`<li>${cmUndoEsc(cmUndoNames[p.col]||p.col)} : ${cmUndoEsc(p.reason)}</li>`).join('')}</ul>`:'<p>Seule cette action sera corrigée. Les opérations compatibles plus récentes seront conservées.</p>'}
+    <ul style="padding-left:20px;max-height:300px;overflow:auto;font-size:12px">${cmUndoDetails(plan,redo)}</ul>
     <div class="mff"><button class="btn" onclick="closeModal()">Fermer sans modifier</button>${conflicts.length?'':`<button class="btn btn-primary" onclick="cmUndoExecute(${!!redo},'${entry.id}')">Confirmer ${redo?'le rétablissement':'l’annulation'}</button>`}</div>`);
 }
 async function cmUndoExecute(redo,id){
   if(S.session?.role!=='admin'||cmUndo.busy||cmUndo.pending||cmUndo.loading||cmUndo.tabChanged||window._modeDemo)return;
-  const list=redo?cmUndo.redo:cmUndo.entries,entry=list[list.length-1];
-  if(!entry||entry.id!==id)return toast('⚠️ L’historique a changé. Rouvrez la confirmation.');
-  if(cmUndoConflicts(entry,redo).length)return toast('⚠️ Données modifiées depuis cette action : retour en arrière bloqué.',6000);
+  const list=redo?cmUndo.redo:cmUndo.entries,index=list.findIndex(e=>e.id===id),entry=list[index];
+  if(!entry)return toast('⚠️ L’historique a changé. Rouvrez la confirmation.');
+  const plan=cmUndoPlan(entry,redo);
+  if(plan.conflicts.length)return toast('⚠️ Données modifiées depuis cette action : retour en arrière bloqué.',6000);
   try{
     const disk=JSON.parse(localStorage.getItem('christmedia_v2')||'null');
     if(disk&&!cmUndoEqual(cmUndoSnapshot(disk),cmUndoSnapshot(S)))return toast('⚠️ Données non enregistrées ou modifiées dans un autre onglet. Rechargez la page.',6000);
   }catch(e){return toast('❌ Impossible de vérifier la sauvegarde locale');}
-  const next=cmUndoApplyPatches(cmUndoClone(S),entry,redo);
+  if(cmUndo.selection&&cmUndo.selection.id===id&&cmUndo.selection.redo===!!redo&&!cmUndoEqual(cmUndo.selection.patches,plan.patches))return toast('⚠️ Les montants ont changé. Rouvrez la confirmation.');
+  const next=cmUndoApplyPatches(cmUndoClone(S),plan,redo);
   // Validate the entire local save before touching in-memory balances.
   try{localStorage.setItem('christmedia_v2',JSON.stringify(cleanDataForStorage(next)));}
   catch(e){return toast('❌ Stockage indisponible : aucune annulation effectuée',6000);}
   cmUndo.busy=true;cmUndo.suppress=true;
-  S=next;list.pop();(redo?cmUndo.entries:cmUndo.redo).push(entry);cmUndo.lastGroup=null;
+  S=next;list.splice(index,1);(redo?cmUndo.entries:cmUndo.redo).push(entry);
+  if(redo)cmUndo.entries.sort((a,b)=>cmUndoOrder(a)-cmUndoOrder(b));
+  cmUndo.lastGroup=null;cmUndo.selection=null;
   cmUndo.baseline=cmUndoSnapshot(S);cmUndoPersist();
   closeModal();
   try{
@@ -26953,17 +27022,22 @@ function rAnnulerRetablir(){
   const el=document.getElementById('content');
   if(S.session?.role!=='admin'){el.innerHTML='<div class="card">Accès réservé à l’administrateur.</div>';return;}
   el.innerHTML=`<div class="card" style="margin-bottom:16px;border-left:4px solid var(--navy)"><h3 style="margin-bottom:10px">↶ Annuler / Rétablir</h3>
-    <p style="font-size:13px;line-height:1.6">Revenez sur vos dernières modifications enregistrées : ventes, paiements de dettes, achats, dépenses, transferts, stocks et autres données de gestion. Les comptes et les éléments liés sont restaurés ensemble, dans l’ordre inverse des actions.</p>
-    <p style="font-size:12px;color:var(--text2);margin-top:10px">Historique de ce navigateur, toutes boutiques : jusqu’à 50 étapes selon l’espace disponible. Il commence avec cette version. Une nouvelle modification supprime la possibilité de rétablir les actions annulées.</p>
+    <p style="font-size:13px;line-height:1.6">Revenez sur vos dernières modifications enregistrées : ventes, paiements de dettes, achats, dépenses, transferts, stocks et autres données de gestion. Choisissez directement l’action à annuler ou à rétablir dans les listes ci-dessous. Les comptes et les éléments liés sont corrigés ensemble, en conservant les autres opérations compatibles.</p>
+    <p style="font-size:12px;color:var(--text2);margin-top:10px">Historique de ce navigateur, toutes boutiques : jusqu’à 50 étapes selon l’espace disponible. Il commence avec cette version. Les actions annulées restent disponibles dans la liste « Actions annulées ». Une opération dépendante ou un solde modifié hors de cet historique peut bloquer une correction.</p>
     <p style="font-size:12px;color:var(--text2);margin-top:8px">Ce retour en arrière corrige les données de l’application. Il ne rappelle pas un paiement bancaire réel, un message envoyé ou une impression. Les connexions, droits d’accès, notes privées, réinitialisations et fichiers externes ne sont pas concernés.</p>
     ${cmUndo.pending?'<p style="margin-top:10px">⏳ Enregistrement en cours…</p>':''}
     <p role="status" style="font-size:12px;margin-top:10px;color:${cmUndo.storageStatus==='saved'?'var(--green)':'var(--text2)'}">${cmUndo.loading?'Chargement de l’historique…':cmUndo.storageStatus==='writing'?'Enregistrement de l’historique…':cmUndo.storageStatus==='saved'?'✓ Historique enregistré sur cet appareil':'⚠ Historique non enregistré après fermeture'}</p>
     ${cmUndo.warning?`<p style="color:var(--amber);margin-top:10px">${cmUndoEsc(cmUndo.warning)}</p>${!cmUndo.tabChanged?'<button class="btn btn-sm" onclick="cmUndoPersist()">Réessayer l’enregistrement</button>':''}`:''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn btn-primary" onclick="cmUndoPreview(false)" ${!cmUndo.entries.length||cmUndo.busy||cmUndo.pending||cmUndo.loading?'disabled':''}>↶ Annuler la dernière action</button><button class="btn" onclick="cmUndoPreview(true)" ${!cmUndo.redo.length||cmUndo.busy||cmUndo.pending||cmUndo.loading?'disabled':''}>↷ Rétablir la dernière annulation</button></div>
     </div>
-    ${cmUndo.redo.length?`<div class="card" style="margin-bottom:12px">Prochaine action à rétablir : <b>${cmUndoEsc(cmUndo.redo[cmUndo.redo.length-1].label)}</b></div>`:''}
     <p class="st">Actions enregistrées (${cmUndo.entries.length})</p>
-    ${cmUndo.entries.length?cmUndo.entries.slice().reverse().map((e,i)=>`<div class="card" style="margin-bottom:10px"><div style="font-weight:600">${i===0?'Dernière action · ':''}${cmUndoEsc(e.label)}</div><div style="font-size:12px;color:var(--text2);margin-top:5px">${cmUndoEsc(new Date(e.date).toLocaleString('fr-FR'))} · ${cmUndoEsc(e.user)} · Boutique ${cmUndoEsc(e.bid)}</div><div style="font-size:12px;margin-top:7px">${cmUndoSummary(e)}</div></div>`).join(''):'<div class="card">Aucune action à annuler pour le moment. Les prochaines modifications enregistrées apparaîtront ici.</div>'}`;
+    ${cmUndo.entries.length?cmUndo.entries.slice().reverse().map((e,i)=>cmUndoActionCard(e,false,i===0)).join(''):'<div class="card">Aucune action à annuler pour le moment.</div>'}
+    <p class="st" style="margin-top:20px">Actions annulées (${cmUndo.redo.length})</p>
+    ${cmUndo.redo.length?cmUndo.redo.slice().reverse().map(e=>cmUndoActionCard(e,true,false)).join(''):'<div class="card">Les actions que vous annulez apparaîtront ici pour pouvoir les rétablir.</div>'}`;
+}
+function cmUndoActionCard(e,redo,last){
+  const disabled=cmUndo.busy||cmUndo.pending||cmUndo.loading;
+  return `<div class="card" style="margin-bottom:10px"><div style="font-weight:600">${last?'Dernière action · ':''}${cmUndoEsc(e.label)}</div><div style="font-size:12px;color:var(--text2);margin-top:5px">${cmUndoEsc(new Date(e.date).toLocaleString('fr-FR'))} · ${cmUndoEsc(e.user)} · Boutique ${cmUndoEsc(e.bid)}</div><div style="font-size:12px;margin-top:7px">${cmUndoSummary(e)}</div><button class="btn ${redo?'':'btn-primary'}" style="margin-top:12px" onclick="cmUndoPreview(${!!redo},'${e.id}')" ${disabled?'disabled':''}>${redo?'↷ Rétablir cette action':'↶ Annuler cette action'}</button></div>`;
 }
 function cmUndoInit(){
   cmUndo.baseline=cmUndoSnapshot(S);cmUndo.ready=true;
@@ -26999,6 +27073,7 @@ saveLocal=function(data){
 };
 cmUndoInit();
 // ─── FIN ANNULER / RÉTABLIR ───
+
 
 
 // Marqueur posé après l'exécution du script principal (pas une simple déclaration).
