@@ -4351,6 +4351,14 @@ function rDash(){
         </div>
         <div class="mv" style="color:${total>=0?'var(--green)':'var(--red)'}">${F(total)}</div>
         <div class="ms">${detail}</div>
+        ${(()=>{
+          const liq=(S.comptes||[]).filter(isCompteLiquidite);
+          const autres=liq.filter(c=>!/^vente\s+/i.test((c.nom||'').trim()));
+          if(!autres.length)return '';
+          const fonct=autres.reduce((t,c)=>t+(+c.solde||0),0);
+          const totL=liq.reduce((t,c)=>t+(+c.solde||0),0);
+          return `<div class="ms" style="margin-top:6px">+ Fonds de fonctionnement : <strong style="color:${fonct>=0?'var(--green)':'var(--red)'}">${F(fonct)}</strong> &nbsp;=&nbsp; Liquidité totale (Caisse globale) : <strong>${F(totL)}</strong></div>`;
+        })()}
       </div>`;
     })()}
     ${(()=>{
@@ -14140,12 +14148,16 @@ function rFluxGlobal(){
 }
 
 // ─── MODULE : CAISSE ESPÈCES — TOUTES BOUTIQUES (liquide par jour) ───
+// Comptes comptés dans la liquidité : comptes « Vente … » et comptes de fonds de fonctionnement (hors comptes bloqués)
+function isCompteLiquidite(c){
+  return !!c&&(/^vente\s+/i.test((c.nom||'').trim())||/fonctionnement/i.test(c.nom||''))&&!c.bloque;
+}
 function rCaisseGlobal(){
   const bouts=S.boutiques||[];
   const defBid=bouts[0]?.id||1;
   const comptes=S.comptes||[];
   const accBid=c=>c.bid||defBid;
-  const cashAccs=comptes.filter(c=>(/^vente\s+/i.test((c.nom||'').trim())||/fonctionnement/i.test(c.nom||''))&&!c.bloque);
+  const cashAccs=comptes.filter(isCompteLiquidite);
   const cashIds=new Set(cashAccs.map(c=>String(c.id)));
   // retrouve le compte espèces d'une opération
   const resolve=(cid,mode,bid)=>{
@@ -14244,6 +14256,7 @@ function rCaisseGlobal(){
       <div class="mv" style="color:var(--teal);font-size:30px">${fmt(totSold)}</div>
       <div class="ms" style="font-size:13px;margin-top:6px">Aujourd'hui : ventes <b style="color:var(--green)">${F(totEnt)}</b> − dépenses <b style="color:var(--red)">${F(totSor)}</b> = <b style="color:${col(totEnt-totSor)}">${fmt(totEnt-totSor)}</b> de reste du jour</div>
       <div class="ms" style="font-size:13px">Ouverture <b>${fmt(totSold-(totEnt-totSor+totTr+totAj-totTn))}</b> + reste du jour ${totTr?'+ transferts/emprunts <b>'+fmt(totTr)+'</b> ':''}${totAj?'+ ajustement de caisse <b>'+fmt(totAj)+'</b> ':''}${totTn?'− tontine versée <b>'+fmt(totTn)+'</b> ':''}= <b>${fmt(totSold)}</b> en caisse</div>
+      ${(()=>{const sv=cashAccs.filter(c=>/^vente\s+/i.test((c.nom||'').trim())).reduce((t,c)=>t+(+c.solde||0),0);const sf=totSold-sv;return `<div class="ms" style="font-size:12px;margin-top:6px">Dont comptes de vente : <b>${fmt(sv)}</b> · fonds de fonctionnement : <b style="color:${col(sf)}">${fmt(sf)}</b></div>`;})()}
     </div>
 
     <p class="st">Aujourd'hui, boutique par boutique</p>
