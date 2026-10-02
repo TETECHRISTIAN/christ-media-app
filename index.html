@@ -4296,7 +4296,7 @@ function rDash(){
   const curM=D().slice(0,7);
   const prevDate=new Date(now.getFullYear(),now.getMonth()-1,1);
   const prevM=prevDate.toISOString().slice(0,7);
-  const svcsB=(S.ventes_services||[]).filter(v=>v.bid==bid);
+  const svcsB=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.bid==bid);
   const ventesM=mois=>ventesB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(mois)).reduce((s,v)=>s+v.mt,0)
                     +(svcsB.filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(mois)).reduce((s,v)=>s+(v.avance||v.mt),0));
   const achatsB=(S.achats||[]).filter(a=>a.bid==bid||((!a.bid)&&bid==(S.boutiques[0]?.id||1)));
@@ -4963,30 +4963,118 @@ function confirmerPaiementVente(id){
 }
 function delVente(id){
   if(S.session&&S.session.role!=='admin'){toast('🔒 Seul l\'admin peut supprimer une vente');return;}
-  if(!confirm('Supprimer cette vente ?'))return;
-  const vDel = S.ventes.find(v=>v.id==id);
-  if(vDel) addAudit('DELETE','Vente','Suppression vente '+F(vDel.mt)+' — '+(vDel.client||'—')+' du '+vDel.date, {id:vDel.id,mt:vDel.mt,client:vDel.client}, null);
   const v=S.ventes.find(v=>v.id==id);
-  if(v){
-    // 1. Remettre le stock
-    const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1}];
-    lignes.forEach(l=>{const a=ga(l.aid);if(a)a.qv=Math.max(0,(a.qv||0)-l.qte);});
+  if(!v||v._deleted){toast('⚠️ Vente introuvable ou déjà annulée');return;}
+  annulerVenteLive(id);
+}
 
-    // 2. Annuler les encaissements réels sur les comptes
-    if(v.statut==='Payé' && v.cid){
-      // Vente entièrement payée d'un coup → annuler le crédit
-      debiterCompte(v.cid, v.mt);
-    } else {
-      // Vente à crédit : annuler uniquement ce qui a été versé
-      if(v.acomptes) v.acomptes.forEach(a=>{if(a.cid) debiterCompte(a.cid, a.mt);});
-      if(v.tranches) v.tranches.forEach(t=>{if(t.cid) debiterCompte(t.cid, t.mt);});
+// ─── ANNULATION D'UNE VENTE (stock + comptes + fidélité) ───
+// Encaissements réellement crédités sur les comptes pour cette vente
+function _venteMouvementsComptes(v){
+  const out=[];
+  const aAcomptes=(v.acomptes||[]).some(a=>a&&a.cid&&a.mt>0);
+  const aTranches=(v.tranches||[]).some(t=>t&&t.cid&&t.mt>0);
+  const creditComplet = v._compte_credite===true || (v.statut==='Payé' && !aAcomptes && !aTranches && v._compte_credite!==false);
+  if(creditComplet && v.cid) out.push({cid:v.cid, mt:v.mt||0, label:'Encaissement'});
+  (v.acomptes||[]).forEach(a=>{ if(a&&a.cid&&a.mt>0) out.push({cid:a.cid, mt:a.mt, label:'Acompte'}); });
+  (v.tranches||[]).forEach(t=>{ if(t&&t.cid&&t.mt>0&&!t.sansMouvementArgent) out.push({cid:t.cid, mt:t.mt, label:'Tranche'}); });
+  return out;
+}
+// Lignes de la vente qui ont réellement sorti du stock
+function _venteLignesStock(v){
+  const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1}];
+  return lignes
+    .filter(l=>l && l.aid!=null && l.type!=='service' && l.typePrix!=='service')
+    .map(l=>({aid:l.aid,qte:+l.qte||0,a:ga(l.aid)}))
+    .filter(l=>l.a && l.qte>0);
+}
+function annulerVenteLive(id){
+  if(S.session&&S.session.role!=='admin'){toast('🔒 Seul l\'admin peut annuler une vente');return;}
+  const v=(S.ventes||[]).find(x=>x.id==id);
+  if(!v||v._deleted){toast('⚠️ Vente introuvable ou déjà annulée');return;}
+  const lignesStock=_venteLignesStock(v);
+  const mouv=_venteMouvementsComptes(v);
+  // Cumul par compte (plusieurs tranches sur le même compte)
+  const parCompte={};
+  mouv.forEach(m=>{parCompte[m.cid]=(parCompte[m.cid]||0)+m.mt;});
+  const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const stockHtml=lignesStock.length
+    ? lignesStock.map(l=>`<div class="total-preview-row"><span>📦 ${esc(l.a.nom)} ×${l.qte}</span><span style="color:var(--green)">Stock ${sa(l.a)} → ${sa(l.a)+l.qte}</span></div>`).join('')
+    : '<div class="total-preview-row"><span style="color:var(--text3)">Aucun article à remettre en stock</span><span></span></div>';
+  let negatif=false;
+  const comptesHtml=Object.keys(parCompte).length
+    ? Object.keys(parCompte).map(cid=>{
+        const c=(S.comptes||[]).find(c=>c.id==cid);
+        const avant=c?(c.solde||0):0, apres=avant-parCompte[cid];
+        if(apres<0) negatif=true;
+        return `<div class="total-preview-row"><span>💳 ${esc(c?c.nom:'Compte supprimé')}</span><span style="color:${apres<0?'var(--red)':'var(--text)'}">−${F(parCompte[cid])} (${F(avant)} → ${F(apres)})</span></div>`;
+      }).join('')
+    : '<div class="total-preview-row"><span style="color:var(--text3)">Aucun encaissement enregistré — aucun solde modifié</span><span></span></div>';
+  modal(`<div class="mft">↩ Annuler cette vente</div>
+    <div class="total-preview" style="margin-bottom:12px">
+      <div class="total-preview-row"><span>Vendeur</span><span>${esc(v.caissier_nom||'—')}</span></div>
+      <div class="total-preview-row"><span>Client</span><span>${esc(v.client||'—')}</span></div>
+      <div class="total-preview-row"><span>Date</span><span>${fmtD(v.date)}${v.heure?' à '+esc(v.heure):''}</span></div>
+      <div class="total-preview-final"><span>Montant de la vente</span><span>${F(v.mt)}</span></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:10px 0 4px">Stock remis</div>
+    <div class="total-preview" style="margin-bottom:10px">${stockHtml}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:10px 0 4px">Soldes des comptes ajustés</div>
+    <div class="total-preview" style="margin-bottom:10px">${comptesHtml}</div>
+    ${negatif?'<div style="background:var(--red-bg);color:var(--red);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px">⚠️ Un compte deviendra négatif : la caisse ne contient plus assez pour rembourser ce montant.</div>':''}
+    <div class="fr">
+      <div class="fg"><label class="fl">Motif</label>
+        <select class="fs" id="av-motif">
+          <option>Erreur de saisie</option><option>Client a renoncé</option><option>Doublon</option><option>Mauvais article / mauvais prix</option><option>Autre</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Note (facultatif)</label><input class="fi" id="av-note" placeholder="Précision..."></div>
+    </div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Retour</button>
+      <button class="btn btn-danger" onclick="confirmerAnnulationVenteLive(${v.id})">↩ Confirmer l'annulation</button>
+    </div>`);
+}
+function confirmerAnnulationVenteLive(id){
+  if(S.session&&S.session.role!=='admin'){toast('🔒 Seul l\'admin peut annuler une vente');return;}
+  const idx=(S.ventes||[]).findIndex(x=>x.id==id);
+  const v=idx>=0?S.ventes[idx]:null;
+  if(!v||v._deleted){closeModal();toast('⚠️ Vente déjà annulée');return;}
+  const motif=document.getElementById('av-motif')?.value||'Erreur de saisie';
+  const note=(document.getElementById('av-note')?.value||'').trim();
+  const now=Date.now();
+  // 1. Remettre le stock (ts mis à jour pour que la correction l'emporte à la synchronisation)
+  const lignesStock=_venteLignesStock(v);
+  lignesStock.forEach(l=>{
+    l.a.qv=Math.max(0,(l.a.qv||0)-l.qte);
+    l.a.ts=now;
+    addHistorique('Entrée',l.a,l.qte,'Annulation vente'+(v.client?' — '+v.client:'')+' ('+motif+')');
+  });
+  // 2. Ajuster les soldes des comptes (exactement ce qui avait été crédité)
+  const mouv=_venteMouvementsComptes(v);
+  mouv.forEach(m=>debiterCompte(m.cid,m.mt));
+  // 3. Retirer les points de fidélité gagnés sur cette vente
+  try{
+    if(v.client && typeof getFideliteConfig==='function' && getFideliteConfig().actif){
+      const c=(S.clients||[]).find(c=>c.nom===v.client);
+      const pts=c?calculerPoints(v.mt):0;
+      if(c && pts>0){
+        c.points=Math.max(0,(c.points||0)-pts);
+        c.pointsHistorique=c.pointsHistorique||[];
+        c.pointsHistorique.push({date:D(),pts:-pts,type:'annulation',detail:'Annulation vente '+F(v.mt)});
+        c.ts=now;
+      }
     }
-  }
-  // FIX : soft delete → marquer _deleted:true au lieu de retirer physiquement
-  // Permet à la fusion Firebase de propager la suppression sur tous les appareils
-  const vDelIdx = S.ventes.findIndex(v=>v.id==id);
-  if(vDelIdx>=0){ S.ventes[vDelIdx]={...S.ventes[vDelIdx], _deleted:true, ts:Date.now()}; }
-  saveData();toast('🗑️ Vente supprimée — stock et comptes mis à jour');(currentPage==='transactions'?rTransactions:rVente)();
+  }catch(e){console.warn('Fidélité non ajustée',e);}
+  // 4. Journal d'audit
+  addAudit('DELETE','Vente','Annulation vente '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date+' ('+motif+(note?' : '+note:'')+')',{id:v.id,mt:v.mt,client:v.client,statut:v.statut},{annulee:true,motif});
+  // 5. Soft delete : la suppression se propage à tous les appareils
+  S.ventes[idx]={...v,_deleted:true,annulee:true,annulee_motif:motif,annulee_note:note||undefined,annulee_par:S.session?.nom||null,annulee_ts:now,ts:now};
+  saveData();
+  closeModal();
+  toast('↩ Vente annulée — stock remis et soldes ajustés',3200);
+  const rerender=({live:renderLiveFeed,transactions:rTransactions,vente:rVente})[currentPage];
+  if(typeof rerender==='function') rerender(); else rVente();
 }
 
 // ─── MODIFIER UNE VENTE DÉJÀ ENREGISTRÉE ───
@@ -5863,11 +5951,11 @@ function ouvrirFicheClient(id){
   const c=S.clients.find(c=>c.id==id);if(!c)return;
   const bid=getBid();
   // Ventes toutes boutiques pour ce client
-  const vcTout=(S.ventes||[]).filter(v=>v.client===c.nom);
+  const vcTout=(S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.client===c.nom);
   // Ventes boutique active uniquement
   const vc2=getVentesBoutique(bid).filter(v=>v.client===c.nom);
   // Services (toutes boutiques)
-  const svcs=(S.ventes_services||[]).filter(v=>v.client===c.nom);
+  const svcs=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.client===c.nom);
   const svcsPaids=svcs.filter(v=>v.statut==='Payé');
   const svcsEnAttente=svcs.filter(v=>v.statut==='Non payé');
   const totalSvcs=svcsPaids.reduce((s,v)=>s+v.mt,0)+svcs.filter(v=>v.avance>0).reduce((s,v)=>s+(v.avance||0),0);
@@ -5881,7 +5969,7 @@ function ouvrirFicheClient(id){
   const joursDepuis=dv?Math.floor((now-new Date(dv.date))/86400000):null;
   const panierMoy=vp2.length>0?Math.round(tot/vp2.length):0;
   // Créances: solde ventes + reste services
-  const soldeVentes=(S.ventes||[]).filter(v=>v.client===c.nom&&v.statut==='Non payé')
+  const soldeVentes=(S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.client===c.nom&&v.statut==='Non payé')
     .reduce((s,v)=>s+(v.mt-((v.acomptes||[]).reduce((x,a)=>x+a.mt,0))),0);
   const totalCreances=soldeVentes+resteServices+(c.solde||0);
 
@@ -6617,7 +6705,7 @@ function rRap(){
 
 // ─── BILAN MENSUEL AUTOMATIQUE ───
 function bilanMoisData(moisStr){
-  const ventes=S.ventes.filter(v=>v.date&&v.date.startsWith(moisStr));
+  const ventes=S.ventes.filter(_x=>!_x._deleted).filter(v=>v.date&&v.date.startsWith(moisStr));
   const ventesP=ventes.filter(v=>v.statut==='Payé');
   const ca=ventesP.reduce((s,v)=>s+v.mt,0);
   const nbVentes=ventesP.length;
@@ -6853,7 +6941,7 @@ function rTresorerie(){
   const depensesB = getDepensesBoutique(bid);
   const achatsB = getAchatsBoutique(bid);
   const stockB = getStockBoutique(bid);
-  const svcsB=(S.ventes_services||[]).filter(v=>v.bid==bid);
+  const svcsB=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.bid==bid);
   const vp=ventesB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0)
            +svcsB.filter(v=>v.statut==='Payé').reduce((s,v)=>s+(v.avance||v.mt),0);
   const vi=ventesB.filter(v=>v.statut==='Non payé').reduce((s,v)=>s+v.mt,0)
@@ -7658,7 +7746,7 @@ function calcInjectStock(){
 }
 function calcInjectCA(){
   const today=D();const bid=getBid();
-  const ca=(S.ventes||[]).filter(v=>v.date===today&&(v.bid===bid||!v.bid)).reduce((s,v)=>s+(+v.mt||0),0);
+  const ca=(S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.date===today&&(v.bid===bid||!v.bid)).reduce((s,v)=>s+(+v.mt||0),0);
   calcInjectHist(String(ca));
   toast('💰 CA du jour injecté');
 }
@@ -8645,11 +8733,11 @@ function rTransactions(){
   };
   // En mode recherche : toutes boutiques ; sinon : boutique active
   const isRecherche=txnFilter==='recherche';
-  const ventes=(isRecherche?(S.ventes||[]):(getVentesBoutique(bid))).filter(filterFn);
+  const ventes=(isRecherche?(S.ventes||[]).filter(_x=>!_x._deleted):(getVentesBoutique(bid))).filter(filterFn);
   const achats=(isRecherche?(S.achats||[]):(getAchatsBoutique(bid))).filter(filterFn);
   const deps=(isRecherche?(S.depenses||[]):(getDepensesBoutique(bid))).filter(filterFn);
   const revs=(S.revenus||[]).filter(filterFn);
-  const svcs=(S.ventes_services||[]).filter(filterFn);
+  const svcs=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(filterFn);
   const transferts=transfertsActifs().filter(filterFn);
 
   const totalVentes=ventes.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
@@ -9221,7 +9309,7 @@ function rServices(){
   const bid=getBid();const defaultBid=(S.boutiques||[])[0]?.id||1;
   const isMine=x=>(!x.bid&&bid==defaultBid)||x.bid==bid;
   const services=(S.services||[]).filter(isMine);
-  const ventes_services=(S.ventes_services||[]).filter(isMine);
+  const ventes_services=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(isMine);
   const totalSvcs=ventes_services.filter(v=>v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
   
   // ─── LOCATIONS CHAISES ───
@@ -10321,13 +10409,13 @@ function rechercheGlobale(q){
   });
   // Clients
   S.clients.filter(c=>c.nom.toLowerCase().includes(r)||(c.tel||'').includes(r)).slice(0,4).forEach(c=>{
-    const tot=S.ventes.filter(v=>v.client===c.nom&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
+    const tot=S.ventes.filter(_x=>!_x._deleted).filter(v=>v.client===c.nom&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0);
     addR('👤 Clients','👤','var(--teal-bg)',c.nom,`${c.tel||''} · ${c.secteur} · Total: ${F(tot)}`,
       `nav(document.querySelector('[data-page=clients]'),'clients');fermerRecherche();setTimeout(()=>ouvrirFicheClient(${c.id}),200)`,
       c.solde>0?`<span style="font-size:10px;background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:8px;font-weight:600">Doit ${F(c.solde)}</span>`:'');
   });
   // Ventes
-  S.ventes.filter(v=>(v.client||'').toLowerCase().includes(r)||(v.date||'').includes(r)).slice(0,4).forEach(v=>{
+  S.ventes.filter(_x=>!_x._deleted).filter(v=>(v.client||'').toLowerCase().includes(r)||(v.date||'').includes(r)).slice(0,4).forEach(v=>{
     const lignes=v.lignes||[{aid:v.aid}];
     const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
     addR('🛒 Ventes','🛒','var(--green-bg)',v.client||'Anonyme',`${fmtD(v.date)} · ${noms.slice(0,40)} · ${F(v.mt)}`,
@@ -12610,8 +12698,8 @@ function rDettes(){
 
   const dettesF=S.achats.filter(a=>a.statut==='À payer'&&isMine(a));
   const resteF=dettesF.reduce((s,a)=>s+(a.mt-(a.tranches?a.tranches.reduce((x,t)=>x+t.mt,0):0)),0);
-  const dettesC_ventes=S.ventes.filter(v=>v.statut==='Non payé'&&isMine(v));
-  const dettesC_svcs=(S.ventes_services||[]).filter(v=>v.statut==='Non payé'&&isMine(v));
+  const dettesC_ventes=S.ventes.filter(_x=>!_x._deleted).filter(v=>v.statut==='Non payé'&&isMine(v));
+  const dettesC_svcs=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.statut==='Non payé'&&isMine(v));
   const dettesC=[...dettesC_ventes, ...dettesC_svcs.map(v=>({...v, _type:'service', mt:v.reste||v.mt}))];
   const resteC=dettesC_ventes.reduce((s,v)=>s+(v.mt-((v.acomptes?v.acomptes.reduce((x,a)=>x+a.mt,0):0)+(v.tranches?v.tranches.reduce((x,t)=>x+t.mt,0):0))),0)
     + dettesC_svcs.reduce((s,v)=>s+(v.reste!=null?v.reste:v.mt),0);
@@ -16374,8 +16462,8 @@ function rRapportMensuel(){
   var prevMois=prevY+'-'+String(prevM).padStart(2,'0');
 
   function moisData(m, b){
-    var ventes=(S.ventes||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Payé';});
-    var svcs=(S.ventes_services||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b);});
+    var ventes=(S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Payé';});
+    var svcs=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b);});
     var deps=(S.depenses||[]).filter(function(d){return d.date&&d.date.startsWith(m)&&(!b||d.bid==b);});
     var revs=(S.revenus||[]).filter(function(r){return r.date&&r.date.startsWith(m)&&(!b||r.bid==b);});
     var achats=fluxPaiementsAchats(b?getAchatsBoutique(b):S.achats).filter(function(a){return a.date&&a.date.startsWith(m);});
@@ -16419,9 +16507,9 @@ function rRapportMensuel(){
     var depCats=Object.entries(depMap).sort(function(a,b){return b[1]-a[1];});
 
     // Clients impayés
-    var impayes=(S.ventes||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
+    var impayes=(S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
       .reduce(function(s,v){return s+(v.mt-((v.acomptes||[]).reduce(function(x,a){return x+a.mt;},0)));},0)
-      +(S.ventes_services||[]).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
+      +(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){return v.date&&v.date.startsWith(m)&&(!b||v.bid==b)&&v.statut==='Non payé';})
       .reduce(function(s,v){return s+(v.reste!=null?v.reste:v.mt);},0);
 
     return {ca:ca,dep:dep,rev:rev,achat:achat,nbTx:nbTx,panier:panier,benefice:benefice,marge:marge,topArts:topArts,topSvcs:topSvcs,depCats:depCats,impayes:impayes};
@@ -16637,7 +16725,7 @@ function rCalcCommande(){
 
   // Calcul vitesse de vente par article
   var rows = stock.map(function(a){
-    var ventesPeriode = (S.ventes||[]).filter(function(v){
+    var ventesPeriode = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
       return v.date>=debutStr && v.statut==='Payé' && (!bid||v.bid==bid);
     });
     var qteSold=0;
@@ -16818,16 +16906,16 @@ function rRelances(){
 
   // 1. Débiteurs (ventes impayées + services en attente)
   var debiteurs = S.clients.filter(function(c){
-    var soldeV = (S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
+    var soldeV = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
       .reduce(function(s,v){ return s+(v.mt-((v.acomptes||[]).reduce(function(x,a){ return x+a.mt; },0))); },0);
-    var soldeS = (S.ventes_services||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
+    var soldeS = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; })
       .reduce(function(s,v){ return s+(v.reste!=null?v.reste:v.mt); },0);
     c._totalDu = soldeV + soldeS + (c.solde||0);
     return c._totalDu > 0;
   }).sort(function(a,b){ return b._totalDu - a._totalDu; });
 
   // 2. Services en attente
-  var svcsEnAttente = (S.ventes_services||[]).filter(function(v){ return v.statut==='Non payé'; }).map(function(v){
+  var svcsEnAttente = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.statut==='Non payé'; }).map(function(v){
     var c = S.clients.find(function(c){ return c.nom===v.client; });
     var d1=new Date(v.date+'T12:00:00');
     var jours=Math.floor((today-d1)/86400000);
@@ -16837,8 +16925,8 @@ function rRelances(){
   // 3. Inactifs (>30j sans achat)
   var inactifs = S.clients.filter(function(c){
     if(c._totalDu>0) return false;
-    var ventes=(S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; });
-    var svcs=(S.ventes_services||[]).filter(function(v){ return v.client===c.nom; });
+    var ventes=(S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; });
+    var svcs=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom; });
     var all=[...ventes,...svcs];
     if(all.length===0) return false;
     var derniere=all.sort(function(a,b){ return b.date.localeCompare(a.date); })[0].date;
@@ -16892,7 +16980,7 @@ function rRelances(){
           ? Math.floor((today-new Date(c.derniereRelance+'T12:00:00'))/86400000) : null;
         var urgence = c._totalDu>50000?'var(--red)':c._totalDu>10000?'var(--amber)':'var(--text)';
         // Détail créances pour message
-        var vImpayees=(S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; });
+        var vImpayees=(S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom&&v.statut==='Non payé'; });
         var details=vImpayees.slice(0,3).map(function(v){
           var lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu||v.mt}];
           var noms=lignes.map(function(l){ var a=ga(l.aid); return a?a.nom:'Article'; }).join(', ');
@@ -16963,7 +17051,7 @@ function rRelances(){
         +'<th>Dernière visite</th><th style="text-align:right">CA historique</th><th>Actions</th>'
         +'</tr></thead><tbody>';
       inactifs.forEach(function(c){
-        var ca = (S.ventes||[]).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; })
+        var ca = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.client===c.nom&&v.statut==='Payé'; })
           .reduce(function(s,v){ return s+v.mt; },0);
         var couleur = c._joursInactif>90?'var(--red)':c._joursInactif>60?'var(--amber)':'var(--text3)';
         html += '<tr style="border-bottom:1px solid var(--border)">';
@@ -17159,7 +17247,7 @@ function rObjArticle(){
     var cible = a.stock_cible || 0;
     var seuil = a.seuil || 0;
     // Ventes 30 jours
-    var ventes30 = (S.ventes||[]).filter(function(v){
+    var ventes30 = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
       return v.date>=debut30 && v.statut==='Payé' && (!bid||v.bid==bid);
     });
     var qteSold30 = 0;
@@ -17321,7 +17409,7 @@ function rRevArticle(){
 
   // Ventes filtrées par boutique et période
   // bid=0 ou null = pas de boutique configurée (mode démo) → pas de filtre bid
-  var ventes = (S.ventes||[]).filter(function(v){
+  var ventes = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
     return v.statut==='Payé' && v.date && v.date>=debut && v.date<=today && (!bid||!v.bid||v.bid==bid);
   });
 
@@ -17588,9 +17676,9 @@ function rComparaison(){
 
   function calcBoutique(b){
     var bid = b.id;
-    var ventes    = (S.ventes||[]).filter(function(v){ return v.bid==bid && inRange(v.date) && v.statut==='Payé'; });
-    var svcsPaids = (S.ventes_services||[]).filter(function(v){ return v.bid==bid && inRange(v.date) && v.statut==='Payé'; });
-    var svcsAv    = (S.ventes_services||[]).filter(function(v){ return v.bid==bid && inRange(v.date) && v.avance>0; });
+    var ventes    = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.bid==bid && inRange(v.date) && v.statut==='Payé'; });
+    var svcsPaids = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.bid==bid && inRange(v.date) && v.statut==='Payé'; });
+    var svcsAv    = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.bid==bid && inRange(v.date) && v.avance>0; });
     var deps      = (S.depenses||[]).filter(function(d){ return d.bid==bid && inRange(d.date); });
     var revs      = (S.revenus||[]).filter(function(r){ return r.bid==bid && inRange(r.date); });
     var b0id=(S.boutiques[0]?S.boutiques[0].id:1);
@@ -17623,9 +17711,9 @@ function rComparaison(){
     var nbTx    = ventes.length + svcsPaids.length + svcsAv.length;
     var panier  = nbTx>0 ? Math.round(ca/nbTx) : 0;
     var stockVal= (S.stock||[]).filter(function(a){return a.bid==bid||!a.bid;}).reduce(function(s,a){return s+sa(a)*(a.pa||0);},0);
-    var dettesC = (S.ventes||[]).filter(function(v){return v.bid==bid&&v.statut==='Non payé';})
+    var dettesC = (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){return v.bid==bid&&v.statut==='Non payé';})
       .reduce(function(s,v){return s+(v.mt-((v.acomptes||[]).reduce(function(x,a){return x+a.mt;},0)));},0)
-      + (S.ventes_services||[]).filter(function(v){return v.bid==bid&&v.statut==='Non payé';})
+      + (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){return v.bid==bid&&v.statut==='Non payé';})
       .reduce(function(s,v){return s+(v.reste!=null?v.reste:v.mt);},0);
 
     var artMap={};
@@ -17702,10 +17790,10 @@ function rComparaison(){
       });
       var prefix = _cmpPeriode==='annee' ? jour : jour;
       function caJour(b){
-        return (S.ventes||[]).filter(function(v){
+        return (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
             return v.bid==b.id && (_cmpPeriode==='annee'?v.date.startsWith(prefix):v.date===jour) && v.statut==='Payé';
           }).reduce(function(s,v){return s+v.mt;},0)
-          +(S.ventes_services||[]).filter(function(v){
+          +(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){
             return v.bid==b.id && (_cmpPeriode==='annee'?v.date.startsWith(prefix):v.date===jour);
           }).reduce(function(s,v){return s+(v.statut==='Payé'?v.mt:0)+(v.avance||0);},0);
       }
@@ -17923,10 +18011,10 @@ function rClotureCaisse(){
   const start = clotureDebut(bid,today);
 
   // ── Données du jour par boutique ──
-  const ventesJour = (S.ventes||[]).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.statut==='Payé');
+  const ventesJour = (S.ventes||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.statut==='Payé');
   // Services du jour : payés intégralement OU avec avance encaissée
-  const svcsPayesJour = (S.ventes_services||[]).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.statut==='Payé' && !(v.avance>0));
-  const svcsAvanceJour = (S.ventes_services||[]).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.avance>0);
+  const svcsPayesJour = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.statut==='Payé' && !(v.avance>0));
+  const svcsAvanceJour = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,start,today) && (!bid || v.bid==bid) && v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d => dansPeriode(d.date,start,today) && (!bid || d.bid==bid));
   const achatsPayesJour = fluxPaiementsAchats(bid?getAchatsBoutique(bid):S.achats).filter(a=>dansPeriode(a.date,start,today));
 
@@ -17979,9 +18067,9 @@ function rClotureCaisse(){
   let totalTheorique = 0;
   const detailBoutiques = boutiques.map(b => {
     const bStart = clotureDebut(b.id,today);
-    const bVentes = (S.ventes||[]).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.statut==='Payé');
-    const bSvcsPayes = (S.ventes_services||[]).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.statut==='Payé' && !(v.avance>0));
-    const bSvcsAvance = (S.ventes_services||[]).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.avance>0);
+    const bVentes = (S.ventes||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.statut==='Payé');
+    const bSvcsPayes = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.statut==='Payé' && !(v.avance>0));
+    const bSvcsAvance = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v => dansPeriode(v.date,bStart,today) && v.bid==b.id && v.avance>0);
     const bDeps   = (S.depenses||[]).filter(d => dansPeriode(d.date,bStart,today) && d.bid==b.id);
     const bRevs   = (S.revenus||[]).filter(r => dansPeriode(r.date,bStart,today) && r.bid==b.id);
     const bHistorique = (S.clotures_caisse||[]).filter(c => c.bid==b.id).sort((a,b2)=>b2.ts-a.ts);
@@ -18235,9 +18323,9 @@ function rClotureCaisse(){
       const today30 = new Date(); today30.setDate(today30.getDate()-30);
       const d30 = today30.toISOString().slice(0,10);
       const bid2 = getBid();
-      const ventesRecentes = (S.ventes||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé');
-      const svcsRecentsPayes = (S.ventes_services||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé'&&!(v.avance>0));
-      const svcsRecents = (S.ventes_services||[]).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.avance>0);
+      const ventesRecentes = (S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé');
+      const svcsRecentsPayes = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.statut==='Payé'&&!(v.avance>0));
+      const svcsRecents = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.date>=d30&&(!bid2||v.bid==bid2)&&v.avance>0);
       const revsRecents = (S.revenus||[]).filter(r=>r.date>=d30&&(!bid2||r.bid==bid2));
       const totalEntrees30 = ventesRecentes.reduce((s,v)=>s+v.mt,0)
         + svcsRecentsPayes.reduce((s,v)=>s+v.mt,0)
@@ -18563,9 +18651,9 @@ function ouvrirModalCloture(){
   const start = clotureDebut(bid,today);
   const dev = (S.parametres||{}).devise || 'FCFA';
 
-  const ventesJour = (S.ventes||[]).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.statut==='Payé');
-  const svcsPayesJour2 = (S.ventes_services||[]).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.statut==='Payé'&&!(v.avance>0));
-  const svcsAvanceJour2 = (S.ventes_services||[]).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.avance>0);
+  const ventesJour = (S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const svcsPayesJour2 = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.statut==='Payé'&&!(v.avance>0));
+  const svcsAvanceJour2 = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>dansPeriode(v.date,start,today)&&(!bid||v.bid==bid)&&v.avance>0);
   const depensesJour = (S.depenses||[]).filter(d=>dansPeriode(d.date,start,today)&&(!bid||d.bid==bid));
   const achatsPayesJour = fluxPaiementsAchats(bid?getAchatsBoutique(bid):S.achats).filter(a=>dansPeriode(a.date,start,today));
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsPayesJour2.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
@@ -18757,7 +18845,7 @@ function imprimerCloture(){
   <hr>
   ${derniereCloture?`
   <div class="row"><span>Solde ouverture</span><span>${derniereCloture.solde_ouverture.toLocaleString()} ${dev}</span></div>
-  <div class="row"><span>+ Ventes encaissées</span><span>${(derniereCloture.solde_theorique-derniereCloture.solde_ouverture+(derniereCloture.ecart||0)>=0?'':'')}${((S.ventes||[]).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0)).toLocaleString()} ${dev}</span></div>
+  <div class="row"><span>+ Ventes encaissées</span><span>${(derniereCloture.solde_theorique-derniereCloture.solde_ouverture+(derniereCloture.ecart||0)>=0?'':'')}${((S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.date&&v.date.startsWith(today)&&(!bid||v.bid==bid)&&v.statut==='Payé').reduce((s,v)=>s+v.mt,0)).toLocaleString()} ${dev}</span></div>
   <div class="row"><span>− Dépenses</span><span>${((S.depenses||[]).filter(d=>d.date&&d.date.startsWith(today)&&(!bid||d.bid==bid)).reduce((s,d)=>s+d.mt,0)).toLocaleString()} ${dev}</span></div>
   <hr>
   <div class="row total"><span>Solde théorique</span><span>${derniereCloture.solde_theorique.toLocaleString()} ${dev}</span></div>
@@ -19261,7 +19349,7 @@ function relancerClientWA(id){
   const nomShop=p.nom||'Christ Media';
   let msg='';
   if(c.solde>0){
-    const vImpayees=S.ventes.filter(v=>v.client===c.nom&&v.statut==='Non payé');
+    const vImpayees=S.ventes.filter(_x=>!_x._deleted).filter(v=>v.client===c.nom&&v.statut==='Non payé');
     const details=vImpayees.slice(0,3).map(v=>{
       const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu||v.mt}];
       const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'Article';}).join(', ');
@@ -19269,7 +19357,7 @@ function relancerClientWA(id){
     }).join('\n');
     msg=`Bonjour ${c.nom},\n\nNous vous contactons de la part de ${nomShop} concernant votre solde impayé.\n\nMontant dû : ${F(c.solde)}${details?'\n\nDétail :\n'+details:''}\n\nMerci de régulariser dans les meilleurs délais.\n\n-- ${nomShop}`;
   }else{
-    const vc=S.ventes.filter(v=>v.client===c.nom&&v.statut==='Payé');
+    const vc=S.ventes.filter(_x=>!_x._deleted).filter(v=>v.client===c.nom&&v.statut==='Payé');
     const derniere=vc.sort((a,b)=>b.date.localeCompare(a.date))[0];
     const jours=derniere?Math.floor((new Date()-new Date(derniere.date))/86400000):null;
     msg=`Bonjour ${c.nom} !\n\n${jours>30?`Vous nous manquez ! Cela fait ${jours} jours que nous ne vous avons pas vu(e).\n\n`:''}Nous avons de nouveaux articles qui pourraient vous intéresser chez ${nomShop}.\n\nN'hésitez pas à passer nous voir !\n\nA bientôt !\n-- ${nomShop}`;
@@ -19293,13 +19381,13 @@ function ouvrirRelanceClients(){
   const today = new Date();
   const inactifs = S.clients.filter(c => {
     if(c.solde > 0) return false; // déjà dans débiteurs
-    const ventes = S.ventes.filter(v => v.client === c.nom && v.statut === 'Payé');
+    const ventes = S.ventes.filter(_x=>!_x._deleted).filter(v => v.client === c.nom && v.statut === 'Payé');
     if(ventes.length === 0) return false;
     const derniere = new Date(ventes.sort((a,b) => b.date.localeCompare(a.date))[0].date);
     return Math.floor((today - derniere) / 86400000) > 30;
   }).sort((a,b) => {
-    const va = S.ventes.filter(v => v.client === a.nom && v.statut === 'Payé');
-    const vb = S.ventes.filter(v => v.client === b.nom && v.statut === 'Payé');
+    const va = S.ventes.filter(_x=>!_x._deleted).filter(v => v.client === a.nom && v.statut === 'Payé');
+    const vb = S.ventes.filter(_x=>!_x._deleted).filter(v => v.client === b.nom && v.statut === 'Payé');
     const da = va.length ? new Date(va.sort((x,y)=>y.date.localeCompare(x.date))[0].date) : new Date(0);
     const db = vb.length ? new Date(vb.sort((x,y)=>y.date.localeCompare(x.date))[0].date) : new Date(0);
     return da - db; // plus ancien en premier
@@ -19344,7 +19432,7 @@ function ouvrirRelanceClients(){
       '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px">😴 Clients inactifs (30 jours+)</div>' +
       '<div style="max-height:160px;overflow-y:auto;margin-bottom:16px">' +
         inactifs.map(c => {
-          const ventes = S.ventes.filter(v => v.client === c.nom && v.statut === 'Payé');
+          const ventes = S.ventes.filter(_x=>!_x._deleted).filter(v => v.client === c.nom && v.statut === 'Payé');
           const derniere = ventes.length ? ventes.sort((a,b)=>b.date.localeCompare(a.date))[0].date : '—';
           const jours = derniere !== '—' ? Math.floor((today - new Date(derniere)) / 86400000) : '?';
           return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
@@ -19413,7 +19501,7 @@ function confirmerEncaissementClient(id){
   if(c.solde === 0) c.statut = 'Régulier';
   // Marquer les ventes impayées comme payées
   let reste = mt;
-  S.ventes.filter(v => v.client === c.nom && v.statut === 'Non payé').forEach(v => {
+  S.ventes.filter(_x=>!_x._deleted).filter(v => v.client === c.nom && v.statut === 'Non payé').forEach(v => {
     if(reste >= v.mt){ v.statut = 'Payé'; v.mode = mode; reste -= v.mt; }
   });
   saveData();
@@ -19433,7 +19521,7 @@ function verifierAlerteVente(mt, callback){
   const dev = p.devise || 'FCFA';
 
   // Calculer la moyenne des 10 dernières ventes pour contexte
-  const dernieres = S.ventes.filter(v => v.statut === 'Payé').slice(-10);
+  const dernieres = S.ventes.filter(_x=>!_x._deleted).filter(v => v.statut === 'Payé').slice(-10);
   const moy = dernieres.length > 0
     ? Math.round(dernieres.reduce((s,v) => s+v.mt, 0) / dernieres.length)
     : 0;
@@ -19994,6 +20082,7 @@ function renderVenteFeedItem(v, boutiques, recentId){
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:14px;font-weight:700;color:${bCouleur};font-family:'DM Mono',monospace">${heure}</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">${isRecent?'<span style="color:var(--green);font-weight:600">● Nouveau</span>':v.date}</div>
+        ${(v._type!=='service' && S.session && S.session.role==='admin')?`<button onclick="annulerVenteLive(${v.id})" title="Annuler cette vente : remet le stock et ajuste les soldes" style="margin-top:8px;border:1px solid var(--red);background:transparent;color:var(--red);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">↩ Annuler</button>`:''}
       </div>
     </div>
   </div>`;
@@ -20049,7 +20138,7 @@ function renderLiveFeed(){
     .filter(v => v.date && v.date === dateFiltre)
     .map(v => ({...v, _type:'service', aid: v.id, nom_article: v.nom_service||v.nom||'Service'}));
   const ventesAuj = [
-    ...(S.ventes||[]).filter(v => v.date && v.date === dateFiltre),
+    ...(S.ventes||[]).filter(_x=>!_x._deleted).filter(v => v.date && v.date === dateFiltre),
     ...svcsAujRaw
   ].slice().sort((a,b) => {
       const ha = a.heure || '99:99';
@@ -20209,12 +20298,12 @@ function renderLiveFeed(){
               // Construire toutes les opérations du jour avec solde cumulé
               const bid=getBid();
               const ops=[];
-              const ventesJour=(S.ventes||[]).filter(v=>v.date===dateFiltre&&v.statut==='Payé');
+              const ventesJour=(S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.date===dateFiltre&&v.statut==='Payé');
               const depsJour=(S.depenses||[]).filter(d=>d.date===dateFiltre);
               const achatsJour=fluxPaiementsAchats(getAchatsBoutique(bid)).filter(a=>a.date===dateFiltre);
               const salsJour=(S.salaires||[]).filter(s=>s.date===dateFiltre);
               const revsJour=(S.revenus||[]).filter(r=>r.date===dateFiltre);
-              const svcsJour=(S.ventes_services||[]).filter(v=>v.date===dateFiltre&&v.statut==='Payé');
+              const svcsJour=(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.date===dateFiltre&&v.statut==='Payé');
 
               ventesJour.forEach(v=>{
                 const lignes=v.lignes||[{aid:v.aid}];
@@ -23108,8 +23197,8 @@ function afficherResumeQuotidien(){
   const hier = new Date(); hier.setDate(hier.getDate()-1);
   const hierStr = hier.toISOString().slice(0,10);
 
-  const ventesHier = (S.ventes||[]).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
-  const svcsHier = (S.ventes_services||[]).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const ventesHier = (S.ventes||[]).filter(_x=>!_x._deleted).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
+  const svcsHier = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.date===hierStr&&(!bid||v.bid==bid)&&v.statut==='Payé');
   const depHier = (S.depenses||[]).filter(d=>d.date===hierStr&&(!bid||d.bid==bid));
   const caHier = ventesHier.reduce((s,v)=>s+v.mt,0) + svcsHier.reduce((s,v)=>s+v.mt,0);
   const depHierTotal = depHier.reduce((s,d)=>s+d.mt,0);
@@ -23658,7 +23747,7 @@ function renderResultat(){
   const today = D(); const curY = today.slice(0,4);
   const ventes = getVentesBoutique(bid).filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curY));
   const vCredit = getVentesBoutique(bid).filter(v=>v.statut==='Non payé'&&v.date&&v.date.startsWith(curY));
-  const svcs = (S.ventes_services||[]).filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curY));
+  const svcs = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.statut==='Payé'&&v.date&&v.date.startsWith(curY));
   const achats = getAchatsBoutique(bid).filter(a=>a.date&&a.date.startsWith(curY));
   const deps = getDepensesBoutique(bid).filter(d=>d.date&&d.date.startsWith(curY));
   const revs = (S.revenus||[]).filter(r=>r.date&&r.date.startsWith(curY));
@@ -24547,7 +24636,7 @@ function rBilanJour(){
   // ── Collecte toutes les opérations du jour ──
   const ventes = getVentesBoutique(bid).filter(v=>v.date===jour&&v.statut==='Payé');
   const ventesCredit = getVentesBoutique(bid).filter(v=>v.date===jour&&v.statut==='Non payé');
-  const svcs = (S.ventes_services||[]).filter(v=>v.date===jour&&v.statut==='Payé');
+  const svcs = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(v=>v.date===jour&&v.statut==='Payé');
   const revs = (S.revenus||[]).filter(r=>r.date===jour);
   const achats = fluxPaiementsAchats(getAchatsBoutique(bid)).filter(a=>a.date===jour);
   const deps = getDepensesBoutique(bid).filter(d=>d.date===jour);
