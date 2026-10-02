@@ -4366,6 +4366,11 @@ function rDash(){
           const totB=getSoldeBanque();
           return `<div class="ms" style="margin-top:6px">🏦 Argent en banque : <strong style="color:${totB>=0?'var(--green)':'var(--red)'}">${F(totB)}</strong> <span style="color:var(--text3)">(${cb.map(c=>c.nom).join(', ')})</span></div>`;
         })()}
+        ${(()=>{
+          const cg=getComptesGarantie();
+          if(!cg.length)return '';
+          return `<div class="ms" style="margin-top:4px">🔒 Fonds de garantie (bloqué, non compté) : <strong>${F(getSoldeGarantie())}</strong> <span style="color:var(--text3)">(${cg.map(c=>c.nom).join(', ')})</span></div>`;
+        })()}
       </div>`;
     })()}
     ${(()=>{
@@ -14201,8 +14206,11 @@ function isCompteLiquidite(c){
   return !!c&&(/^vente\s+/i.test((c.nom||'').trim())||/fonctionnement/i.test(c.nom||''))&&!c.bloque;
 }
 // Comptes bancaires : type « Banque » ou nom contenant banque/bank (exclus de la liquidité en caisse)
+function isCompteGarantie(c){return !!c&&/garantie/i.test(c.nom||'');}
+function getComptesGarantie(){return (S.comptes||[]).filter(isCompteGarantie);}
+function getSoldeGarantie(){return getComptesGarantie().reduce((t,c)=>t+(+c.solde||0),0);}
 function isCompteBanque(c){
-  return !!c&&!isCompteLiquidite(c)&&(c.type==='Banque'||/banque|bank|bancaire|\b(uba|boa|fucec|wages|orabank|ecobank)\b/i.test(c.nom||''));
+  return !!c&&!isCompteGarantie(c)&&!isCompteLiquidite(c)&&(c.type==='Banque'||/banque|bank|bancaire|\b(uba|boa|fucec|wages|orabank|ecobank)\b/i.test(c.nom||''));
 }
 function getComptesBanque(){return (S.comptes||[]).filter(isCompteBanque);}
 function getSoldeBanque(){return getComptesBanque().reduce((t,c)=>t+(+c.solde||0),0);}
@@ -14337,6 +14345,7 @@ function rCaisseGlobal(){
           <div class="mv" style="color:${col(totB)}">${fmt(totB)}</div>
           <div class="ms">${cb.length?cb.map(c=>c.nom+' : <b>'+fmt(+c.solde||0)+'</b>').join(' · '):'Aucun compte bancaire (créez un compte de type « Banque » dans Comptes)'}</div>
           <div class="ms" style="font-size:11px;margin-top:4px">Non compté dans le liquide en caisse.</div>
+          ${(()=>{const cg=getComptesGarantie();if(!cg.length)return '';return `<div class="ms" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border2)">🔒 Fonds de garantie (bloqué) : <b>${fmt(getSoldeGarantie())}</b> <span style="color:var(--text3)">— ${cg.map(c=>c.nom).join(', ')} · non compté ci-dessus</span></div>`;})()}
         </div>
         <div class="card" style="border-left:3px solid var(--teal)">
           <div class="ct">💰 Liquide en caisse + banque</div>
