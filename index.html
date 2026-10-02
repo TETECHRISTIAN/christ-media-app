@@ -4968,6 +4968,22 @@ function delVente(id){
   annulerVenteLive(id);
 }
 
+// ─── MARQUER UNE VENTE COMME LIVRÉE ───
+// (appelée par le badge « 📦 Non livré » et le bouton 📦 de l'historique des ventes)
+function marquerLivre(id){
+  const idx=(S.ventes||[]).findIndex(x=>x.id==id);
+  const v=idx>=0?S.ventes[idx]:null;
+  if(!v||v._deleted){toast('⚠️ Vente introuvable');return;}
+  if(v.livraison!=='Non livré'){toast('✅ Cette vente est déjà livrée');return;}
+  const now=Date.now();
+  S.ventes[idx]={...v,livraison:'Livré',livre_date:D(),livre_par:S.session?.nom||null,livre_ts:now,ts:now};
+  try{addAudit('UPDATE','Vente','Vente livrée '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date,{livraison:'Non livré'},{livraison:'Livré'});}catch(e){}
+  saveData();
+  toast('✅ Vente marquée comme livrée'+(v.client?' — '+v.client:''));
+  const rerender=({dashboard:typeof rDash==='function'?rDash:null,vente:rVente,transactions:rTransactions,live:renderLiveFeed})[currentPage];
+  if(typeof rerender==='function') rerender(); else rVente();
+}
+
 // ─── ANNULATION D'UNE VENTE (stock + comptes + fidélité) ───
 // Encaissements réellement crédités sur les comptes pour cette vente
 function _venteMouvementsComptes(v){
