@@ -5052,7 +5052,14 @@ function confirmerAnnulationVenteLive(id){
   });
   // 2. Ajuster les soldes des comptes (exactement ce qui avait été crédité)
   const mouv=_venteMouvementsComptes(v);
-  mouv.forEach(m=>debiterCompte(m.cid,m.mt));
+  const _resume=[];
+  mouv.forEach(m=>{
+    const c=(S.comptes||[]).find(c=>c.id==m.cid);
+    const avant=c?(c.solde||0):null;
+    debiterCompte(m.cid,m.mt);
+    if(c){ c.ts=now; _resume.push(c.nom+' : '+F(avant)+' → '+F(c.solde||0)); }
+    else _resume.push('⚠️ compte introuvable (id '+m.cid+') — solde non modifié');
+  });
   // 3. Retirer les points de fidélité gagnés sur cette vente
   try{
     if(v.client && typeof getFideliteConfig==='function' && getFideliteConfig().actif){
@@ -5067,12 +5074,12 @@ function confirmerAnnulationVenteLive(id){
     }
   }catch(e){console.warn('Fidélité non ajustée',e);}
   // 4. Journal d'audit
-  addAudit('DELETE','Vente','Annulation vente '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date+' ('+motif+(note?' : '+note:'')+')',{id:v.id,mt:v.mt,client:v.client,statut:v.statut},{annulee:true,motif});
+  addAudit('DELETE','Vente','Annulation vente '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date+' ('+motif+(note?' : '+note:'')+')'+(_resume.length?' | '+_resume.join(' ; '):''),{id:v.id,mt:v.mt,client:v.client,statut:v.statut},{annulee:true,motif});
   // 5. Soft delete : la suppression se propage à tous les appareils
   S.ventes[idx]={...v,_deleted:true,annulee:true,annulee_motif:motif,annulee_note:note||undefined,annulee_par:S.session?.nom||null,annulee_ts:now,ts:now};
   saveData();
   closeModal();
-  toast('↩ Vente annulée — stock remis et soldes ajustés',3200);
+  toast('↩ Vente annulée — stock remis'+(_resume.length?' · '+_resume.join(' · '):' · aucun solde à ajuster'),6000);
   const rerender=({live:renderLiveFeed,transactions:rTransactions,vente:rVente})[currentPage];
   if(typeof rerender==='function') rerender(); else rVente();
 }
@@ -19958,7 +19965,17 @@ function demarrerListenerLive(){
 
     // Mettre à jour S.ventes avec les données fraîches
     const savedSession = S.session;
-    S.ventes = ventes;
+    // Garde-fou : une annulation locale (soft-delete) plus récente que la copie Firebase
+    // ne doit jamais être écrasée, sinon la vente réapparaît alors que stock/comptes sont déjà corrigés.
+    const _locDel = new Map((S.ventes||[]).filter(x=>x && x._deleted && x.id!=null).map(x=>[String(x.id),x]));
+    const _rid = new Set();
+    const _merged = ventes.filter(Boolean).map(x=>{
+      _rid.add(String(x.id));
+      const l=_locDel.get(String(x.id));
+      return (l && Number(l.ts||0)>=Number(x.ts||0)) ? l : x;
+    });
+    _locDel.forEach((l,k)=>{ if(!_rid.has(k)) _merged.push(l); });
+    S.ventes = _merged;
     if(savedSession) S.session = savedSession;
 
     // Rafraîchir la page Live si elle est ouverte
