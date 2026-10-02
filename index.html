@@ -2106,6 +2106,11 @@ function saveLocal(data){
   }catch(e){
     // Si quota dépassé, faire un nettoyage encore plus agressif
     console.warn('localStorage quota exceeded, aggressive cleanup...');
+    // Étape 1 : retirer seulement les grosses images de la copie locale (on garde tout l'historique)
+    try{
+      localStorage.setItem('christmedia_v2', JSON.stringify(_sansGrosImages(cleanDataForStorage(data))));
+      return;
+    }catch(e1){}
     try{
       const cleaned = JSON.parse(JSON.stringify(data));
       // Nettoyage agressif
@@ -2154,11 +2159,84 @@ function runLocalStorageGarbageCollection(){
   }catch(e){}
 }
 
+// ─── COMPRESSION DES IMAGES STOCKÉES EN LOCAL (base64) ───
+// Redimensionne une image (dataURL ou File) en JPEG léger (≈ 30-80 Ko au lieu de plusieurs Mo)
+function compresserImage(src, maxPx, qualite){
+  maxPx=maxPx||640; qualite=qualite||0.72;
+  return new Promise((resolve,reject)=>{
+    const charger=url=>{
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const k=Math.min(1,maxPx/Math.max(img.width,img.height));
+          const c=document.createElement('canvas');
+          c.width=Math.max(1,Math.round(img.width*k)); c.height=Math.max(1,Math.round(img.height*k));
+          const ctx=c.getContext('2d');
+          ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+          ctx.drawImage(img,0,0,c.width,c.height);
+          resolve(c.toDataURL('image/jpeg',qualite));
+        }catch(e){reject(e);}
+      };
+      img.onerror=()=>reject(new Error('image illisible'));
+      img.src=url;
+    };
+    if(typeof src==='string'){ charger(src); return; }
+    const r=new FileReader();
+    r.onload=e=>charger(e.target.result);
+    r.onerror=()=>reject(new Error('lecture impossible'));
+    r.readAsDataURL(src);
+  });
+}
+// Lit un fichier image et renvoie une version compressée (repli : version brute si la compression échoue)
+function lireImageCompressee(file){
+  return compresserImage(file).catch(()=>new Promise((res,rej)=>{
+    const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(file);
+  }));
+}
+// Migration : réduit les photos d'articles déjà stockées en base64 volumineux (> 80 Ko)
+let _migrationPhotosFaite=false;
+async function migrerPhotosVolumineuses(){
+  if(_migrationPhotosFaite) return; _migrationPhotosFaite=true;
+  try{
+    if(typeof S==='undefined'||!Array.isArray(S.stock)) return;
+    let n=0, gagne=0;
+    for(const a of S.stock){
+      if(a && typeof a.photo==='string' && a.photo.startsWith('data:image') && a.photo.length>80000){
+        try{
+          const avant=a.photo.length;
+          const nouv=await compresserImage(a.photo);
+          if(nouv && nouv.length<avant){ a.photo=nouv; a.ts=Date.now(); n++; gagne+=avant-nouv.length; }
+        }catch(e){ console.warn('Photo non compressée pour',a.nom,e); }
+      }
+    }
+    if(n>0){
+      console.log('[PHOTOS] '+n+' photo(s) compressée(s), '+Math.round(gagne/1024)+' Ko libérés');
+      saveData();
+    }
+  }catch(e){ console.warn('Migration photos:',e); }
+}
+// Copie locale allégée : retire uniquement les grosses images base64 (la donnée en mémoire/Firebase n'est pas touchée)
+function _sansGrosImages(obj){
+  if(Array.isArray(obj)) return obj.map(_sansGrosImages);
+  if(obj && typeof obj==='object'){
+    const o={};
+    for(const k in obj){
+      const v=obj[k];
+      if(typeof v==='string' && v.startsWith('data:image') && v.length>60000) continue;
+      o[k]=_sansGrosImages(v);
+    }
+    return o;
+  }
+  return obj;
+}
+
 // Lancer le GC au chargement de l'app
 window.addEventListener('load', () => {
   runLocalStorageGarbageCollection();
   // Re-lancer toutes les heures
   setInterval(runLocalStorageGarbageCollection, 3600000);
+  // Compresser les anciennes photos lourdes une fois les données chargées
+  setTimeout(migrerPhotosVolumineuses, 8000);
 });
 
 // ─── FIREBASE READ ───
@@ -8616,11 +8694,7 @@ function cloudinaryUpload(file, onProgress){
 async function uploadPhotoToStorage(aid, file){
   const a=ga(aid);if(!a||!file)return;
   if(!navigator.onLine){
-    return new Promise(resolve=>{
-      const reader=new FileReader();
-      reader.onload=e=>{a.photo=e.target.result;saveData();rStock();resolve();};
-      reader.readAsDataURL(file);
-    });
+    return lireImageCompressee(file).then(d=>{a.photo=d;saveData();rStock();});
   }
   try{
     const url=await cloudinaryUpload(file);
@@ -8629,9 +8703,7 @@ async function uploadPhotoToStorage(aid, file){
     toast('📸 Photo synchronisée !');
   }catch(e){
     console.warn('uploadPhotoToStorage error:',e);
-    const reader=new FileReader();
-    reader.onload=ev=>{a.photo=ev.target.result;saveData();rStock();};
-    reader.readAsDataURL(file);
+    lireImageCompressee(file).then(d=>{a.photo=d;saveData();rStock();}).catch(()=>toast('❌ Photo illisible'));
   }
 }
 
@@ -8651,12 +8723,10 @@ async function traiterPhoto(aid, input){
   </div>`;
 
   if(!navigator.onLine){
-    const reader=new FileReader();
-    reader.onload=e=>{
-      a.photo=e.target.result;
+    lireImageCompressee(file).then(d=>{
+      a.photo=d;
       saveData();toast('✅ Photo enregistrée (hors ligne)');closeModal();rStock();
-    };
-    reader.readAsDataURL(file);
+    }).catch(()=>{toast('❌ Photo illisible');closeModal();});
     return;
   }
 
@@ -8676,19 +8746,16 @@ async function traiterPhoto(aid, input){
     console.warn('traiterPhoto error:',e);
     // Repli : on sauvegarde la photo en local (base64) même si Cloudinary échoue,
     // pour ne jamais perdre la photo choisie par l'utilisateur.
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      a.photo=ev.target.result;
+    lireImageCompressee(file).then(d=>{
+      a.photo=d;
       saveData();
-      toast('⚠️ Sync Cloudinary indisponible — photo enregistrée en local');
+      toast('⚠️ Sync Cloudinary indisponible — photo enregistrée en local (compressée)');
       closeModal();
       rStock();
-    };
-    reader.onerror=()=>{
+    }).catch(()=>{
       toast('❌ Erreur upload — essaie à nouveau');
       closeModal();
-    };
-    reader.readAsDataURL(file);
+    });
   }
 }
 
