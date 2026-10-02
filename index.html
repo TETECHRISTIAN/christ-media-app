@@ -5077,6 +5077,13 @@ function confirmerAnnulationVenteLive(id){
   addAudit('DELETE','Vente','Annulation vente '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date+' ('+motif+(note?' : '+note:'')+')'+(_resume.length?' | '+_resume.join(' ; '):''),{id:v.id,mt:v.mt,client:v.client,statut:v.statut},{annulee:true,motif});
   // 5. Soft delete : la suppression se propage à tous les appareils
   S.ventes[idx]={...v,_deleted:true,annulee:true,annulee_motif:motif,annulee_note:note||undefined,annulee_par:S.session?.nom||null,annulee_ts:now,ts:now};
+  // Libellé lisible dans la page Annuler / Rétablir (au lieu du texte du bouton cliqué)
+  try{
+    if(typeof cmUndo!=='undefined'&&cmUndo.ready){
+      const _art=lignesStock.map(l=>l.a.nom+(l.qte>1?' ×'+l.qte:'')).join(', ');
+      cmUndo.event={id:'annul-vente-'+id+'-'+now,label:'Annulation vente '+F(v.mt)+(v.client?' ('+v.client+')':'')+(_art?' — '+_art:'')};
+    }
+  }catch(e){}
   saveData();
   closeModal();
   toast('↩ Vente annulée — stock remis'+(_resume.length?' · '+_resume.join(' · '):' · aucun solde à ajuster'),6000);
