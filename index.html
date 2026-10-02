@@ -4345,21 +4345,22 @@ function rDash(){
         const b=(S.boutiques||[]).find(x=>x.id==c.bid);
         return `${b?b.emoji+' '+b.nom:c.nom} : <strong>${F(c.solde)}</strong>`;
       }).join(' &nbsp;+&nbsp; ');
-      return `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--navy);cursor:pointer" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes')">
+      const liqB=(S.comptes||[]).filter(isCompteLiquidite);
+      const fonctB=liqB.filter(c=>!/^vente\s+/i.test((c.nom||'').trim())).reduce((t,c)=>t+(+c.solde||0),0);
+      const totLB=liqB.reduce((t,c)=>t+(+c.solde||0),0);
+      const okB=totLB>=0;
+      const banniereLiq=`<div onclick="nav(document.querySelector('[data-page=caisse_global]'),'caisse_global')" style="margin-bottom:12px;padding:16px 20px;border-radius:14px;cursor:pointer;color:#fff;background:${okB?'linear-gradient(135deg,#0f766e,#14b8a6)':'linear-gradient(135deg,#b91c1c,#ef4444)'};box-shadow:0 6px 18px ${okB?'rgba(15,118,110,.35)':'rgba(185,28,28,.35)'}">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.92">💵 Liquidité totale — Caisse globale</div>
+        <div style="font-size:40px;font-weight:800;line-height:1.15;margin:2px 0">${F(totLB)}</div>
+        <div style="font-size:12px;opacity:.92">Comptes de vente ${F(totLB-fonctB)}${liqB.some(c=>!/^vente\s+/i.test((c.nom||'').trim()))?` + fonds de fonctionnement ${F(fonctB)}`:''} · touchez pour le détail</div>
+      </div>`;
+      return banniereLiq+`<div class="card" style="margin-bottom:16px;border-left:3px solid var(--navy);cursor:pointer" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div class="ct">🏦 Total comptes Ventes — toutes boutiques</div>
           <button class="btn btn-sm" onclick="event.stopPropagation();voirHistoriqueSoldeVente()" style="white-space:nowrap">📈 Historique</button>
         </div>
         <div class="mv" style="color:${total>=0?'var(--green)':'var(--red)'}">${F(total)}</div>
         <div class="ms">${detail}</div>
-        ${(()=>{
-          const liq=(S.comptes||[]).filter(isCompteLiquidite);
-          const autres=liq.filter(c=>!/^vente\s+/i.test((c.nom||'').trim()));
-          if(!autres.length)return '';
-          const fonct=autres.reduce((t,c)=>t+(+c.solde||0),0);
-          const totL=liq.reduce((t,c)=>t+(+c.solde||0),0);
-          return `<div class="ms" style="margin-top:6px">+ Fonds de fonctionnement : <strong style="color:${fonct>=0?'var(--green)':'var(--red)'}">${F(fonct)}</strong> &nbsp;=&nbsp; Liquidité totale (Caisse globale) : <strong>${F(totL)}</strong></div>`;
-        })()}
         ${(()=>{
           const cb=getComptesBanque();
           if(!cb.length)return '';
