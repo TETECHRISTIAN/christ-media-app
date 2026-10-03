@@ -18246,13 +18246,14 @@ function rClotureCaisse(){
     const bDeps   = (S.depenses||[]).filter(d => dansPeriode(d.date,bStart,today) && d.bid==b.id);
     const bRevs   = (S.revenus||[]).filter(r => dansPeriode(r.date,bStart,today) && r.bid==b.id);
     const bHistorique = (S.clotures_caisse||[]).filter(c => c.bid==b.id).sort((a,b2)=>b2.ts-a.ts);
-    const bOuverture = bHistorique[0] ? bHistorique[0].solde_fermeture : 0;
+    const bManuel = getSoldeOuvManuel(b.id); // correction manuelle propre à cette boutique
+    const bOuverture = (bManuel != null) ? bManuel : (bHistorique[0] ? bHistorique[0].solde_fermeture : 0);
     const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsPayes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
     const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
     const bRevsTotal   = bRevs.reduce((s,r)=>s+r.mt,0);
     const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal + ajustementsManuelsJour(b.id,today,bStart) - tontineVerseeJour(b.id,today,bStart);
     totalTheorique += bSolde;
-    return { nom: b.nom||b.name||b.id, solde: bSolde, ventes: bVentesTotal, deps: bDepsTotal, revs: bRevsTotal, ouverture: bOuverture };
+    return { nom: b.nom||b.name||b.id, solde: bSolde, ventes: bVentesTotal, deps: bDepsTotal, revs: bRevsTotal, ouverture: bOuverture, corrige: bManuel != null };
   });
   const totalDepsToutes = detailBoutiques.reduce((s,b)=>s+b.deps,0);
   const totalVentesToutes = detailBoutiques.reduce((s,b)=>s+b.ventes,0);
@@ -18303,7 +18304,7 @@ function rClotureCaisse(){
         <div class="ct">🏪 Total toutes boutiques</div>
         <div class="mv" style="color:${totalTheorique>=0?'var(--green)':'var(--red)'}">${F(totalTheorique)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">
-          ${detailBoutiques.map(b=>`<span style="display:block">${b.nom} : <b style="color:${b.solde>=0?'var(--green)':'var(--red)'}">${F(b.solde)}</b></span>`).join('')}
+          ${detailBoutiques.map(b=>`<span style="display:block">${b.nom}${b.corrige?' ✏️':''} : <b style="color:${b.solde>=0?'var(--green)':'var(--red)'}">${F(b.solde)}</b></span>`).join('')}
         </div>
       </div>
     </div>
@@ -18324,7 +18325,7 @@ function rClotureCaisse(){
         <tbody>
           ${detailBoutiques.map(b=>`
           <tr style="border-bottom:1px solid var(--border2)">
-            <td style="padding:8px;font-weight:600">${b.nom}</td>
+            <td style="padding:8px;font-weight:600">${b.nom}${b.corrige?' <span title="Solde d\'ouverture corrigé manuellement" style="font-size:11px;color:var(--amber)">✏️</span>':''}</td>
             <td style="text-align:right;padding:8px;color:var(--green);font-weight:600">${F(b.ventes)}</td>
             <td style="text-align:right;padding:8px;color:var(--red);font-weight:600">${b.deps>0?'−'+F(b.deps):F(0)}</td>
             <td style="text-align:right;padding:8px;color:var(--teal);font-weight:600">${b.revs>0?'+'+F(b.revs):F(0)}</td>
