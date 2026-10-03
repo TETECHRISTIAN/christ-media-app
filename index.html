@@ -1666,6 +1666,7 @@ body.dark th{background:var(--surface3)}
       <div class="shortcut-row"><span class="shortcut-desc">Trésorerie</span><div class="shortcut-keys"><span class="kbd">T</span></div></div>
       <div class="shortcut-row"><span class="shortcut-desc">Fournisseurs</span><div class="shortcut-keys"><span class="kbd">F</span></div></div>
       <div class="shortcut-row"><span class="shortcut-desc">Achats</span><div class="shortcut-keys"><span class="kbd">A</span></div></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Gestion des dettes</span><div class="shortcut-keys"><span class="kbd">G</span></div></div>
     </div>
     <div class="shortcuts-section">
       <div class="shortcuts-section-title">Actions globales</div>
@@ -10469,6 +10470,9 @@ document.addEventListener('keydown', e => {
       break;
     case 'a': case 'A':
       if(!modalOpen) nav(document.querySelector('[data-page=achats]'), 'achats');
+      break;
+    case 'g': case 'G':
+      if(!modalOpen && !e.ctrlKey && !e.metaKey && !e.altKey) nav(document.querySelector('[data-page=dettes]'), 'dettes');
       break;
   }
 });
