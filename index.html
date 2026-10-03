@@ -18166,6 +18166,15 @@ function tontineVerseeJour(bid,day,from){
   const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
   return transfertsActifs().filter(t=>t.date&&dansPeriode(t.date,from,day)&&isV(t.de!=null?t.de:t.cidSrc)&&isT(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
 }
+// Correction manuelle du solde d'ouverture : propre à chaque boutique
+function getSoldeOuvManuel(bid){
+  const m=window._soldeOuvManuelParBid||{};
+  return (m[bid]!=null)?m[bid]:null;
+}
+function setSoldeOuvManuel(bid,v){
+  if(!window._soldeOuvManuelParBid) window._soldeOuvManuelParBid={};
+  if(v==null) delete window._soldeOuvManuelParBid[bid]; else window._soldeOuvManuelParBid[bid]=v;
+}
 function rClotureCaisse(){
   if(!S.clotures_caisse) S.clotures_caisse = [];
   const today = new Date().toISOString().slice(0,10);
@@ -18218,7 +18227,8 @@ function rClotureCaisse(){
   // ── Dernière clôture pour solde d'ouverture ──
   const derniere = historique[0];
   const soldeOuvertureBase = derniere ? derniere.solde_fermeture : 0;
-  const soldeOuverture = (window._soldeOuvertureManuel != null) ? window._soldeOuvertureManuel : soldeOuvertureBase;
+  const _manuelOuv = getSoldeOuvManuel(bid);
+  const soldeOuverture = (_manuelOuv != null) ? _manuelOuv : soldeOuvertureBase;
 
   // ── Solde théorique ──
   const ajustJour = bid ? ajustementsManuelsJour(bid,today,start) : 0;
@@ -18279,10 +18289,10 @@ function rClotureCaisse(){
       </div>
       <div class="card" style="border-left:3px solid var(--navy)">
         <div class="ct">Solde ouverture</div>
-        <div class="mv" style="color:${window._soldeOuvertureManuel!=null?'var(--amber)':'inherit'}">${F(soldeOuverture)}</div>
-        <div style="font-size:11px;color:var(--text3)">${window._soldeOuvertureManuel!=null?'✏️ Corrigé manuellement':(derniere?'Depuis clôture '+derniere.date:'Aucune clôture précédente')}</div>
+        <div class="mv" style="color:${_manuelOuv!=null?'var(--amber)':'inherit'}">${F(soldeOuverture)}</div>
+        <div style="font-size:11px;color:var(--text3)">${_manuelOuv!=null?'✏️ Corrigé manuellement':(derniere?'Depuis clôture '+derniere.date:'Aucune clôture précédente')}</div>
         <button onclick="corrigerSoldeOuverture(${soldeOuverture})" class="btn btn-sm" style="margin-top:8px;font-size:11px;color:var(--amber);border-color:var(--amber)">✏️ Corriger</button>
-        ${window._soldeOuvertureManuel!=null?`<button onclick="window._soldeOuvertureManuel=null;rClotureCaisse()" class="btn btn-sm" style="margin-top:4px;font-size:11px">↩ Réinitialiser</button>`:''}
+        ${_manuelOuv!=null?`<button onclick="setSoldeOuvManuel(${bid},null);rClotureCaisse()" class="btn btn-sm" style="margin-top:4px;font-size:11px">↩ Réinitialiser</button>`:''}
       </div>
       <div class="card" style="border-left:3px solid ${soldeTheorique>=0?'var(--green)':'var(--red)'}">
         <div class="ct">Solde théorique</div>
@@ -18797,7 +18807,7 @@ function corrigerSoldeOuverture(actuel){
 function appliquerCorrectionOuverture(){
   const v=parseFloat(document.getElementById('soc-val').value);
   if(isNaN(v)){toast('⚠️ Valeur invalide');return;}
-  window._soldeOuvertureManuel=v;
+  setSoldeOuvManuel(getBid(),v);
   closeModal();
   toast('✅ Solde ouverture corrigé : '+v.toLocaleString()+' FCFA');
   rClotureCaisse();
@@ -18826,7 +18836,8 @@ function ouvrirModalCloture(){
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
   const derniere = historique[0];
   const soldeOuvertureBase2 = derniere ? derniere.solde_fermeture : 0;
-  const soldeOuverture = (window._soldeOuvertureManuel != null) ? window._soldeOuvertureManuel : soldeOuvertureBase2;
+  const _manuelOuv2 = getSoldeOuvManuel(bid);
+  const soldeOuverture = (_manuelOuv2 != null) ? _manuelOuv2 : soldeOuvertureBase2;
   const ajustJour = bid ? ajustementsManuelsJour(bid,today,start) : 0;
   const tontJour = bid ? tontineVerseeJour(bid,today,start) : 0;
   const soldeTheorique = soldeOuverture + totalVentes - totalDepenses + ajustJour - tontJour;
@@ -18969,7 +18980,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     ts: Date.now()
   };
   S.clotures_caisse.push(cloture);
-  window._soldeOuvertureManuel = null; // reset après clôture
+  setSoldeOuvManuel(cloture.bid!=null?cloture.bid:getBid(),null); // reset après clôture
   saveData();
   closeModal();
 
