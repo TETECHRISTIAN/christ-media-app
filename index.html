@@ -13095,6 +13095,15 @@ function savePayerGroupeFournisseur(idsStr, nomFour){
 
 function addDettePerso(){
   const dev=(S.parametres&&S.parametres.devise)||'FCFA';
+  // Noms déjà utilisés (emprunts + prêts, soldés inclus), sans doublon, triés A→Z
+  const _vus={};
+  (S.dettesPerso||[]).forEach(d=>{
+    const nom=String(d.personne||'').trim();
+    const k=nom.toLowerCase().replace(/\s+/g,' ');
+    if(nom&&!_vus[k]) _vus[k]=nom;
+  });
+  const _noms=Object.values(_vus).sort((a,b)=>a.localeCompare(b,'fr'));
+  const _optNoms=_noms.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join('');
   modal(`<div class="mft">💳 Nouvel emprunt / Prêt</div>
     <div class="fg"><label class="fl">Type d'opération</label>
       <select class="fs" id="dp-type" onchange="toggleEmpruntMicrofinance()">
@@ -13104,7 +13113,8 @@ function addDettePerso(){
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">Établissement / Personne</label>
-        <input class="fi" id="dp-pers" placeholder="Ex: FUCEC, WAGES, proche...">
+        <input class="fi" id="dp-pers" list="dp-pers-list" autocomplete="off" placeholder="Choisir ou écrire un nom..." onfocus="this.select()">
+        <datalist id="dp-pers-list">${_optNoms}</datalist>
       </div>
       <div class="fg"><label class="fl">Date de début</label>
         <input class="fi" type="date" id="dp-date" value="${D()}">
@@ -13216,7 +13226,12 @@ function previewMensualite(){
   document.getElementById('mf-interets').textContent=F(Math.round(totalRembourse-mt));
 }
 function saveDettePerso(){
-  const personne=document.getElementById('dp-pers').value.trim();
+  let personne=document.getElementById('dp-pers').value.trim();
+  (function(){
+    const k=personne.toLowerCase().replace(/\s+/g,' ');
+    const ex=(S.dettesPerso||[]).find(d=>String(d.personne||'').trim().toLowerCase().replace(/\s+/g,' ')===k);
+    if(ex) personne=String(ex.personne).trim();
+  })();
   const mt=+document.getElementById('dp-mt').value||0;
   const cid=document.getElementById('dp-cid').value;
   const typeDette=document.getElementById('dp-type').value;
