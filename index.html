@@ -15162,7 +15162,7 @@ function confirmerModele(id, agendaOpId){
 // ─── MODULE : OPÉRATIONS SUIVANTES (AGENDA) ───
 // ════════════════════════════════════════════════════
 // Filtres agenda
-let agendaFiltrePeriode='tout';
+let agendaFiltrePeriode='semaine2';
 let agendaFiltreType='tout';
 let agendaFiltreCompte='tout';
 
@@ -15171,15 +15171,17 @@ function rAgenda(){
   const today=D();
   const demain=new Date();demain.setDate(demain.getDate()+1);
   const demainStr=demain.toISOString().split('T')[0];
-  const finSemaine=new Date();finSemaine.setDate(finSemaine.getDate()+7);
+  const nbJoursFenetre=agendaFiltrePeriode==='semaine2'?14:7;
+  const finSemaine=new Date();finSemaine.setDate(finSemaine.getDate()+nbJoursFenetre);
   const finSemaineStr=finSemaine.toISOString().split('T')[0];
+  const _fenetreActive=agendaFiltrePeriode==='semaine'||agendaFiltrePeriode==='semaine2';
 
   // Appliquer filtres — exclure les items soft-deleted (_deleted:true)
   let ops=S.agenda.filter(a=>!a.fait&&!a._deleted);
   if(agendaFiltreType!=='tout') ops=ops.filter(a=>a.type===agendaFiltreType);
   if(agendaFiltreCompte!=='tout') ops=ops.filter(a=>a.cid==agendaFiltreCompte);
   if(agendaFiltrePeriode==='aujourd\'hui') ops=ops.filter(a=>a.date===today);
-  else if(agendaFiltrePeriode==='semaine') ops=ops.filter(a=>a.date>=today&&a.date<=finSemaineStr);
+  else if(_fenetreActive) ops=ops.filter(a=>a.date<=finSemaineStr);
   else if(agendaFiltrePeriode==='retard') ops=ops.filter(a=>a.date<today);
 
   // Groupes
@@ -15225,7 +15227,7 @@ function rAgenda(){
     <div class="g3" style="margin-bottom:16px">
       <div class="card" style="border-left:3px solid var(--red)"><div class="ct">En retard</div><div class="mv" style="color:var(--red)">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date<today).length}</div></div>
       <div class="card" style="border-left:3px solid var(--amber)"><div class="ct">Aujourd'hui</div><div class="mv" style="color:var(--amber)">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date===today).length}</div></div>
-      <div class="card" style="border-left:3px solid var(--navy)"><div class="ct">À venir (7j)</div><div class="mv">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date>today&&a.date<=finSemaineStr).length}</div></div>
+      <div class="card" style="border-left:3px solid var(--navy)"><div class="ct">À venir (${nbJoursFenetre}j)</div><div class="mv">${S.agenda.filter(a=>!a.fait&&!a._deleted&&a.date>today&&a.date<=finSemaineStr).length}</div></div>
     </div>
 
     <!-- Filtres -->
@@ -15236,7 +15238,8 @@ function rAgenda(){
           <option value="tout"${agendaFiltrePeriode==='tout'?' selected':''}>Toutes</option>
           <option value="retard"${agendaFiltrePeriode==='retard'?' selected':''}>En retard</option>
           <option value="aujourd'hui"${agendaFiltrePeriode==="aujourd'hui"?' selected':''}>Aujourd'hui</option>
-          <option value="semaine"${agendaFiltrePeriode==='semaine'?' selected':''}>7 prochains jours</option>
+          <option value="semaine"${agendaFiltrePeriode==='semaine'?' selected':''}>7 prochains jours (1 semaine)</option>
+          <option value="semaine2"${agendaFiltrePeriode==='semaine2'?' selected':''}>14 prochains jours (2 semaines)</option>
         </select>
       </div>
       <div style="display:flex;flex-direction:column;gap:3px">
@@ -15257,16 +15260,16 @@ function rAgenda(){
           ${comptesOpts}
         </select>
       </div>`:''}
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px">        <button class="btn btn-sm" onclick="agendaFiltrePeriode='tout';agendaFiltreType='tout';agendaFiltreCompte='tout';rAgenda()">↺ Réinitialiser filtres</button>        <button class="btn btn-sm" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="resetToutAgenda()">🗑️ Tout supprimer</button>      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px">        <button class="btn btn-sm" onclick="agendaFiltrePeriode='semaine2';agendaFiltreType='tout';agendaFiltreCompte='tout';rAgenda()">↺ Réinitialiser filtres</button>        <button class="btn btn-sm" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="resetToutAgenda()">🗑️ Tout supprimer</button>      </div>
     </div>
 
     ${enRetard.length?`<p class="st" style="color:var(--red)">🚨 En retard (${enRetard.length})</p>${renderOps(enRetard)}<div style="margin-bottom:16px"></div>`:''}
-    ${agendaFiltrePeriode==='tout'||agendaFiltrePeriode==="aujourd'hui"?`<p class="st">📅 Aujourd'hui — ${today}</p>
+    ${agendaFiltrePeriode==='tout'||_fenetreActive||agendaFiltrePeriode==="aujourd'hui"?`<p class="st">📅 Aujourd'hui — ${today}</p>
     ${aujd.length?renderOps(aujd):'<div style="color:var(--text3);font-size:13px;padding:6px 0;margin-bottom:12px">Aucune opération aujourd\'hui</div>'}`:''}
-    ${(agendaFiltrePeriode==='tout'||agendaFiltrePeriode==='semaine')&&demainOps.length?`<p class="st" style="margin-top:12px">📅 Demain</p>${renderOps(demainOps)}<div style="margin-bottom:12px"></div>`:''}
-    ${(agendaFiltrePeriode==='tout'||agendaFiltrePeriode==='semaine')&&suite.length?`<p class="st" style="margin-top:12px">📅 À venir</p>${renderOps(suite)}`:''}
+    ${(agendaFiltrePeriode==='tout'||_fenetreActive)&&demainOps.length?`<p class="st" style="margin-top:12px">📅 Demain</p>${renderOps(demainOps)}<div style="margin-bottom:12px"></div>`:''}
+    ${(agendaFiltrePeriode==='tout'||_fenetreActive)&&suite.length?`<p class="st" style="margin-top:12px">📅 À venir</p>${renderOps(suite)}`:''}
     ${ops.length===0&&agendaFiltrePeriode!=='tout'?`<div style="text-align:center;padding:24px;color:var(--text3)">Aucune opération pour ce filtre</div>`:''}
-    ${faits.length&&agendaFiltrePeriode==='tout'?`<p class="st" style="margin-top:16px;color:var(--text3)">✅ Récemment effectués</p>
+    ${faits.length&&(agendaFiltrePeriode==='tout'||_fenetreActive)?`<p class="st" style="margin-top:16px;color:var(--text3)">✅ Récemment effectués</p>
     <div style="display:flex;flex-direction:column;gap:6px;opacity:.6">
       ${faits.map(op=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--surface2);border-radius:var(--rs)">
         <span>✓ ${op.titre}${op.montant?` — ${F(op.montant)}`:''}</span><span style="color:var(--text3)">${op.dateFait||op.date}</span>
