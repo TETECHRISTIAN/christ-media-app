@@ -5445,6 +5445,7 @@ function rAchats(){
   const tot=filtered.reduce((s,a)=>s+a.mt,0);
   const totalDu=filtered.filter(a=>a.statut==='À payer').reduce((s,a)=>s+resteAchat(a),0);
   document.getElementById('content').innerHTML=dfHtml('achats')+`
+    ${(()=>{const _nr=filtered.filter(a=>qteRecueAchat(a)<a.qte);return _nr.length?`<div class="alert" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-light)">📦 ${_nr.length} achat(s) en attente de réception — reste à recevoir : ${_nr.slice(0,4).map(a=>(ga(a.aid)?ga(a.aid).nom:'Article')+' ×'+(a.qte-qteRecueAchat(a))).join(', ')}${_nr.length>4?'…':''}</div>`:'';})()}
     <div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Heure</th><th>Fournisseur</th><th>Article</th><th>Qté</th><th>Montant</th><th>Compte</th><th>Statut</th><th>Notes</th><th></th></tr></thead>
       <tbody>${filtered.length===0?'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Aucun achat</td></tr>':
@@ -5461,12 +5462,13 @@ function rAchats(){
           return`<tr>
           <td style="font-family:'DM Mono',monospace;font-size:12px">${fmtD(a.date)}</td>
           <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${a.heure||'—'}</td>
-          <td class="tdm">${fnom}</td><td>${anom}</td><td>${N(a.qte)}</td>
+          <td class="tdm">${fnom}</td><td>${anom}</td><td>${N(a.qte)}${(()=>{const _r=qteRecueAchat(a);return _r<a.qte?`<div><span class="badge" style="background:var(--amber-bg);color:var(--amber);cursor:pointer;font-size:10px" onclick="recevoirAchat(${a.id})" title="Enregistrer une réception">📦 Reçu ${_r}/${a.qte}</span></div>`:'';})()}</td>
           <td style="font-weight:600;color:var(--purple)">${F(a.mt)}</td>
           <td><span class="badge bb">${a.cid?nomCompte(a.cid):(a.mode||'—')}</span></td>
           <td>${statutBadge}</td>
           <td style="color:var(--text3);font-size:12px">${a.notes||'—'}</td>
           <td><div class="td-actions">
+            ${qteRecueAchat(a)<a.qte?`<button class="btn-icon btn-sm" onclick="recevoirAchat(${a.id})" title="Enregistrer une réception" style="color:var(--amber)">📦</button>`:''}
             ${payerBtn}
             <button class="btn-icon btn-sm" onclick="delAchat(${a.id})" style="color:var(--red)">✕</button>
           </div></td>
@@ -5483,6 +5485,7 @@ function rAchats(){
 function addAchat(){
   if(!window.panierAchat) window.panierAchat=[];
   window.panierAchat=[];
+  window.achatRecepDiff=false;
   _renderModalAchat();
 }
 
@@ -5528,6 +5531,14 @@ function _renderModalAchat(){
       </div>
     </div>
 
+    <!-- Réception différée / partielle -->
+    <div style="margin:0 0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--amber)">
+        <input type="checkbox" id="achat-recep-diff" ${window.achatRecepDiff?'checked':''} onchange="toggleRecepDiffAchat(this.checked)" style="width:16px;height:16px;accent-color:var(--amber)">
+        📦 Réception différée ou partielle (tout ou partie non encore reçu)
+      </label>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Le stock n'augmente que de la quantité reçue. Le montant dû au fournisseur reste celui de la commande.</div>
+    </div>
     <!-- Panier -->
     <div style="margin-bottom:10px">
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Articles dans la commande (${panier.length})</div>
@@ -5544,6 +5555,11 @@ function _renderModalAchat(){
               <input class="fi" type="number" min="0" value="${l.pu}" oninput="majLigneAchat(${i},'pu',+this.value||0)" style="padding:3px 5px;font-size:11px">
               <div id="achat-mt-${i}" style="font-weight:700;color:var(--purple)">${F(l.mt)}</div>
               <button onclick="retirerLigneAchat(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:15px;padding:0">✕</button>
+            </div>
+            <div class="achat-recu-row" style="display:${window.achatRecepDiff?'flex':'none'};align-items:center;gap:8px;padding:0 10px 7px;font-size:11px;color:var(--amber)">
+              📦 Reçu maintenant :
+              <input class="fi" type="number" min="0" max="${l.qte}" value="${typeof l.recu==='number'?l.recu:l.qte}" id="achat-recu-${i}" oninput="majRecuAchat(${i},this.value)" style="width:60px;padding:3px 5px;font-size:11px;text-align:center">
+              <span id="achat-recu-max-${i}">/ ${l.qte}</span>
             </div>`).join('')}
           </div>`}
     </div>
@@ -5609,11 +5625,12 @@ function ajouterLigneAchat(){
   if(!window.panierAchat) window.panierAchat=[];
   const existant=window.panierAchat.findIndex(l=>l.aid===aid);
   if(existant>=0){
+    { const _l=window.panierAchat[existant]; _l.recu=(typeof _l.recu==='number'?_l.recu:_l.qte)+qte; }
     window.panierAchat[existant].qte+=qte;
     window.panierAchat[existant].mt=window.panierAchat[existant].qte*window.panierAchat[existant].pu;
     toast(`✅ Quantité mise à jour — ${art.nom}`);
   } else {
-    window.panierAchat.push({aid,nom:art.nom,qte,pu,mt:pu*qte});
+    window.panierAchat.push({aid,nom:art.nom,qte,pu,mt:pu*qte,recu:qte});
     toast(`✅ ${art.nom} ajouté`);
   }
   _renderModalAchat();
@@ -5621,7 +5638,13 @@ function ajouterLigneAchat(){
 
 function majLigneAchat(i,champ,val){
   if(!window.panierAchat[i]) return;
+  const _l0=window.panierAchat[i];const _oldQ=_l0.qte;const _etaitComplet=(typeof _l0.recu!=='number')||_l0.recu>=_oldQ;
   window.panierAchat[i][champ]=val;
+  if(champ==='qte'){
+    _l0.recu=_etaitComplet?_l0.qte:Math.min(_l0.recu,_l0.qte);
+    const _er=document.getElementById('achat-recu-'+i);if(_er){_er.value=_l0.recu;_er.max=_l0.qte;}
+    const _em=document.getElementById('achat-recu-max-'+i);if(_em)_em.textContent='/ '+_l0.qte;
+  }
   window.panierAchat[i].mt=window.panierAchat[i].qte*window.panierAchat[i].pu;
   const elMt=document.getElementById('achat-mt-'+i);
   if(elMt) elMt.textContent=F(window.panierAchat[i].mt);
@@ -5637,6 +5660,77 @@ function retirerLigneAchat(i){
   _renderModalAchat();
 }
 
+// ─── RÉCEPTION PARTIELLE DES ACHATS ───
+// recu_qte = quantité déjà reçue d'un achat. Absent = tout est reçu (anciens achats).
+// La réception ne touche QUE le stock : le montant dû au fournisseur (dette, tranches)
+// reste celui de la commande, qu'elle soit reçue en une fois ou en plusieurs.
+function qteRecueAchat(a){
+  const q=a.qte||0;
+  return typeof a.recu_qte==='number'?Math.max(0,Math.min(q,a.recu_qte)):q;
+}
+// Montant encore dû pour une entrée de S.dettesAchats (reste > montant > mt selon l'ancienneté)
+function resteDetteAchat(d){
+  if(typeof d.reste==='number') return d.reste;
+  return +(d.montant||d.mt||0);
+}
+function majRecuAchat(i,val){
+  const l=window.panierAchat&&window.panierAchat[i];if(!l)return;
+  l.recu=Math.max(0,Math.min(l.qte,Math.floor(+val||0)));
+}
+function toggleRecepDiffAchat(on){
+  window.achatRecepDiff=!!on;
+  (window.panierAchat||[]).forEach((l,i)=>{
+    l.recu=l.qte;
+    const el=document.getElementById('achat-recu-'+i);if(el)el.value=l.qte;
+  });
+  document.querySelectorAll('.achat-recu-row').forEach(r=>{r.style.display=on?'flex':'none';});
+}
+function recevoirAchat(id){
+  const a=(S.achats||[]).find(x=>x.id==id&&!x._deleted);
+  if(!a){toast('⚠️ Achat introuvable');return;}
+  const dej=qteRecueAchat(a),reste=(a.qte||0)-dej;
+  if(reste<=0){toast('✅ Cet achat est déjà entièrement reçu');return;}
+  if((a.qte||0)===1){confirmerReceptionAchat(id,1);return;}
+  const art=ga(a.aid);
+  modal(`<div class="mft">📦 Réception — ${art?art.nom:'Article'}</div>
+    <div class="total-preview" style="margin-bottom:12px">
+      <div class="total-preview-row"><span>Commandé</span><span>×${a.qte}</span></div>
+      <div class="total-preview-row"><span>Déjà reçu</span><span>×${dej}</span></div>
+      <div class="total-preview-final"><span>Reste à recevoir</span><span>×${reste}</span></div>
+    </div>
+    <div class="fg"><label class="fl">Quantité reçue maintenant</label>
+      <input class="fi" type="number" id="rec-ach-q" min="1" max="${reste}" value="${reste}"></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Le stock augmente de cette quantité. Le montant dû au fournisseur ne change pas.</div>
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="confirmerReceptionAchat(${id})">✓ Confirmer la réception</button>
+    </div>`);
+}
+function confirmerReceptionAchat(id,forceQ){
+  const a=(S.achats||[]).find(x=>x.id==id&&!x._deleted);
+  if(!a){toast('⚠️ Achat introuvable');return;}
+  const dej=qteRecueAchat(a),reste=(a.qte||0)-dej;
+  if(reste<=0){toast('✅ Cet achat est déjà entièrement reçu');return;}
+  const el=document.getElementById('rec-ach-q');
+  const q=Math.max(0,Math.min(reste,forceQ!==undefined?forceQ:Math.floor(+(el&&el.value)||0)));
+  if(q<=0){toast('⚠️ Indique une quantité reçue');return;}
+  const now=Date.now();
+  const art=ga(a.aid);
+  if(art){
+    art.ea=(art.ea||0)+q;
+    if(dej===0&&a.pu>0) art.pa=a.pu;
+    art.ts=now+2000;
+    addHistorique('Entrée',art,q,'Réception achat'+(a.notes?' — '+a.notes:''));
+  }
+  a.recu_qte=dej+q;
+  a.receptions=[...(a.receptions||[]),{date:D(),ts:now,qte:q,par:S.session?.nom||null}];
+  a.ts=now;
+  try{addAudit('UPDATE','Achat','Réception '+(art?art.nom:'article')+' ×'+q+' ('+(dej+q)+'/'+a.qte+')',{recu:dej},{recu:dej+q});}catch(e){}
+  saveData();closeModal();
+  toast(dej+q>=a.qte?'✅ Achat entièrement reçu — stock mis à jour':'📦 Réception enregistrée ('+(dej+q)+'/'+a.qte+') — stock mis à jour');
+  (currentPage==='transactions'?rTransactions:rAchats)();
+}
+
 function saveAchatMulti(){
   const panier=window.panierAchat||[];
   if(panier.length===0) return toast('❌ Panier vide');
@@ -5648,14 +5742,16 @@ function saveAchatMulti(){
   const notes=document.getElementById('mno').value;
   const statut_achat=document.getElementById('mstatut')?.value||'Payé';
   const bid=getBid();
+  const _diff=!!window.achatRecepDiff;
 
   // Horodater en avance de 2s pour garantir que le local gagne la fusion Firebase
   const tsNow = Date.now() + 2000;
   panier.forEach(l=>{
     const art=ga(l.aid);
-    if(art){ art.ea=(art.ea||0)+l.qte; if(l.pu>0) art.pa=l.pu; art.ts=tsNow; }
+    const recu=_diff?Math.max(0,Math.min(l.qte,typeof l.recu==='number'?l.recu:l.qte)):l.qte;
+    if(art){ art.ea=(art.ea||0)+recu; if(l.pu>0&&recu>0) art.pa=l.pu; art.ts=tsNow; }
     const achatId=genId();
-    S.achats.push({id:achatId,date,fid,aid:l.aid,qte:l.qte,pu:l.pu,mt:l.mt,mode,cid,notes,statut:statut_achat,bid,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
+    S.achats.push({id:achatId,date,fid,aid:l.aid,qte:l.qte,pu:l.pu,mt:l.mt,mode,cid,notes,statut:statut_achat,bid,...(_diff?{recu_qte:recu,receptions:recu>0?[{date,ts:Date.now(),qte:recu}]:[]}:{}),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()});
     if(statut_achat==='Payé'){
       debiterCompte(cid,l.mt);
     } else {
@@ -5671,13 +5767,15 @@ function saveAchatMulti(){
       if(!S.dettesAchats) S.dettesAchats=[];
       S.dettesAchats.push({id:achatId,fid,date,mt:l.mt,reste:l.mt,statut:'À payer'});
     }
-    if(art) addHistorique('Entrée',art,l.qte,`Achat — ${notes||'réappro'}`);
+    if(art&&recu>0) addHistorique('Entrée',art,recu,`Achat — ${notes||'réappro'}`);
   });
 
   const total=panier.reduce((s,l)=>s+l.mt,0);
+  const _nbAttente=_diff?panier.filter(l=>(typeof l.recu==='number'?l.recu:l.qte)<l.qte).length:0;
   window.panierAchat=[];
+  window.achatRecepDiff=false;
   saveData(); closeModal();
-  toast(`✅ ${panier.length} article${panier.length>1?'s':''} achetés — Total: ${F(total)}`);
+  toast(`✅ ${panier.length} article${panier.length>1?'s':''} achetés — Total: ${F(total)}${_nbAttente?` · ${_nbAttente} en attente de réception`:''}`);
   rAchats();
 }
 
@@ -5687,7 +5785,7 @@ function delAchat(id){
   if(ac){
     // 1. Déduire du stock (annuler les entrées liées à cet achat)
     const art=ga(ac.aid);
-    if(art){ art.ea=Math.max(0,(art.ea||0)-ac.qte); art.ts=Date.now(); }
+    if(art){ art.ea=Math.max(0,(art.ea||0)-qteRecueAchat(ac)); art.ts=Date.now(); }
 
     if(ac.statut==='Payé'){
       // 2a. Achat entièrement payé → rembourser le compte débité
@@ -8635,7 +8733,7 @@ function recalculerStock(){
   // Recalculer ea depuis les achats
   S.achats.forEach(ac=>{
     const a=ga(ac.aid);
-    if(a) a.ea=(a.ea||0)+ac.qte;
+    if(a) a.ea=(a.ea||0)+qteRecueAchat(ac);
   });
   saveData();
   toast('✅ Stock recalculé depuis les ventes et achats réels');
@@ -10344,7 +10442,7 @@ function getNotifs(){
     retard.forEach(d=>{
       const jours=Math.ceil((new Date()-new Date(d.echeance))/864e5);
       const f=getFournisseursActifs().find(f=>f.id==d.fid);
-      notifs.push({icon:'🚨',msg:`Facture fournisseur en retard`,sub:`${f?f.nom:'?'} — ${F(d.montant)} — ${jours}j`,type:'fourn',urgent:true,action:"nav(document.querySelector('[data-page=fourni_avance]'),'fourni_avance')"});
+      notifs.push({icon:'🚨',msg:`Facture fournisseur en retard`,sub:`${f?f.nom:'?'} — ${F(resteDetteAchat(d))} — ${jours}j`,type:'fourn',urgent:true,action:"nav(document.querySelector('[data-page=fourni_avance]'),'fourni_avance')"});
     });
   }
 
@@ -18458,7 +18556,7 @@ function rClotureCaisse(){
       // La vraie liquidité disponible = solde théorique du jour de la boutique active
       // (pas la somme brute des comptes qui ne reflète pas la journée en cours)
       const liquiditeJour = soldeTheorique;
-      const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+      const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+resteDetteAchat(d),0);
       const liquiditeNette = liquiditeJour - totalDettes;
 
       const cmdsActives = (S.commandes||[]).filter(c=>c.statut!=='Reçue');
@@ -24623,7 +24721,7 @@ function renderFourniOverview(){
     const dernier = ach.sort((a,b)=>b.date.localeCompare(a.date))[0];
     const evals = (S.fourni_evals||[]).filter(e=>e.fid==f.id);
     const score = evals.length ? Math.round(evals.reduce((s,e)=>s+e.score,0)/evals.length*10)/10 : null;
-    const dettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.fid==f.id&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+    const dettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.fid==f.id&&d.statut!=='Soldé').reduce((s,d)=>s+resteDetteAchat(d),0);
     return {...f, total, totalYear, dernier, score, dettes, nbCommandes:ach.length};
   }).sort((a,b)=>b.totalYear-a.totalYear);
 
@@ -24719,9 +24817,9 @@ function renderFourniDelais(){
   const today = D();
   const dettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé');
   const achats = getAchatsBoutique(bid).filter(a=>a.statut==='À payer');
-  const totalDu = dettes.reduce((s,d)=>s+(d.montant||0),0);
+  const totalDu = dettes.reduce((s,d)=>s+resteDetteAchat(d),0);
   const enRetard = dettes.filter(d=>d.echeance&&d.echeance<today);
-  const totalRetard = enRetard.reduce((s,d)=>s+(d.montant||0),0);
+  const totalRetard = enRetard.reduce((s,d)=>s+resteDetteAchat(d),0);
 
   document.getElementById('fourni-body').innerHTML=`
   <div class="g3" style="margin-bottom:16px">
@@ -24830,7 +24928,7 @@ function renderFourniCapacite(){
   const pct = liquidite>0&&totalCmds>0 ? Math.min(100,Math.round(liquidite/totalCmds*100)) : (liquidite>0?100:0);
 
   // 5. Dettes fournisseurs non soldées
-  const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+(d.montant||0),0);
+  const totalDettes = (S.dettesAchats||[]).filter(d=>!d._deleted&&d.statut!=='Soldé').reduce((s,d)=>s+resteDetteAchat(d),0);
   const liquiditeNette = liquidite - totalDettes;
 
   const jauge = (val,max,color)=>{
