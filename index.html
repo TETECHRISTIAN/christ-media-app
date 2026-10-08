@@ -4415,7 +4415,7 @@ function rDash(){
         </button>`).join('')}
     </div>
     ${al.length?`<div class="alert alert-r">⚠️ ${al.length} article(s) en stock bas : ${al.slice(0,3).map(a=>`<strong>${a.nom}</strong> (${sa(a)} restants)`).join(' · ')}${al.length>3?` +${al.length-3} autres`:''}</div>`:''}
-    ${(()=>{const nL=ventesB.filter(v=>v.livraison==='Non livré');if(!nL.length)return '';const ret=nL.filter(v=>Math.floor((Date.now()-new Date(v.date).getTime())/864e5)>=2);return`<div class="alert" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-light);cursor:pointer" onclick="window.venteLivrFilter='Non livré';nav(document.querySelector('[data-page=vente]'),'vente')">📦 ${nL.length} vente(s) non livrée(s)${ret.length?` · <strong>${ret.length} en retard (+2j)</strong>`:''} — Voir →</div>`;})()}
+    ${(()=>{const nL=ventesB.filter(v=>v.livraison==='Non livré');if(!nL.length)return '';const ret=nL.filter(v=>Math.floor((Date.now()-new Date(v.date).getTime())/864e5)>=2);return`<div class="alert" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-light);cursor:pointer" onclick="window.venteLivrFilter='Non livré';nav(document.querySelector('[data-page=vente]'),'vente')">📦 ${nL.length} vente(s) non livrée(s) ou partielle(s)${ret.length?` · <strong>${ret.length} en retard (+2j)</strong>`:''} — Voir →</div>`;})()}
     ${(()=>{
       const comptesVente = getComptesVentePrincipaux();
       if(comptesVente.length===0)return '';
@@ -4739,7 +4739,7 @@ function rVente(){
         const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
         const estNL=v.livraison==='Non livré';
         const livrBadge=estNL
-          ?`<span class="badge" style="background:var(--amber-bg);color:var(--amber);cursor:pointer" onclick="marquerLivre(${v.id})" title="Cliquer pour marquer livré">📦 Non livré</span>`
+          ?`<span class="badge" style="background:var(--amber-bg);color:var(--amber);cursor:pointer" onclick="ouvrirLivraison(${v.id})" title="Cliquer pour enregistrer une remise / livrer">${(()=>{const r=resumeLivraison(v);return r.partiel?`📦 Partiel ${r.liv}/${r.tot}`:'📦 Non livré';})()}</span>`
           :`<span class="badge bg" style="font-size:10px">✅ Livré</span>`;
         return`<tr style="${estNL?'border-left:3px solid var(--amber);':''}">
           <td style="font-family:'DM Mono',monospace;font-size:12px">${fmtD(v.date)}</td>
@@ -4752,7 +4752,7 @@ function rVente(){
           <td>${livrBadge}</td>
           <td><div class="td-actions">
             ${v.statut==='Non payé'?`<button class="btn-icon btn-sm" onclick="payerVente(${v.id})" title="Encaisser">✓</button><button class="btn-icon btn-sm" onclick="gererAcompte(${v.id})" title="Acompte">💰</button>`:''}
-            ${estNL?`<button class="btn-icon btn-sm" onclick="marquerLivre(${v.id})" title="Marquer livré" style="color:var(--amber)">📦</button>`:''}
+            ${estNL?`<button class="btn-icon btn-sm" onclick="ouvrirLivraison(${v.id})" title="Enregistrer une remise / livrer" style="color:var(--amber)">📦</button>`:''}
             <button class="btn-icon btn-sm" onclick="demanderMontantRecu(${v.id})" title="Reçu A4">🖨️</button>
             <button class="btn-icon btn-sm" onclick="imprimerThermique(${v.id})" title="Reçu thermique 58mm" style="color:var(--teal)">🧾</button>
             <button class="btn-icon btn-sm" onclick="configurerTranches(${v.id})" title="Tranches">💳</button>
@@ -4883,10 +4883,11 @@ function ouvrirPanierModal(){
     <!-- Livraison différée -->
     <div style="margin:8px 0 4px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px;display:flex;align-items:center;gap:10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--amber)">
-        <input type="checkbox" id="pa-livraison-diff" style="width:16px;height:16px;accent-color:var(--amber)">
-        📦 Livraison différée (non remis au client)
+        <input type="checkbox" id="pa-livraison-diff" onchange="renderZoneLivrPartielle()" style="width:16px;height:16px;accent-color:var(--amber)">
+        📦 Livraison différée ou partielle (tout ou partie non remis)
       </label>
     </div>
+    <div id="pa-livr-zone" style="display:none;margin:0 0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px"></div>
     <div id="zone-recu-panier" style="margin-top:4px">
       <div class="fr">
         <div class="fg"><label class="fl">💵 Montant remis</label>
@@ -4957,6 +4958,7 @@ function majLignePanier(i,champ,val){
   const btn=document.querySelector('.btn.btn-success[onclick*="validerPanier"]');
   if(btn)btn.textContent='✓ Valider — '+F(total);
   calcMonnaieInline(total);
+  if(document.getElementById('pa-livraison-diff')?.checked)renderZoneLivrPartielle();
 }
 function retirerDuPanier(i){window.panier.splice(i,1);rVente();}
 function viderPanier(){window.panier=[];rVente();}
@@ -4989,6 +4991,15 @@ function validerPanier(){
     addHistorique('Sortie',a,l.qte,`Vente à ${client||'client anonyme'}`);
   }
   // Vérifier alerte vente inhabituelle avant de finaliser
+  // Livraison : quantités remises maintenant (par ligne) si livraison différée/partielle
+  const _livDiff=!!document.getElementById('pa-livraison-diff')?.checked;
+  const _livQtes=window.panier.map((l,i)=>{
+    if(!_livDiff) return l.qte;
+    const el=document.getElementById('pa-liv-'+i);
+    const q=el?Math.floor(+el.value||0):0;
+    return Math.max(0,Math.min(l.qte,q));
+  });
+  const _toutLivre=_livQtes.every((q,i)=>q>=window.panier[i].qte);
   verifierAlerteVente(mt, function(ok){
     if(!ok) return;
     const vid=genId();
@@ -4996,7 +5007,7 @@ function validerPanier(){
     S.ventes.push({
       id:vid,date:D(),ts:Date.now(),
       bid:_bidFinal,
-      lignes:window.panier.map(l=>({aid:l.aid,nom:l.nom,qte:l.qte,pu:l.pu,mt:l.mt,pa:l.pa||0,typePrix:l.typePrix})),
+      lignes:window.panier.map((l,i)=>Object.assign({aid:l.aid,nom:l.nom,qte:l.qte,pu:l.pu,mt:l.mt,pa:l.pa||0,typePrix:l.typePrix},_livDiff?{livre_qte:_livQtes[i]}:{})),
       aid:window.panier[0].aid,qte:window.panier[0].qte,pu:window.panier[0].pu,
       mt,sousTotal,remise:remiseMt,typePrix:window.typePrix||'detail',
       statut,client,mode,cid,
@@ -5007,7 +5018,7 @@ function validerPanier(){
       heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
       montant_recu: statut==='Payé' && montantRecu > 0 ? montantRecu : null,
       monnaie: statut==='Payé' && montantRecu > 0 ? Math.max(0, montantRecu - mt) : null,
-      livraison: document.getElementById('pa-livraison-diff')?.checked ? 'Non livré' : 'Livré',
+      livraison: (_livDiff && !_toutLivre) ? 'Non livré' : 'Livré',
       _compte_credite: statut==='Payé' ? true : undefined
     });
     window.panier=[];
@@ -5047,6 +5058,94 @@ function delVente(id){
   annulerVenteLive(id);
 }
 
+// ─── LIVRAISON PARTIELLE ───
+// Chaque ligne d'une vente peut avoir livre_qte (quantité déjà remise). Sans livre_qte :
+// vente « Non livré » = rien remis ; sinon tout est remis. La vente reste « Non livré »
+// tant qu'il reste au moins un article à remettre (alertes et filtres inchangés).
+function qteLivreeLigne(v,l){
+  if(typeof l.livre_qte==='number') return Math.max(0,Math.min(l.qte||0,l.livre_qte));
+  return v.livraison==='Non livré' ? 0 : (l.qte||0);
+}
+function resumeLivraison(v){
+  const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu,mt:v.mt}];
+  let tot=0,liv=0;
+  lignes.forEach(l=>{tot+=(l.qte||0);liv+=qteLivreeLigne(v,l);});
+  return {tot,liv,reste:tot-liv,partiel:liv>0&&liv<tot};
+}
+function nomLigneVente(l){
+  return l.nom||(ga(l.aid)?ga(l.aid).nom:'Article');
+}
+function resteALivrerTexte(v){
+  const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu,mt:v.mt}];
+  return lignes.map(l=>{const r=(l.qte||0)-qteLivreeLigne(v,l);return r>0?nomLigneVente(l)+' ×'+r:'';}).filter(Boolean).join(', ');
+}
+function renderZoneLivrPartielle(){
+  const cb=document.getElementById('pa-livraison-diff');
+  const z=document.getElementById('pa-livr-zone');
+  if(!z) return;
+  if(!cb||!cb.checked){z.style.display='none';z.innerHTML='';return;}
+  const prev={};
+  z.querySelectorAll('input[data-liv]').forEach(inp=>{prev[inp.dataset.liv]=inp.value;});
+  z.style.display='';
+  z.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quantité <strong>remise maintenant</strong> au client (0 = rien remis). Le reste sera à livrer plus tard, avec le même reçu.</div>'
+    +window.panier.map((l,i)=>{
+      const val=prev[i]!==undefined?Math.max(0,Math.min(l.qte,Math.floor(+prev[i]||0))):0;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px"><span style="flex:1">'+l.nom+' <span style="color:var(--text3)">(×'+l.qte+')</span></span>'
+        +'<input class="fi" type="number" min="0" max="'+l.qte+'" value="'+val+'" data-liv="'+i+'" id="pa-liv-'+i+'" style="width:70px;padding:4px 6px;font-size:12px;text-align:center"></div>';
+    }).join('');
+}
+function livInfoTicket(v,l){
+  if(v.livraison!=='Non livré' && typeof l.livre_qte!=='number') return '';
+  const q=qteLivreeLigne(v,l),n=l.qte||1;
+  if(q>=n) return '<div style="font-size:9px;color:#1a7a3c">✓ Remis</div>';
+  return '<div style="font-size:9px;color:#c07000;font-weight:700">📦 Remis '+q+'/'+n+' — reste '+(n-q)+' à retirer</div>';
+}
+function ouvrirLivraison(id){
+  const v=(S.ventes||[]).find(x=>x.id==id);
+  if(!v||v._deleted){toast('⚠️ Vente introuvable');return;}
+  if(v.livraison!=='Non livré'){toast('✅ Cette vente est déjà livrée');return;}
+  const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1,pu:v.pu,mt:v.mt}];
+  if(lignes.length===1&&(lignes[0].qte||1)===1){marquerLivre(id);return;}
+  modal(`<div class="mft">📦 Livraison — ${v.client||'Client'}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Indique la quantité remise <strong>maintenant</strong> pour chaque article.</div>
+    ${lignes.map((l,i)=>{
+      const dej=qteLivreeLigne(v,l),reste=(l.qte||0)-dej;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="flex:1"><strong>${nomLigneVente(l)}</strong>
+          <div style="font-size:10px;color:var(--text3)">Commandé ×${l.qte} · déjà remis ${dej} · reste ${reste}</div></div>
+        ${reste>0?`<input class="fi" type="number" min="0" max="${reste}" value="${reste}" id="liv-in-${i}" style="width:70px;padding:4px 6px;font-size:12px;text-align:center">`:'<span class="badge bg" style="font-size:10px">✅ Complet</span>'}
+      </div>`;}).join('')}
+    <div class="mff">
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="confirmerLivraison(${id})">✓ Confirmer la remise</button>
+    </div>`);
+}
+function confirmerLivraison(id){
+  const idx=(S.ventes||[]).findIndex(x=>x.id==id);
+  const v=idx>=0?S.ventes[idx]:null;
+  if(!v||v._deleted){toast('⚠️ Vente introuvable');return;}
+  const base=v.lignes||[{aid:v.aid,nom:ga(v.aid)?ga(v.aid).nom:'Article',qte:v.qte||1,pu:v.pu,mt:v.mt}];
+  const remis=[];
+  const lignes=base.map((l,i)=>{
+    const dej=qteLivreeLigne(v,l),reste=(l.qte||0)-dej;
+    const el=document.getElementById('liv-in-'+i);
+    const q=reste>0&&el?Math.max(0,Math.min(reste,Math.floor(+el.value||0))):0;
+    if(q>0) remis.push({nom:nomLigneVente(l),qte:q});
+    return {...l,livre_qte:dej+q};
+  });
+  if(!remis.length){toast('⚠️ Indique au moins une quantité remise');return;}
+  const now=Date.now();
+  const tout=lignes.every(l=>l.livre_qte>=(l.qte||0));
+  const livraisons=[...(v.livraisons||[]),{date:D(),ts:now,par:S.session?.nom||null,items:remis}];
+  S.ventes[idx]={...v,lignes,livraisons,livraison:tout?'Livré':'Non livré',
+    ...(tout?{livre_date:D(),livre_par:S.session?.nom||null,livre_ts:now}:{}),ts:now};
+  try{addAudit('UPDATE','Vente',(tout?'Vente entièrement livrée ':'Livraison partielle ')+F(v.mt)+' — '+(v.client||'—')+' : '+remis.map(r=>r.nom+' ×'+r.qte).join(', '),{livraison:v.livraison},{livraison:tout?'Livré':'Partiel'});}catch(e){}
+  saveData();closeModal();
+  toast(tout?'✅ Vente entièrement livrée'+(v.client?' — '+v.client:''):'📦 Remise enregistrée — reste : '+resteALivrerTexte(S.ventes[idx]));
+  const rerender=({dashboard:typeof rDash==='function'?rDash:null,vente:rVente,transactions:rTransactions,live:renderLiveFeed})[currentPage];
+  if(typeof rerender==='function') rerender(); else rVente();
+}
+
 // ─── MARQUER UNE VENTE COMME LIVRÉE ───
 // (appelée par le badge « 📦 Non livré » et le bouton 📦 de l'historique des ventes)
 function marquerLivre(id){
@@ -5055,7 +5154,8 @@ function marquerLivre(id){
   if(!v||v._deleted){toast('⚠️ Vente introuvable');return;}
   if(v.livraison!=='Non livré'){toast('✅ Cette vente est déjà livrée');return;}
   const now=Date.now();
-  S.ventes[idx]={...v,livraison:'Livré',livre_date:D(),livre_par:S.session?.nom||null,livre_ts:now,ts:now};
+  const _lg=v.lignes?v.lignes.map(l=>typeof l.livre_qte==='number'?{...l,livre_qte:l.qte}:l):null;
+  S.ventes[idx]={...v,...(_lg?{lignes:_lg}:{}),livraison:'Livré',livre_date:D(),livre_par:S.session?.nom||null,livre_ts:now,ts:now};
   try{addAudit('UPDATE','Vente','Vente livrée '+F(v.mt)+' — '+(v.client||'—')+' du '+v.date,{livraison:'Non livré'},{livraison:'Livré'});}catch(e){}
   saveData();
   toast('✅ Vente marquée comme livrée'+(v.client?' — '+v.client:''));
@@ -11634,7 +11734,7 @@ function partagerWhatsApp(id, type){
   if(type==='facture'||type==='recu'){
     const v=S.ventes.find(v=>v.id==id);if(!v)return;
     const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu,mt:v.mt}];
-    const detail=lignes.map(l=>{const a=ga(l.aid);return`- ${a?a.nom:'Article'} x${l.qte} = ${F(l.mt)}`;}).join(String.fromCharCode(10));
+    const detail=lignes.map(l=>{const a=ga(l.aid);const _q=qteLivreeLigne(v,l);const _suf=(v.livraison==='Non livré'||typeof l.livre_qte==='number')?(_q>=l.qte?' ✓ remis':` (remis ${_q}/${l.qte})`):'';return`- ${a?a.nom:'Article'} x${l.qte} = ${F(l.mt)}${_suf}`;}).join(String.fromCharCode(10))+(v.livraison==='Non livré'?String.fromCharCode(10,10)+'📦 Reste à retirer : '+resteALivrerTexte(v):'');
     texte=`🧾 *REÇU - ${S.parametres?.nom||'Christ Media'}*\n\nClient: ${v.client||'—'}\nDate: ${fmtD(v.date)}\n\n${detail}\n\n💰 *Total: ${F(v.mt)}*\nMode: ${v.mode}\nStatut: ${(()=>{const ac=(v.acomptes||[]).reduce((s,a)=>s+a.mt,0);return v.statut==='Payé'?'Payé':(ac>0?'Paiement partiel':v.statut);})()}\n\nMerci pour votre confiance ! 🙏`;
   }else if(type==='devis'){
     const d=S.devis.find(d=>d.id==id);if(!d)return;
@@ -12400,11 +12500,13 @@ function genRecuA4HTML(vid){
               <div style="flex:1;min-width:0">
                 <span class="recu-item-nom">${nom}</span>
                 ${l.qte>1?`<div style="font-size:10px;color:#aaa;margin-top:1px">${F(puUnit)} × ${l.qte}</div>`:''}
+                 ${(()=>{if(v.livraison!=='Non livré'&&typeof l.livre_qte!=='number')return'';const q=qteLivreeLigne(v,l);return q>=l.qte?'<div style="font-size:10px;color:#1d6b3c;margin-top:1px">✓ Remis</div>':`<div style="font-size:10px;color:#8a5200;font-weight:600;margin-top:1px">📦 Remis ${q}/${l.qte} — reste ${l.qte-q} à retirer</div>`;})()}
               </div>
               <span class="recu-item-qte">×${l.qte}</span>
               <span class="recu-item-mt">${F(mtLigne)}</span>
             </div>`}).join('')}
         </div>
+        ${v.livraison==='Non livré'?`<div style="background:#fff8e6;border:1px solid #f0d9a0;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:11px;color:#8a5200"><strong>📦 Reste à retirer :</strong> ${resteALivrerTexte(v)}</div>`:''}
         <div class="recu-totaux">
           ${v.sousTotal&&v.sousTotal!==v.mt?`<div class="recu-tot-row"><span>Sous-total</span><span>${F(v.sousTotal)}</span></div>`:''}
           ${v.remise&&v.remise>0?`<div class="recu-tot-row recu-tot-remise"><span>🎯 Remise</span><span>−${F(v.remise)}</span></div>`:''}
@@ -23177,7 +23279,7 @@ function genTicketHTML(v, opts){
         '<div style="font-size:11px;font-weight:700;white-space:nowrap">' + mt.toLocaleString('fr-FR') + ' ' + dev + '</div>' +
       '</div>' +
       '<div style="font-size:9px;color:#888;margin-top:1px">' + qte + ' × ' + pu.toLocaleString('fr-FR') + ' ' + dev + (l.typePrix&&l.typePrix!=='detail'?' · '+(l.typePrix==='gros'?'Gros':'Semi-gros'):'') + '</div>' +
-    '</div>';
+    livInfoTicket(v,l) + '</div>';
   }).join('')}
   <div class="line"></div>
   ${remise > 0 ? '<div class="row"><span style="font-size:10px;color:#888">Sous-total</span><span style="font-size:10px">' + sousTotal.toLocaleString('fr-FR') + ' ' + dev + '</span></div>' +
@@ -23190,6 +23292,7 @@ function genTicketHTML(v, opts){
   ${v.monnaie > 0 ? '<div class="row" style="background:#f0f9f0;border-radius:5px;padding:4px 6px;margin:3px 0"><span style="font-size:11px;font-weight:700;color:#1a7a3c">💵 Monnaie rendue</span><span style="font-size:12px;font-weight:800;color:#1a7a3c">' + v.monnaie.toLocaleString('fr-FR') + ' ' + dev + '</span></div>' : ''}
   <div class="center" style="margin:4px 0"><span class="mode-badge">${v.mode || 'Espèces'}</span></div>
   ${v.statut === 'Non payé' ? '<div class="center" style="font-size:10px;color:#c07000;font-weight:700;margin:3px 0;background:#fff8e6;padding:4px;border-radius:4px">⏳ EN ATTENTE DE PAIEMENT</div>' : ''}
+  ${v.livraison === 'Non livré' ? '<div class="center" style="font-size:10px;color:#8a5200;font-weight:700;margin:3px 0;background:#fff8e6;padding:4px;border-radius:4px">📦 RESTE À RETIRER : ' + resteALivrerTexte(v) + '</div>' : ''}
   <div class="line-solid"></div>
   <div class="footer-msg">${msgFin}</div>
   ${showQR ? '<div class="qr-block"><img src="' + qrSrc + '" alt="WhatsApp"><div class="qr-label">Scanner pour nous contacter sur WhatsApp</div></div>' : ''}
