@@ -51,6 +51,7 @@
   },true);
   window.addEventListener('unhandledrejection',function(e){
     var message=String(e.reason&&e.reason.message||e.reason);
+    if(message.indexOf('chrome: call method')!==-1){e.preventDefault();return;} // bruit d'extension navigateur
     console.error('[Christ Media] Promesse rejetée :',message);
     if(!window.cmMainLoaded)notice('Erreur de démarrage : '+message,true);
   });
@@ -27807,7 +27808,9 @@ window.cmMainLoaded=true;
   };
 
   // Intercepter les promesses rejetées non gérées
-  window.addEventListener('unhandledrejection', function(){
+  window.addEventListener('unhandledrejection', function(e){
+    var m = String((e && e.reason && e.reason.message) || (e && e.reason) || '');
+    if(m.indexOf('chrome: call method') !== -1){ e.preventDefault(); return; } // bruit d'extension
     if(!_erudaActif){ _erudaActif = true; chargerEruda(true); }
   });
 
