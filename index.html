@@ -3623,7 +3623,7 @@ const actionsMap={annuler_retablir:()=>'',
   depenses:()=>'<button class="btn btn-danger" onclick="addDep()">+ Dépense</button>',
   tresorerie:()=>'',revenus:()=>'<button class="btn btn-success" onclick="addRevenu()">+ Revenu</button> <button class="btn" onclick="addCharge()">+ Charge</button>',rapports:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',
   historique:()=>'<button class="btn" onclick="clearHistorique()">🗑️ Vider</button>',inventaire:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',workspace:()=>'',comptes:()=>'<button class="btn btn-primary" onclick="addCompte()">+ Compte</button>',devis:()=>'<button class="btn" onclick="_devisFiltreStatut=\'Envoyé\';rDevis()">📤 En attente</button> <button class="btn btn-primary" onclick="addDevis()">+ Devis</button>',planning:()=>'<button class="btn btn-primary" onclick="addPlanning()">+ Tâche</button>',calculatrice:()=>'',parametres:()=>'',
-  dettes:()=>'<button class="btn btn-primary" onclick="voirTousPaiementsFournisseurs()">📜 Paiements fournisseurs</button> <button class=\"btn\" onclick=\"voirAllInOne()\">🗂️ All in One</button>',
+  dettes:()=>'<button class="btn btn-primary" onclick="voirTousPaiementsFournisseurs()">📜 Paiements fournisseurs</button>',
   flux:()=>'',
   limites:()=>'<button class="btn btn-primary" onclick="addLimite()">+ Limite</button>',
   modeles:()=>'<button class="btn btn-primary" onclick="addModele()">+ Modèle</button>',
@@ -3739,6 +3739,7 @@ const QB_PAGES = [
   {page:'parametres',   emoji:'⚙️', label:'Paramètres',    labelCourt:'Paramètres'},
   // Action spéciale caisse rapide
   {page:'__caisse_rapide__', emoji:'⚡', label:'Caisse Rapide', labelCourt:'⚡ Caisse', special:true},
+  {page:'__all_in_one__', emoji:'🗂️', label:'All in One', labelCourt:'All in One', special:true},
 ];
 
 // Config par défaut
@@ -3773,6 +3774,8 @@ function renderQuickBar(){
     let onclick = '';
     if(item.page==='__caisse_rapide__'){
       onclick = `ouvrirCaisseRapide()`;
+    } else if(item.page==='__all_in_one__'){
+      onclick = `voirAllInOne()`;
     } else {
       onclick = `nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');qbActivate('${id}')`;
     }
@@ -3808,7 +3811,7 @@ function ouvrirQBManager(){
       <span class="qb-slot-icon">${def.emoji}</span>
       <div class="qb-slot-info">
         <div class="qb-slot-name">${def.label}${item.center?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px">Principal</span>':''}</div>
-        <div class="qb-slot-page">${item.page==='__caisse_rapide__'?'Action rapide':'Page : '+item.page}</div>
+        <div class="qb-slot-page">${String(item.page).indexOf('__')===0?'Action rapide':'Page : '+item.page}</div>
       </div>
       <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--navy);border-color:var(--navy-light)" 
         onclick="toggleCenterSlot(${i})" title="${item.center?'Retirer du centre':'Mettre en avant'}">
@@ -3883,7 +3886,7 @@ function toggleQBPage(page, btn){
         <span class="qb-slot-icon">${def.emoji}</span>
         <div class="qb-slot-info">
           <div class="qb-slot-name">${def.label}${item.center?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px">Principal</span>':''}</div>
-          <div class="qb-slot-page">${item.page==='__caisse_rapide__'?'Action rapide':'Page : '+item.page}</div>
+          <div class="qb-slot-page">${String(item.page).indexOf('__')===0?'Action rapide':'Page : '+item.page}</div>
         </div>
         <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--navy);border-color:var(--navy-light)" 
           onclick="toggleCenterSlot(${i})" title="${item.center?'Retirer du centre':'Mettre en avant'}">
@@ -3955,6 +3958,7 @@ function getMNSvg(page){
     live:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3" fill="currentColor" opacity=".5" stroke="none"/><circle cx="10" cy="10" r="3"/><circle cx="10" cy="10" r="7"/></svg>',
     coach:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="2" width="14" height="12" rx="2"/><path d="M7 18l3-4 3 4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     parametres:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4" stroke-linecap="round"/></svg>',
+    __all_in_one__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.2"/></svg>',
     __caisse_rapide__:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v14M5 8l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     crm:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><path d="M9 10a4 4 0 014-4h1a4 4 0 014 4" stroke-linecap="round"/><circle cx="6" cy="5" r="2"/><circle cx="14" cy="5" r="2"/><path d="M2 17c0-2.5 2-4 4.5-4S11 14.5 11 17" stroke-linecap="round"/><path d="M11 17c0-2 1.5-3.5 3.5-3.5S18 15 18 17" stroke-linecap="round"/></svg>',
     projets:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="16" height="13" rx="1.5"/><path d="M2 8h16" stroke-width="1"/><path d="M6 12l2.5 2.5L14 9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -3972,7 +3976,7 @@ function renderMobileNav(){
   bar.innerHTML=cfg.map((item,i)=>{
     const def=QB_PAGES.find(p=>p.page===item.page)||{labelCourt:item.page,label:item.page};
     const id='mnd-'+i;
-    const oc=item.page==='__caisse_rapide__'?'ouvrirCaisseRapide()':`nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');mnDynActivate('${id}')`;
+    const oc=item.page==='__caisse_rapide__'?'ouvrirCaisseRapide()':item.page==='__all_in_one__'?'voirAllInOne()':`nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');mnDynActivate('${id}')`;
     const svg=getMNSvg(item.page);
     if(item.center)return `<div class="mn-center" id="${id}" onclick="${oc}"><div class="mn-center-bubble" id="mn-center-bubble">${getMNSvg('vente')}</div><span style="font-size:9px;color:var(--text3);font-weight:500;margin-top:2px">${def.labelCourt}</span></div>`;
     return `<div class="mn-item" id="${id}" onclick="${oc}">${svg}<span>${def.labelCourt}</span></div>`;
