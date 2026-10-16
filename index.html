@@ -4458,6 +4458,7 @@ function rDash(){
         })()}
       </div>`;
     })()}
+    ${carteTresorerieAchat()}
     ${(()=>{
       const soldes = getSoldesInterBoutiques();
       if(!soldes.length)return '';
@@ -15160,6 +15161,47 @@ function isCompteBanque(c){
 }
 function getComptesBanque(){return (S.comptes||[]).filter(isCompteBanque);}
 function getSoldeBanque(){return getComptesBanque().reduce((t,c)=>t+(+c.solde||0),0);}
+// ─── COMPTES D'INVESTISSEMENT (achat de marchandises) — un par boutique ───
+// Repérés par le nom (« Investissement … » ou la faute « Invertissement ») ou par le marqueur c.invest===true
+function isCompteInvestissement(c){
+  return !!c&&!c.bloque&&(c.invest===true||/inve\w*ssement/i.test(c.nom||''));
+}
+function getComptesInvestissement(){return (S.comptes||[]).filter(isCompteInvestissement);}
+function getSoldeInvestissement(){return getComptesInvestissement().reduce((t,c)=>t+(+c.solde||0),0);}
+// Dettes globales (toutes boutiques) pour comparer avec la trésorerie d'achat
+function getDettesGlobales(){
+  const fournAchats=(S.achats||[]).filter(a=>a&&!a._deleted&&a.statut==='À payer')
+    .reduce((s,a)=>s+(a.mt-(a.tranches?a.tranches.reduce((x,t)=>x+t.mt,0):0)),0);
+  const fournSolde=getFournisseursActifs().filter(f=>f.dette>0).reduce((s,f)=>s+f.dette,0);
+  const emprunts=(S.dettesPerso||[]).filter(d=>d&&!d._deleted&&d.typeDette==='emprunter'&&d.statut!=='Soldé')
+    .reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
+  return {fournAchats,fournSolde,emprunts,total:fournAchats+fournSolde+emprunts};
+}
+function carteTresorerieAchat(){
+  const cs=getComptesInvestissement();
+  if(!cs.length)return '';
+  const total=getSoldeInvestissement();
+  const bouts=S.boutiques||[];
+  const defBid=bouts[0]?.id||1;
+  const detail=cs.map(c=>{
+    const b=bouts.find(x=>x.id==(c.bid||defBid));
+    return `<div class="stat-row"><span style="font-size:13px">${b?(b.emoji||'🏪')+' '+b.nom:c.nom}</span><strong style="color:${(+c.solde||0)>=0?'var(--green)':'var(--red)'}">${F(+c.solde||0)}</strong></div>`;
+  }).join('');
+  const d=getDettesGlobales();
+  const reste=total-d.total;
+  return `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber,#d97706);cursor:pointer" onclick="nav(document.querySelector('[data-page=comptes]'),'comptes')">
+    <div class="ct">🛒 Trésorerie d'achat — comptes Investissement (${cs.length})</div>
+    <div class="mv" style="color:${total>=0?'var(--green)':'var(--red)'}">${F(total)}</div>
+    <div class="ms" style="margin-bottom:8px">Argent disponible pour le ravitaillement</div>
+    ${detail}
+    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border2)">
+      <div class="stat-row"><span style="font-size:12px">📦 Fournisseurs (achats à payer)</span><span style="color:var(--red)">${F(d.fournAchats)}</span></div>
+      <div class="stat-row"><span style="font-size:12px">🏭 Fournisseurs (solde direct)</span><span style="color:var(--red)">${F(d.fournSolde)}</span></div>
+      <div class="stat-row"><span style="font-size:12px">📥 Emprunts personnels</span><span style="color:var(--red)">${F(d.emprunts)}</span></div>
+      <div class="stat-row" style="font-weight:700"><span style="font-size:13px">Reste après dettes</span><span style="color:${reste>=0?'var(--green)':'var(--red)'}">${F(reste)}</span></div>
+    </div>
+  </div>`;
+}
 function rCaisseGlobal(){
   const bouts=S.boutiques||[];
   const defBid=bouts[0]?.id||1;
