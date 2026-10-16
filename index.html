@@ -13076,6 +13076,7 @@ function rDettes(){
         <td><div style="background:var(--surface2);border-radius:4px;height:6px;min-width:60px"><div style="width:${pct}%;background:${d.typeDette==='emprunter'?'var(--amber)':'var(--teal)'};height:100%;border-radius:4px"></div></div><div style="font-size:10px;color:var(--text3)">${pct}%</div></td>
         <td>
           ${d.echeancier?`<button class="btn btn-sm" onclick="voirTableauAmort(${d.id})" style="font-size:11px;background:var(--navy-bg,#e8eaf6);color:var(--navy);border-color:var(--navy)">📊 Tableau</button>`:''}
+          ${d.typeDette==='emprunter'&&reste>0?`<button class="btn btn-sm" onclick="modifierCreditEmprunt(${d.id})" style="font-size:11px;color:var(--purple);border-color:var(--purple)">🏦 ${isCreditFormel(d)?'Modifier crédit':'Crédit'}</button>`:''}
           ${reste>0?`<button class="btn btn-sm" onclick="rembourserDette(${d.id})" style="font-size:11px">${d.typeDette==='emprunter'?'💳 Rembourser':'💰 Récupérer'}</button>`:'<span style="color:var(--green);font-size:11px;font-weight:600">✅ Soldé</span>'}
           <button class="btn-icon btn-sm" onclick="delDettePerso(${d.id})" style="color:var(--red);margin-left:4px">✕</button>
         </td>
@@ -13596,6 +13597,72 @@ function genAmortDette(id){
   closeModal();
   toast('✅ Tableau généré — '+duree+' versements de '+F(verse));
   voirTableauAmort(id);
+}
+// ═══ Transformer / modifier un emprunt en crédit formel (taux, durée, fréquence) après coup ═══
+function _creditAPayeQuelqueChose(d){
+  return (d.rembourse||0)>0||(Array.isArray(d.echeancier)&&d.echeancier.some(e=>e.paye))||(Array.isArray(d.paiements)&&d.paiements.length>0);
+}
+function modifierCreditEmprunt(id){
+  const d=(S.dettesPerso||[]).find(x=>x.id==id);if(!d||d.typeDette!=='emprunter')return;
+  window._mcId=id;
+  if(_creditAPayeQuelqueChose(d)) return toast('⚠️ Des remboursements ont déjà été enregistrés : le tableau ne peut plus être régénéré');
+  const sel=(v,cur)=>v===cur?' selected':'';
+  const tp=d.tauxPeriode||'annuel', fq=d.freq||'mensuel', at=d.amortType||'constant';
+  modal(`<div class="mft">🏦 Crédit formel — ${d.personne}</div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span>Capital emprunté</span><strong>${F(d.montant)}</strong></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Taux d'intérêt %</label><input class="fi" type="number" id="mc-taux" step="0.01" value="${d.taux||''}" placeholder="Ex: 18" oninput="previewCreditEmprunt()"></div>
+      <div class="fg"><label class="fl">Période du taux</label><select class="fs" id="mc-tper" onchange="previewCreditEmprunt()"><option value="annuel"${sel('annuel',tp)}>Annuel</option><option value="mensuel"${sel('mensuel',tp)}>Mensuel</option></select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Durée (nb d'échéances)</label><input class="fi" type="number" id="mc-duree" min="1" value="${d.duree||''}" placeholder="Ex: 12" oninput="previewCreditEmprunt()"></div>
+      <div class="fg"><label class="fl">Fréquence</label><select class="fs" id="mc-freq" onchange="previewCreditEmprunt()"><option value="mensuel"${sel('mensuel',fq)}>Mensuelle</option><option value="hebdo"${sel('hebdo',fq)}>Hebdomadaire</option><option value="trimestriel"${sel('trimestriel',fq)}>Trimestrielle</option></select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Type d'amortissement</label><select class="fs" id="mc-type" onchange="previewCreditEmprunt()"><option value="constant"${sel('constant',at)}>Mensualité constante</option><option value="lineaire"${sel('lineaire',at)}>Capital constant (dégressif)</option></select></div>
+      <div class="fg"><label class="fl">Date de déblocage</label><input class="fi" type="date" id="mc-date" value="${String(d.date||D()).slice(0,10)}" onchange="previewCreditEmprunt()"></div>
+    </div>
+    <div id="mc-preview" style="display:none;margin-top:6px;background:var(--navy);color:#fff;border-radius:var(--rs);padding:10px 14px;font-size:13px"></div>
+    <div style="font-size:11px;color:var(--text3);margin:10px 0">Quand la banque te remettra son tableau officiel, compare-le à celui-ci ; les montants (intérêts, frais) restent modifiables à chaque remboursement.</div>
+    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCreditEmprunt(${id})">✅ Enregistrer et générer le tableau</button></div>`);
+  previewCreditEmprunt();
+}
+function _lireCreditForm(){
+  const g=i=>document.getElementById(i);
+  return {taux:+g('mc-taux').value||0,tper:g('mc-tper').value,duree:Math.floor(+g('mc-duree').value||0),freq:g('mc-freq').value,type:g('mc-type').value,date:g('mc-date').value||D()};
+}
+function previewCreditEmprunt(){
+  const d=(S.dettesPerso||[]).find(x=>x.id==window._mcId);
+  const box=document.getElementById('mc-preview');if(!box)return;
+  const dd=d;
+  const f=_lireCreditForm();
+  const cap=(dd&&dd.montant)||0;
+  if(!cap||!f.duree){box.style.display='none';return;}
+  const e=genEcheancier(cap,f.taux,f.tper,f.duree,f.freq,f.type,f.date);
+  const tot=e.reduce((t,l)=>t+l.mensualite,0);
+  box.style.display='block';
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>${f.type==='lineaire'?'1re échéance':'Échéance estimée'}</span><strong>${F(e[0].mensualite)}</strong></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Total à rembourser</span><strong>${F(tot)}</strong></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Coût des intérêts</span><strong style="color:#ffd54f">${F(tot-cap)}</strong></div>
+    <div style="display:flex;justify-content:space-between"><span>Dernière échéance</span><strong>${fmtD(e[e.length-1].date)}</strong></div>`;
+}
+function saveCreditEmprunt(id){
+  const d=(S.dettesPerso||[]).find(x=>x.id==id);if(!d)return;
+  if(_creditAPayeQuelqueChose(d)) return toast('⚠️ Des remboursements existent déjà : modification impossible');
+  const f=_lireCreditForm();
+  if(!f.duree||f.duree<1) return toast('❌ Durée requise');
+  const ech=genEcheancier(d.montant,f.taux,f.tper,f.duree,f.freq,f.type,f.date);
+  d.taux=f.taux;d.tauxPeriode=f.tper;d.duree=f.duree;d.freq=f.freq;d.amortType=f.type;
+  d.date=f.date;d.echeancier=ech;d.echeance=ech[ech.length-1].date;
+  d.credit=true;
+  if(d.interetsPayes==null)d.interetsPayes=0;
+  if(!Array.isArray(d.paiements))d.paiements=[];
+  saveData();closeModal();
+  toast(`✅ Crédit enregistré — ${f.duree} échéances, première de ~${F(ech[0].mensualite)}`);
+  rDettes();voirTableauAmort(id);
 }
 // Règlement (total ou partiel) d'un crédit avec le fonds de garantie bloqué à la banque
 function soldeAvecGarantie(id){
