@@ -15175,7 +15175,7 @@ function getDettesGlobales(){
   const fournSolde=getFournisseursActifs().filter(f=>f.dette>0).reduce((s,f)=>s+f.dette,0);
   const emprunts=(S.dettesPerso||[]).filter(d=>d&&!d._deleted&&d.typeDette==='emprunter'&&d.statut!=='Soldé')
     .reduce((s,d)=>s+(d.montant-(d.rembourse||0)),0);
-  return {fournAchats,fournSolde,emprunts,total:fournAchats+fournSolde+emprunts};
+  return {fournAchats,fournSolde,emprunts,total:fournSolde+emprunts};
 }
 function carteTresorerieAchat(){
   const cs=getComptesInvestissement();
@@ -15195,8 +15195,7 @@ function carteTresorerieAchat(){
     <div class="ms" style="margin-bottom:8px">Argent disponible pour le ravitaillement</div>
     ${detail}
     <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border2)">
-      <div class="stat-row"><span style="font-size:12px">📦 Fournisseurs (achats à payer)</span><span style="color:var(--red)">${F(d.fournAchats)}</span></div>
-      <div class="stat-row"><span style="font-size:12px">🏭 Fournisseurs (solde direct)</span><span style="color:var(--red)">${F(d.fournSolde)}</span></div>
+      <div class="stat-row"><span style="font-size:12px">🏭 Dettes fournisseurs</span><span style="color:var(--red)">${F(d.fournSolde)}</span></div>
       <div class="stat-row"><span style="font-size:12px">📥 Emprunts personnels</span><span style="color:var(--red)">${F(d.emprunts)}</span></div>
       <div class="stat-row" style="font-weight:700"><span style="font-size:13px">Reste après dettes</span><span style="color:${reste>=0?'var(--green)':'var(--red)'}">${F(reste)}</span></div>
     </div>
