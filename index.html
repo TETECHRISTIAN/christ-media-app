@@ -3609,7 +3609,7 @@ const titles={annuler_retablir:'Annuler / Rétablir',dashboard:'Tableau de bord'
 const actionsMap={annuler_retablir:()=>'',
   dashboard:()=>'<button class="btn btn-success" onclick="nav(document.querySelector(\'[data-page=vente]\'),\'vente\')">+ Vente</button>',
   objectifs:()=>'<button class="btn btn-primary" onclick="editObjectifs()">⚙️ Modifier objectifs</button>',
-  transactions:()=>'',
+  transactions:()=>'<button class="btn btn-primary" onclick="voirAllInOne()">🗂️ All in One</button>',
   vente:()=>'<button class="btn" onclick="ouvrirCaisseRapide()" title="Mode plein écran optimisé caisse">⚡ Caisse Rapide</button>',
   services:()=>'<button class="btn btn-primary" onclick="addService()">+ Service</button>',
   achats:()=>'<button class="btn" onclick="modalExportExcel()">📊 Excel</button> <button class="btn btn-primary" onclick="addAchat()">+ Achat</button>',
@@ -3623,7 +3623,7 @@ const actionsMap={annuler_retablir:()=>'',
   depenses:()=>'<button class="btn btn-danger" onclick="addDep()">+ Dépense</button>',
   tresorerie:()=>'',revenus:()=>'<button class="btn btn-success" onclick="addRevenu()">+ Revenu</button> <button class="btn" onclick="addCharge()">+ Charge</button>',rapports:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',
   historique:()=>'<button class="btn" onclick="clearHistorique()">🗑️ Vider</button>',inventaire:()=>'<button class="btn" onclick="printRapport()">🖨️ Imprimer</button>',workspace:()=>'',comptes:()=>'<button class="btn btn-primary" onclick="addCompte()">+ Compte</button>',devis:()=>'<button class="btn" onclick="_devisFiltreStatut=\'Envoyé\';rDevis()">📤 En attente</button> <button class="btn btn-primary" onclick="addDevis()">+ Devis</button>',planning:()=>'<button class="btn btn-primary" onclick="addPlanning()">+ Tâche</button>',calculatrice:()=>'',parametres:()=>'',
-  dettes:()=>'',
+  dettes:()=>'<button class="btn btn-primary" onclick="voirTousPaiementsFournisseurs()">📜 Paiements fournisseurs</button> <button class=\"btn\" onclick=\"voirAllInOne()\">🗂️ All in One</button>',
   flux:()=>'',
   limites:()=>'<button class="btn btn-primary" onclick="addLimite()">+ Limite</button>',
   modeles:()=>'<button class="btn btn-primary" onclick="addModele()">+ Modèle</button>',
@@ -14179,6 +14179,276 @@ function reconcilierHistoDette(fid){
     toast('✅ Soldes du relevé recalculés et corrigés');
     voirHistoDette(fid);
   }
+}
+
+// ─── ALL IN ONE : toutes les transactions (toutes boutiques) dans une seule fenêtre ───
+function _aioFmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _aioPeriodeDates(p){
+  const t=D(), n=new Date();
+  if(p==='jour') return {dateD:t,dateF:t};
+  if(p==='semaine'){const j=n.getDay()||7;const m=new Date(n);m.setDate(n.getDate()-j+1);return {dateD:_aioFmt(m),dateF:t};}
+  if(p==='mois') return {dateD:t.slice(0,8)+'01',dateF:t};
+  return {dateD:'',dateF:''};
+}
+function _aioInit(){
+  if(!window._aioF) window._aioF=Object.assign({type:'tous',bid:'',compte:'',mot:'',mtMin:'',mtMax:'',periode:'mois',limit:200},_aioPeriodeDates('mois'));
+}
+function _aioCollect(){
+  const def=(S.boutiques||[])[0]?.id||1;
+  const bnom=b=>{const x=(S.boutiques||[]).find(y=>y.id==(b||def));return x?x.nom:'—';};
+  const fnom=id=>{const f=(S.fournisseurs||[]).find(x=>x.id==id);return f?f.nom:'';};
+  const L=[];
+  const push=o=>{o=Object.assign({compte:'',tiers:'',note:'',statut:'',heure:'',ts:0,date:'',bid:null,paye:null},o);o.boutique=bnom(o.bid);o.bidN=String(o.bid||def);L.push(o);};
+  (S.ventes||[]).filter(v=>!v._deleted).forEach(v=>{
+    const lg=(v.lignes&&v.lignes.length)?v.lignes:[{aid:v.aid,qte:v.qte}];
+    const desc=lg.map(l=>{const a=ga(l.aid);return (a?a.nom:(l.nom||l.desc||'?'))+(l.qte>1?' ×'+l.qte:'');}).join(', ');
+    push({id:v.id,type:'vente',date:v.date,heure:v.heure,ts:v.ts||0,bid:v.bid,desc,tiers:v.client||'',compte:v.mode||'',mt:+v.mt||0,statut:v.statut||'',note:v.notes||''});
+  });
+  (S.ventes_services||[]).filter(x=>!x._deleted).forEach(x=>{
+    push({id:x.id,type:'service',date:x.date,heure:x.heure,ts:x.ts||0,bid:x.bid,desc:(x.nom_service||'Service')+(x.qte>1?' ×'+x.qte:''),tiers:x.client||'',compte:x.mode||'',mt:+x.mt||0,statut:x.statut||'',note:x.notes||''});
+  });
+  (S.revenus||[]).filter(r=>!r._deleted).forEach(r=>{
+    push({id:r.id,type:'revenu',date:r.date,heure:r.heure,ts:r.ts||0,bid:r.bid,desc:r.desc||r.cat||'Revenu',tiers:r.cat||'',compte:r.mode||'',mt:+r.mt||0,note:r.notes||''});
+  });
+  (S.achats||[]).filter(a=>!a._deleted).forEach(a=>{
+    const ar=ga(a.aid);
+    const reste=(a.statut==='À payer')?resteAchat(a):0;
+    push({id:a.id,type:'achat',date:a.date,heure:a.heure,ts:a.ts||0,bid:a.bid,desc:(ar?ar.nom:'?')+(a.qte>1?' ×'+a.qte:''),tiers:fnom(a.fid)||a.four||'',compte:a.mode||'',mt:+a.mt||0,paye:Math.max(0,(+a.mt||0)-reste),statut:a.statut||'Payé',note:a.notes||''});
+  });
+  const reglements=[];
+  (S.depenses||[]).filter(d=>!d._deleted).forEach(d=>{
+    const reg=d.cat==='Règlement dette', n=d.notes||'', i=n.indexOf(' · ');
+    push({id:d.id,type:reg?'dette_paiement':'depense',date:d.date,heure:d.heure,ts:d.ts||0,bid:d.bid,desc:reg?'Règlement dette':(d.cat||'Dépense'),tiers:d.four||'',compte:d.mode||'',mt:+d.mt||0,note:reg?(i>=0?n.slice(i+3):''):n});
+    if(reg) reglements.push(d);
+  });
+  (S.fournisseurs||[]).filter(f=>!f._deleted).forEach(f=>{
+    (f.historiquePaiementsFour||[]).forEach(p=>{
+      if(p.montantPaye==null)return;
+      const note=(p.note&&p.note!=='—')?p.note:'', mt=+p.montantPaye||0;
+      if(/^Paiement achat/i.test(note))return; // déjà visible via la ligne de l'achat
+      if(reglements.some(d=>String(d.id)===String(p.id)||(d.four===f.nom&&d.date===p.date&&(+d.mt||0)===mt)))return;
+      push({id:p.id,type:'dette_paiement',date:p.date,ts:p.ts||0,bid:f.bid,desc:'Règlement dette',tiers:f.nom,compte:p.compte||'',mt,note});
+    });
+    (f.historiqueDetteAjouts||[]).forEach(h=>{
+      if((S.achats||[]).some(a=>String(a.id)===String(h.id)))return; // déjà visible via l'achat
+      push({id:h.id,type:'dette_ajout',date:h.date,ts:h.ts||0,bid:f.bid,desc:'Dette ajoutée',tiers:f.nom,mt:+h.mt||0,note:h.notes||''});
+    });
+  });
+  transfertsActifs().forEach(t=>{
+    const de=(S.comptes||[]).find(c=>c.id==(t.de??t.cidSrc)), vers=(S.comptes||[]).find(c=>c.id==(t.vers??t.cidDst));
+    push({id:t.id,type:'transfert',date:t.date,heure:t.heure,ts:t.ts||0,bid:de?de.bid:t.bid,desc:(de?de.nom:'?')+' → '+(vers?vers.nom:'?'),mt:+t.mt||0,note:t.notes||''});
+  });
+  return L;
+}
+function _aioRows(){
+  const f=window._aioF, mot=(f.mot||'').toLowerCase().trim();
+  const mn=f.mtMin!==''?parseFloat(f.mtMin):null, mx=f.mtMax!==''?parseFloat(f.mtMax):null;
+  return _aioCollect().filter(l=>{
+    if(f.type!=='tous'&&l.type!==f.type)return false;
+    if(f.bid&&l.bidN!==String(f.bid))return false;
+    if(f.compte&&l.compte!==f.compte)return false;
+    if(f.dateD&&l.date<f.dateD)return false;
+    if(f.dateF&&l.date>f.dateF)return false;
+    if(mn!=null&&!isNaN(mn)&&l.mt<mn)return false;
+    if(mx!=null&&!isNaN(mx)&&l.mt>mx)return false;
+    if(mot&&!(l.desc+' '+l.tiers+' '+l.note+' '+l.compte+' '+l.boutique+' '+l.statut).toLowerCase().includes(mot))return false;
+    return true;
+  }).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||((b.ts||0)-(a.ts||0)));
+}
+function aioSet(k,v){_aioInit();window._aioF[k]=v;if(k==='dateD'||k==='dateF')window._aioF.periode='perso';window._aioF.limit=200;voirAllInOne();}
+function aioPeriode(p){_aioInit();Object.assign(window._aioF,{periode:p,limit:200},_aioPeriodeDates(p));voirAllInOne();}
+function aioReset(){window._aioF=null;voirAllInOne();}
+function aioPlus(){_aioInit();window._aioF.limit+=200;voirAllInOne();}
+function aioExportCSV(){
+  const lib={vente:'Vente',service:'Service',revenu:'Revenu',achat:'Achat',depense:'Dépense',dette_paiement:'Paiement dette',dette_ajout:'Dette ajoutée',transfert:'Transfert'};
+  const sortie=t=>t==='achat'||t==='depense'||t==='dette_paiement';
+  const q=x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"';
+  const csv='\ufeff'+['Date;Heure;Boutique;Type;Description;Tiers;Compte;Montant;Statut;Remarque']
+    .concat(_aioRows().map(l=>[q(_pfDateFR(l.date)),q(l.heure||''),q(l.boutique),q(lib[l.type]||l.type),q(l.desc),q(l.tiers),q(l.compte),(sortie(l.type)?-l.mt:l.mt),q(l.statut),q(l.note)].join(';'))).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='all-in-one-'+D()+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+}
+function voirAllInOne(){
+  _aioInit();
+  const f=window._aioF, all=_aioCollect(), rows=_aioRows();
+  const shown=rows.slice(0,f.limit);
+  const comptes=[...new Set(all.map(l=>l.compte).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const sum=(fn)=>rows.filter(fn).reduce((s,l)=>s+(l.type==='achat'?(l.paye||0):l.mt),0);
+  const tVentes=sum(l=>l.type==='vente'&&l.statut==='Payé');
+  const tAEnc=rows.filter(l=>l.type==='vente'&&l.statut==='Non payé').reduce((s,l)=>s+l.mt,0);
+  const tSvc=sum(l=>l.type==='service'&&l.statut==='Payé');
+  const tRev=sum(l=>l.type==='revenu');
+  const tAch=sum(l=>l.type==='achat');
+  const tDep=sum(l=>l.type==='depense');
+  const tDet=sum(l=>l.type==='dette_paiement');
+  const solde=tVentes+tSvc+tRev-tAch-tDep-tDet;
+  const lib={vente:'🛒 Vente',service:'⭐ Service',revenu:'💵 Revenu',achat:'📦 Achat',depense:'💸 Dépense',dette_paiement:'💳 Paiement dette',dette_ajout:'➕ Dette ajoutée',transfert:'↔️ Transfert'};
+  const col={vente:'var(--green)',service:'var(--amber)',revenu:'var(--teal)',achat:'var(--purple)',depense:'var(--red)',dette_paiement:'var(--red)',dette_ajout:'var(--amber)',transfert:'var(--teal)'};
+  const sortie=t=>t==='achat'||t==='depense'||t==='dette_paiement';
+  const inp='padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--bg);color:var(--text1);font-size:13px;font-family:inherit';
+  const pbtn=(id,l)=>`<button class="btn btn-sm${f.periode===id?' btn-primary':''}" onclick="aioPeriode('${id}')">${l}</button>`;
+  const chip=(l,v,c)=>`<div style="background:var(--surface2);border-radius:var(--rs);padding:7px 12px;font-size:12px">${l}<div style="font-weight:700;font-size:14px;color:${c}">${v}</div></div>`;
+  const typeOpts=[['tous','Tous les types'],['vente','🛒 Ventes'],['service','⭐ Services'],['revenu','💵 Revenus'],['achat','📦 Achats'],['depense','💸 Dépenses'],['dette_paiement','💳 Paiements de dettes'],['dette_ajout','➕ Dettes ajoutées'],['transfert','↔️ Transferts']];
+  const html=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:1200px;max-width:97vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div class="mft" style="margin:0">🗂️ All in One — toutes les transactions</div>
+      <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="aioExportCSV()">📥 CSV</button><button class="btn btn-sm" onclick="closeModal()">✕ Fermer</button></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      ${pbtn('jour',"Aujourd'hui")}${pbtn('semaine','Semaine')}${pbtn('mois','Mois')}${pbtn('tout','Tout')}
+      <input type="date" style="${inp}" value="${_pfEsc(f.dateD)}" onchange="aioSet('dateD',this.value)" title="Du">
+      <input type="date" style="${inp}" value="${_pfEsc(f.dateF)}" onchange="aioSet('dateF',this.value)" title="Au">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <select style="${inp}" onchange="aioSet('type',this.value)">${typeOpts.map(o=>`<option value="${o[0]}"${f.type===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select>
+      <select style="${inp}" onchange="aioSet('bid',this.value)"><option value="">Toutes les boutiques</option>${(S.boutiques||[]).map(b=>`<option value="${b.id}"${String(f.bid)===String(b.id)?' selected':''}>${_pfEsc(b.nom)}</option>`).join('')}</select>
+      <select style="${inp}" onchange="aioSet('compte',this.value)"><option value="">Tous les comptes</option>${comptes.map(c=>`<option value="${_pfEsc(c)}"${f.compte===c?' selected':''}>${_pfEsc(c)}</option>`).join('')}</select>
+      <input type="number" style="${inp};width:110px" placeholder="Montant min" value="${_pfEsc(f.mtMin)}" onchange="aioSet('mtMin',this.value)">
+      <input type="number" style="${inp};width:110px" placeholder="Montant max" value="${_pfEsc(f.mtMax)}" onchange="aioSet('mtMax',this.value)">
+      <input type="text" style="${inp};flex:1;min-width:170px" placeholder="🔍 Article, client, fournisseur, remarque…" value="${_pfEsc(f.mot)}" onchange="aioSet('mot',this.value)">
+      <button class="btn btn-sm" onclick="aioReset()">✖ Réinitialiser</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${chip('Ventes encaissées',F(tVentes),'var(--green)')}
+      ${chip('À encaisser',F(tAEnc),'var(--amber)')}
+      ${chip('Services',F(tSvc),'var(--amber)')}
+      ${chip('Revenus',F(tRev),'var(--teal)')}
+      ${chip('Achats payés','−'+F(tAch),'var(--purple)')}
+      ${chip('Dépenses','−'+F(tDep),'var(--red)')}
+      ${chip('Paiements dettes','−'+F(tDet),'var(--red)')}
+      ${chip('Solde de la période',(solde<0?'−':'')+F(Math.abs(solde)),solde<0?'var(--red)':'var(--green)')}
+    </div>
+    <div class="tbl-wrap" style="max-height:55dvh;overflow-y:auto"><table>
+      <thead><tr><th>Date</th><th>Boutique</th><th>Type</th><th>Description</th><th>Tiers</th><th>Compte</th><th>Montant</th><th>Statut</th><th>Remarque</th></tr></thead>
+      <tbody>${shown.length?shown.map(l=>{
+        const c=col[l.type]||'var(--text1)';
+        let m;
+        if(l.type==='transfert') m=`<span style="color:${c}">${F(l.mt)}</span>`;
+        else if(l.type==='vente'&&l.statut==='Non payé') m=`<span style="color:var(--text3)">${F(l.mt)}</span>`;
+        else if(l.type==='dette_ajout') m=`<span style="color:${c}">+${F(l.mt)}</span>`;
+        else m=`<span style="color:${c}">${sortie(l.type)?'−':'+'}${F(l.mt)}</span>`;
+        const st=l.statut?`<span style="font-size:11px;${(l.statut==='Non payé'||l.statut==='À payer')?'color:var(--amber);font-weight:600':'color:var(--text3)'}">${_pfEsc(l.statut)}${l.type==='achat'&&l.statut==='À payer'?' (payé '+F(l.paye||0)+')':''}</span>`:'';
+        return `<tr>
+          <td style="white-space:nowrap">${_pfDateFR(l.date)}${l.heure?`<div style="font-size:10px;color:var(--text3)">${_pfEsc(l.heure)}</div>`:''}</td>
+          <td style="font-size:11px">${_pfEsc(l.boutique)}</td>
+          <td style="color:${c};white-space:nowrap;font-size:12px">${lib[l.type]||l.type}</td>
+          <td style="font-size:12px;min-width:160px">${_pfEsc(l.desc)}</td>
+          <td style="font-size:12px">${_pfEsc(l.tiers)||'<span style="color:var(--text3)">—</span>'}</td>
+          <td style="font-size:12px">${_pfEsc(l.compte)||'<span style="color:var(--text3)">—</span>'}</td>
+          <td style="font-weight:700;white-space:nowrap">${m}</td>
+          <td>${st}</td>
+          <td style="font-size:12px;min-width:160px">${l.note?_pfEsc(l.note):'<span style="color:var(--text3)">—</span>'}</td>
+        </tr>`;}).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Aucune transaction pour ces filtres</td></tr>'}</tbody>
+    </table></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--text3);gap:8px;flex-wrap:wrap">
+      <span>${shown.length} affichée${shown.length>1?'s':''} sur ${rows.length}</span>
+      ${rows.length>shown.length?'<button class="btn btn-sm" onclick="aioPlus()">Afficher 200 de plus</button>':''}
+    </div>
+  </div></div>`;
+  document.getElementById('modal-root').innerHTML=html;
+}
+
+// ─── VUE UNIQUE : TOUS LES MOUVEMENTS DE DETTES FOURNISSEURS (paiements + ajouts + remarques) ───
+window._pfFiltre = window._pfFiltre || {type:'tous',four:'',mot:'',dateD:'',dateF:''};
+function _pfEsc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _pfDateFR(d){return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?d.split('-').reverse().join('/'):(d||'—');}
+function _pfCollect(){
+  const lignes=[], vus=new Set();
+  (getFournisseursActifs()||[]).forEach(f=>{
+    (f.historiquePaiementsFour||[]).forEach(p=>{
+      const aMontant=p.montantPaye!=null;
+      const mt=aMontant?(+p.montantPaye||0):(+p.mt||0);
+      const info=!aMontant&&/converti/i.test(p.note||'');
+      lignes.push({id:p.id,date:p.date||'',ts:p.ts||0,four:f.nom,type:info?'info':'paiement',mt,compte:p.compte||'',note:(p.note&&p.note!=='—')?p.note:''});
+      vus.add(String(p.id));
+    });
+    (f.historiqueDetteAjouts||[]).forEach(h=>{
+      lignes.push({id:h.id,date:h.date||'',ts:h.ts||0,four:f.nom,type:'ajout',mt:+h.mt||0,compte:'',note:h.notes||''});
+    });
+  });
+  // Règlements présents en dépenses mais absents du relevé fournisseur
+  (S.depenses||[]).filter(d=>!d._deleted&&d.cat==='Règlement dette').forEach(d=>{
+    if(vus.has(String(d.id)))return;
+    if(lignes.some(l=>l.type==='paiement'&&l.four===d.four&&l.date===d.date&&l.mt===d.mt))return;
+    const n=d.notes||'', i=n.indexOf(' · ');
+    lignes.push({id:d.id,date:d.date||'',ts:d.ts||0,four:d.four||'—',type:'paiement',mt:+d.mt||0,compte:d.mode||'',note:i>=0?n.slice(i+3):''});
+  });
+  return lignes;
+}
+function _pfRows(){
+  const fl=window._pfFiltre, mot=(fl.mot||'').toLowerCase().trim();
+  return _pfCollect().filter(l=>{
+    if(fl.type!=='tous'&&l.type!==fl.type)return false;
+    if(fl.four&&l.four!==fl.four)return false;
+    if(fl.dateD&&l.date<fl.dateD)return false;
+    if(fl.dateF&&l.date>fl.dateF)return false;
+    if(mot&&!(l.note+' '+l.four+' '+l.compte).toLowerCase().includes(mot))return false;
+    return true;
+  }).sort((a,b)=>b.date.localeCompare(a.date)||(b.ts-a.ts));
+}
+function pfSetFiltre(k,v){window._pfFiltre[k]=v;voirTousPaiementsFournisseurs();}
+function pfResetFiltre(){window._pfFiltre={type:'tous',four:'',mot:'',dateD:'',dateF:''};voirTousPaiementsFournisseurs();}
+function pfExportCSV(){
+  const rows=_pfRows();
+  const lib={paiement:'Paiement',ajout:'Ajout de dette',info:'Info'};
+  const q=x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"';
+  const csv='\ufeff'+['Date;Fournisseur;Type;Montant;Compte;Remarque']
+    .concat(rows.map(l=>[q(_pfDateFR(l.date)),q(l.four),q(lib[l.type]||l.type),l.mt,q(l.compte),q(l.note)].join(';'))).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='paiements-fournisseurs-'+D()+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+}
+function voirTousPaiementsFournisseurs(){
+  const fl=window._pfFiltre;
+  const noms=[...new Set(_pfCollect().map(l=>l.four))].sort((a,b)=>String(a).localeCompare(String(b)));
+  const rows=_pfRows();
+  const totPaye=rows.filter(l=>l.type==='paiement').reduce((s,l)=>s+l.mt,0);
+  const totAjout=rows.filter(l=>l.type==='ajout').reduce((s,l)=>s+l.mt,0);
+  const nbPaie=rows.filter(l=>l.type==='paiement').length;
+  const lib={paiement:'💳 Paiement',ajout:'➕ Ajout dette',info:'ℹ️ Info'};
+  const col={paiement:'var(--green)',ajout:'var(--amber)',info:'var(--text3)'};
+  const inp='padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--bg);color:var(--text1);font-size:13px;font-family:inherit';
+  const html=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:1000px;max-width:96vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+      <div class="mft" style="margin:0">📜 Paiements & dettes fournisseurs — tout en un</div>
+      <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="pfExportCSV()">📥 CSV</button><button class="btn btn-sm" onclick="closeModal()">✕ Fermer</button></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <select style="${inp}" onchange="pfSetFiltre('type',this.value)">
+        <option value="tous"${fl.type==='tous'?' selected':''}>Tous les mouvements</option>
+        <option value="paiement"${fl.type==='paiement'?' selected':''}>Paiements seulement</option>
+        <option value="ajout"${fl.type==='ajout'?' selected':''}>Ajouts de dette seulement</option>
+      </select>
+      <select style="${inp}" onchange="pfSetFiltre('four',this.value)">
+        <option value="">Tous les fournisseurs</option>
+        ${noms.map(n=>`<option value="${_pfEsc(n)}"${fl.four===n?' selected':''}>${_pfEsc(n)}</option>`).join('')}
+      </select>
+      <input type="date" style="${inp}" value="${_pfEsc(fl.dateD)}" onchange="pfSetFiltre('dateD',this.value)" title="Du">
+      <input type="date" style="${inp}" value="${_pfEsc(fl.dateF)}" onchange="pfSetFiltre('dateF',this.value)" title="Au">
+      <input type="text" style="${inp};flex:1;min-width:150px" placeholder="🔍 Mot dans les remarques…" value="${_pfEsc(fl.mot)}" onchange="pfSetFiltre('mot',this.value)">
+      <button class="btn btn-sm" onclick="pfResetFiltre()">✖ Effacer</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 14px">Total payé : <strong style="color:var(--green)">${F(totPaye)}</strong> <span style="color:var(--text3)">(${nbPaie} paiement${nbPaie>1?'s':''})</span></div>
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 14px">Dettes ajoutées : <strong style="color:var(--amber)">${F(totAjout)}</strong></div>
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 14px">${rows.length} ligne${rows.length>1?'s':''}</div>
+    </div>
+    <div class="tbl-wrap" style="max-height:60dvh;overflow-y:auto"><table>
+      <thead><tr><th>Date</th><th>Fournisseur</th><th>Type</th><th>Montant</th><th>Compte</th><th>Remarque</th></tr></thead>
+      <tbody>${rows.length?rows.map(l=>`<tr>
+        <td style="white-space:nowrap">${_pfDateFR(l.date)}</td>
+        <td class="tdm">${_pfEsc(l.four)}</td>
+        <td style="color:${col[l.type]};white-space:nowrap;font-size:12px">${lib[l.type]||l.type}</td>
+        <td style="font-weight:700;white-space:nowrap;color:${col[l.type]}">${l.type==='info'?'—':F(l.mt)}</td>
+        <td style="font-size:12px">${_pfEsc(l.compte)||'—'}</td>
+        <td style="font-size:12px;min-width:200px">${l.note?_pfEsc(l.note):'<span style="color:var(--text3)">—</span>'}</td>
+      </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Aucun mouvement pour ces filtres</td></tr>'}</tbody>
+    </table></div>
+  </div></div>`;
+  document.getElementById('modal-root').innerHTML=html;
 }
 
 function voirHistoDette(fid){
