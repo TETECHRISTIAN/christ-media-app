@@ -18528,6 +18528,7 @@ function rRevArticle(){
 function cmpSetPeriode(p){
   window._cmpPeriode = p;
   window._cmpDatePerso = null;
+  window._cmpMois = null;
   rComparaison();
 }
 function cmpNavJour(delta){
@@ -18544,17 +18545,39 @@ function cmpNavJour(delta){
 var _cmpPeriode = 'jour';
 var _cmpDatePerso = null;
 
+var _cmpMois = null;
+function cmpNavMois(delta){
+  var curYM = new Date().toISOString().slice(0,7);
+  var cur = window._cmpMois || curYM;
+  var d = new Date(Date.UTC(+cur.slice(0,4), +cur.slice(5,7)-1+delta, 1));
+  var ym = d.toISOString().slice(0,7);
+  if(ym <= curYM){
+    window._cmpMois = ym;
+    rComparaison();
+  }
+}
+
+// Comparaison de TOUTES les boutiques + colonne TOTAL
 function rComparaison(){
   var boutiques = S.boutiques || [];
   if(boutiques.length < 2){
     document.getElementById('content').innerHTML = '<div class="page"><div style="text-align:center;padding:60px;color:var(--text3)">Aucune comparaison possible — une seule boutique configurée.</div></div>';
     return;
   }
+  var palette = ['var(--green)','var(--teal)','var(--purple)','var(--amber)','var(--navy)','var(--red)'];
+  var colB = function(i){ return palette[i % palette.length]; };
 
   var now = new Date();
   var today      = now.toISOString().slice(0,10);
+  var curYM      = today.slice(0,7);
   var debutSem   = (function(){ var d=new Date(now); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
-  var debutMois  = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
+  var moisSel    = _cmpMois || curYM;
+  var debutMois  = moisSel+'-01';
+  var finMois    = (function(){
+    var last = new Date(Date.UTC(+moisSel.slice(0,4), +moisSel.slice(5,7), 0)).getUTCDate();
+    var f = moisSel+'-'+String(last).padStart(2,'0');
+    return f > today ? today : f;
+  })();
   var debutAnnee = now.getFullYear()+'-01-01';
 
   var debut, fin;
@@ -18564,7 +18587,7 @@ function rComparaison(){
   } else if(_cmpPeriode==='semaine'){
     debut = debutSem; fin = today;
   } else if(_cmpPeriode==='mois'){
-    debut = debutMois; fin = today;
+    debut = debutMois; fin = finMois;
   } else {
     debut = debutAnnee; fin = today;
   }
@@ -18578,7 +18601,6 @@ function rComparaison(){
     var svcsAv    = (S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){ return v.bid==bid && inRange(v.date) && v.avance>0; });
     var deps      = (S.depenses||[]).filter(function(d){ return d.bid==bid && inRange(d.date); });
     var revs      = (S.revenus||[]).filter(function(r){ return r.bid==bid && inRange(r.date); });
-    var b0id=(S.boutiques[0]?S.boutiques[0].id:1);
     var achats    = fluxPaiementsAchats(getAchatsBoutique(bid)).filter(function(a){ return inRange(a.date); });
 
     var ca      = ventes.reduce(function(s,v){return s+v.mt;},0)
@@ -18594,7 +18616,6 @@ function rComparaison(){
       items.forEach(function(it){
         var qte = it.qte||1;
         var pu  = it.pu || (qte>0?(it.mt||it.total||0)/qte:0);
-        // PA : priorité à la valeur enregistrée dans la ligne, sinon stock actuel
         var pa = (it.pa != null && it.pa > 0) ? it.pa
                : (function(){ var artStock=(S.stock||[]).find(function(s){return s.id==it.aid||(it.nom&&s.nom===it.nom);}); return artStock?(artStock.pa||0):0; })();
         beneficeVentes += (pu - pa) * qte;
@@ -18623,98 +18644,113 @@ function rComparaison(){
       });
     });
     var topArts=Object.entries(artMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,5);
-    return {nom:b.nom||b.id,ca:ca,dep:dep,rev:rev,achat:achat,benefice:benefice,marge:marge,nbTx:nbTx,panier:panier,stockVal:stockVal,dettesC:dettesC,topArts:topArts};
+    return {id:bid,nom:b.nom||b.id,ca:ca,dep:dep,rev:rev,achat:achat,benefice:benefice,marge:marge,nbTx:nbTx,panier:panier,stockVal:stockVal,dettesC:dettesC,artMap:artMap,topArts:topArts};
   }
 
   var data = boutiques.map(calcBoutique);
-  var b1=data[0], b2=data[1];
 
-  function kpiRow(label,v1,v2,fmt,color,inverse){
-    var f=fmt==='pct'?function(v){return v+'%';}:F;
-    var eq=(v1===v2);
-    var best1=!eq&&(inverse?v1<v2:v1>v2);
-    var best2=!eq&&!best1;
-    var c1=best1?color:'var(--text)';
-    var c2=best2?color:'var(--text)';
-    return '<tr style="border-bottom:1px solid var(--border2)">'
-      +'<td style="padding:12px 16px;font-size:13px;color:var(--text);font-weight:600;white-space:nowrap">'+label+'</td>'
-      +'<td style="padding:11px 16px;font-weight:800;color:'+c1+';font-size:15px;letter-spacing:-.3px;border-left:1px solid var(--border)">'
-        +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">'
-        +(best1?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700">▲ Mieux</span>':'')
-        +'<span>'+f(v1)+'</span></div></td>'
-      +'<td style="padding:11px 16px;font-weight:800;color:'+c2+';font-size:15px;letter-spacing:-.3px;border-left:1px solid var(--border)">'
-        +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">'
-        +(best2?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700">▲ Mieux</span>':'')
-        +'<span>'+f(v2)+'</span></div></td>'
-      +'</tr>';
+  // ── TOTAL toutes boutiques ──
+  var tot = {nom:'TOTAL',ca:0,dep:0,rev:0,achat:0,benefice:0,nbTx:0,dettesC:0,artMap:{}};
+  data.forEach(function(d){
+    ['ca','dep','rev','achat','benefice','nbTx','dettesC'].forEach(function(k){ tot[k]+=d[k]; });
+    Object.keys(d.artMap).forEach(function(k){
+      var e = tot.artMap[k] || (tot.artMap[k]={qte:0,total:0});
+      e.qte += d.artMap[k].qte; e.total += d.artMap[k].total;
+    });
+  });
+  tot.marge   = tot.ca>0 ? Math.round(tot.benefice/tot.ca*100) : 0;
+  tot.panier  = tot.nbTx>0 ? Math.round(tot.ca/tot.nbTx) : 0;
+  // Valeur du stock : chaque article compté une seule fois (évite le double comptage des articles sans boutique)
+  tot.stockVal = (S.stock||[]).reduce(function(s,a){return s+sa(a)*(a.pa||0);},0);
+  tot.topArts = Object.entries(tot.artMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,5);
+
+  var thStyle = 'padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12);text-align:right;white-space:nowrap';
+
+  function kpiRow(label,key,fmt,color,inverse){
+    var f = fmt==='pct' ? function(v){return v+'%';} : fmt==='nb' ? function(v){return String(v);} : F;
+    var vals = data.map(function(d){return d[key];});
+    var best = inverse ? Math.min.apply(null,vals) : Math.max.apply(null,vals);
+    var allEq = vals.every(function(v){return v===vals[0];});
+    var h = '<tr style="border-bottom:1px solid var(--border2)">'
+      +'<td style="padding:12px 16px;font-size:13px;color:var(--text);font-weight:600;white-space:nowrap">'+label+'</td>';
+    vals.forEach(function(v){
+      var isBest = !allEq && v===best;
+      h += '<td style="padding:11px 16px;font-weight:800;color:'+(isBest?color:'var(--text)')+';font-size:15px;letter-spacing:-.3px;border-left:1px solid var(--border);text-align:right;white-space:nowrap">'
+        +(isBest?'<span style="font-size:10px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-right:6px">▲ Mieux</span>':'')
+        +f(v)+'</td>';
+    });
+    h += '<td style="padding:11px 16px;font-weight:800;color:'+color+';font-size:15px;letter-spacing:-.3px;border-left:2px solid var(--border2);background:var(--surface2);text-align:right;white-space:nowrap">'+f(tot[key])+'</td>';
+    return h+'</tr>';
   }
 
-  // Évolution jour par jour (7 derniers jours pour semaine/mois, sinon juste le jour)
+  // Évolution jour par jour (ou mois par mois pour l'année)
   function evolJours(){
     if(_cmpPeriode==='jour') return '';
     var jours=[];
-    var nbJ = _cmpPeriode==='semaine'?7:_cmpPeriode==='mois'?30:12;
-    var d = new Date(debut);
-    var dFin = new Date(fin);
-    while(d<=dFin && jours.length<nbJ){
-      jours.push(d.toISOString().slice(0,10));
-      d.setDate(d.getDate()+1);
-    }
     if(_cmpPeriode==='annee'){
-      // Par mois
-      jours=[];
-      for(var m=0;m<12;m++){
-        jours.push(now.getFullYear()+'-'+String(m+1).padStart(2,'0'));
+      for(var m=0;m<12;m++) jours.push(now.getFullYear()+'-'+String(m+1).padStart(2,'0'));
+    } else {
+      var d = new Date(debut+'T12:00:00');
+      var dFin = new Date(fin+'T12:00:00');
+      while(d<=dFin && jours.length<31){
+        jours.push(d.toISOString().slice(0,10));
+        d.setDate(d.getDate()+1);
       }
+    }
+
+    function caJour(b,jour){
+      var an = _cmpPeriode==='annee';
+      return (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
+          return v.bid==b.id && (an?v.date.startsWith(jour):v.date===jour) && v.statut==='Payé';
+        }).reduce(function(s,v){return s+v.mt;},0)
+        +(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){
+          return v.bid==b.id && (an?v.date.startsWith(jour):v.date===jour);
+        }).reduce(function(s,v){return s+(v.statut==='Payé'?v.mt:0)+(v.avance||0);},0);
     }
 
     var html='<div class="card" style="margin-bottom:16px;overflow-x:auto">';
     html+='<div style="font-weight:700;font-size:13px;margin-bottom:12px">📅 Évolution '
-      +(_cmpPeriode==='semaine'?'cette semaine':_cmpPeriode==='mois'?'ce mois':'cette année')
-      +' — CA par jour</div>';
-    html+='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:500px">';
-    html+='<thead><tr style="background:var(--surface2)">'
-      +'<th style="padding:8px 10px;text-align:left">Date</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--green)">'+b1.nom+'</th>'
-      +'<th style="padding:8px 10px;text-align:right;color:var(--teal)">'+b2.nom+'</th>'
-      +'<th style="padding:8px 10px;text-align:right">Écart</th>'
-      +'<th style="padding:8px 10px;text-align:left">Tendance</th>'
-      +'</tr></thead><tbody>';
+      +(_cmpPeriode==='semaine'?'cette semaine':_cmpPeriode==='mois'?'du mois':'cette année')
+      +(_cmpPeriode==='annee'?' — CA par mois':' — CA par jour')+'</div>';
+    html+='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:'+(260+boutiques.length*110)+'px">';
+    html+='<thead><tr style="background:var(--surface2)"><th style="padding:8px 10px;text-align:left">Date</th>';
+    boutiques.forEach(function(b,i){
+      html+='<th style="padding:8px 10px;text-align:right;color:'+colB(i)+'">'+(b.nom||b.id)+'</th>';
+    });
+    html+='<th style="padding:8px 10px;text-align:right;border-left:2px solid var(--border2)">TOTAL</th>'
+      +'<th style="padding:8px 10px;text-align:left">Tendance</th></tr></thead><tbody>';
 
+    var sums = boutiques.map(function(){return 0;});
+    var sumAll = 0;
     jours.forEach(function(jour){
-      boutiques.forEach(function(b,i){
-        // already done inline below
-      });
-      var prefix = _cmpPeriode==='annee' ? jour : jour;
-      function caJour(b){
-        return (S.ventes||[]).filter(_x=>!_x._deleted).filter(function(v){
-            return v.bid==b.id && (_cmpPeriode==='annee'?v.date.startsWith(prefix):v.date===jour) && v.statut==='Payé';
-          }).reduce(function(s,v){return s+v.mt;},0)
-          +(S.ventes_services||[]).filter(_x=>!_x._deleted).filter(function(v){
-            return v.bid==b.id && (_cmpPeriode==='annee'?v.date.startsWith(prefix):v.date===jour);
-          }).reduce(function(s,v){return s+(v.statut==='Payé'?v.mt:0)+(v.avance||0);},0);
-      }
-      var ca1=caJour(boutiques[0]), ca2=caJour(boutiques[1]);
-      if(ca1===0&&ca2===0) return;
-      var ecart=ca1-ca2;
-      var max=Math.max(ca1,ca2,1);
+      var cas = boutiques.map(function(b){return caJour(b,jour);});
+      var tj = cas.reduce(function(s,v){return s+v;},0);
+      if(tj===0) return;
+      cas.forEach(function(v,i){ sums[i]+=v; });
+      sumAll += tj;
+      var max = Math.max.apply(null,cas.concat([1]));
       var label=_cmpPeriode==='annee'
         ? new Date(jour+'-01').toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})
         : new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       html+='<tr style="border-bottom:1px solid var(--border)">'
-        +'<td style="padding:8px 10px;font-weight:600;white-space:nowrap">'+label+'</td>'
-        +'<td style="text-align:right;padding:8px 10px;font-weight:700;color:var(--green)">'+F(ca1)+'</td>'
-        +'<td style="text-align:right;padding:8px 10px;font-weight:700;color:var(--teal)">'+F(ca2)+'</td>'
-        +'<td style="text-align:right;padding:8px 10px;font-weight:700;color:'+(ecart>0?'var(--green)':ecart<0?'var(--red)':'var(--text3)')+'">'+( ecart>0?'+':'')+F(ecart)+'</td>'
-        +'<td style="padding:8px 10px;min-width:120px">'
-          +'<div style="display:flex;gap:3px;align-items:center">'
-          +'<div style="height:8px;border-radius:4px;background:var(--green);width:'+Math.round(ca1/max*80)+'px"></div>'
-          +'<div style="height:8px;border-radius:4px;background:var(--teal);opacity:.7;width:'+Math.round(ca2/max*80)+'px"></div>'
-          +'</div>'
-        +'</td>'
-        +'</tr>';
+        +'<td style="padding:8px 10px;font-weight:600;white-space:nowrap">'+label+'</td>';
+      cas.forEach(function(v,i){
+        html+='<td style="text-align:right;padding:8px 10px;font-weight:700;color:'+colB(i)+'">'+F(v)+'</td>';
+      });
+      html+='<td style="text-align:right;padding:8px 10px;font-weight:800;border-left:2px solid var(--border2);background:var(--surface2)">'+F(tj)+'</td>'
+        +'<td style="padding:8px 10px;min-width:120px"><div style="display:flex;gap:3px;align-items:center">';
+      cas.forEach(function(v,i){
+        html+='<div style="height:8px;border-radius:4px;background:'+colB(i)+';width:'+Math.round(v/max*50)+'px"></div>';
+      });
+      html+='</div></td></tr>';
     });
-    html+='</tbody></table></div>';
+    html+='</tbody><tfoot><tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--border2)">'
+      +'<td style="padding:10px">TOTAL</td>';
+    sums.forEach(function(v,i){
+      html+='<td style="text-align:right;padding:10px;color:'+colB(i)+'">'+F(v)+'</td>';
+    });
+    html+='<td style="text-align:right;padding:10px;border-left:2px solid var(--border2)">'+F(sumAll)+'</td><td></td></tr></tfoot>';
+    html+='</table></div>';
     return html;
   }
 
@@ -18737,7 +18773,7 @@ function rComparaison(){
 
   var html='<div class="page">';
 
-  // Sélecteur période + date picker
+  // Sélecteur période
   html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
   html+='<span style="font-size:13px;color:var(--text3);font-weight:600">P\u00e9riode :</span>';
   periodes.forEach(function(p){
@@ -18745,7 +18781,7 @@ function rComparaison(){
   });
   html+='</div>';
 
-  // Date picker pour vue jour
+  // Date affichée + sélecteur de jour / de mois
   html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">';
   html+='<div style="font-size:13px;font-weight:600;color:var(--navy)">\uD83D\uDCC6 '+dateAffichee+'</div>';
   if(_cmpPeriode==='jour'){
@@ -18753,48 +18789,53 @@ function rComparaison(){
     html+='<button class="btn btn-sm" onclick="cmpNavJour(-1)" style="font-size:16px;padding:4px 12px" title="Jour précédent">◀</button>';
     html+='<button class="btn btn-sm" onclick="cmpNavJour(+1)" style="font-size:16px;padding:4px 12px" title="Jour suivant">▶</button>';
   }
+  if(_cmpPeriode==='mois'){
+    html+='<input type="month" value="'+moisSel+'" max="'+curYM+'" onchange="window._cmpMois=this.value||null;rComparaison()" style="padding:5px 10px;border:1.5px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:12px;background:var(--surface)">';
+    html+='<button class="btn btn-sm" onclick="cmpNavMois(-1)" style="font-size:16px;padding:4px 12px" title="Mois précédent">◀</button>';
+    html+='<button class="btn btn-sm" onclick="cmpNavMois(+1)" style="font-size:16px;padding:4px 12px" title="Mois suivant">▶</button>';
+  }
   html+='</div>';
 
-  // Tableau KPIs
-  html+='<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff">';
-  html+='<div style="padding:14px 16px;font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.6px">INDICATEUR</div>';
-  html+='<div style="padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12)">'+b1.nom+'</div>';
-  html+='<div style="padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12)">'+b2.nom+'</div>';
-  html+='</div>';
-  html+='<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  html+='<colgroup><col style="width:36%"><col style="width:32%"><col style="width:32%"></colgroup>';
-  html+=kpiRow('\uD83D\uDCB0 CA encaissé',b1.ca,b2.ca,'fcfa','var(--green)');
-  html+=kpiRow('\uD83D\uDCC8 Revenus divers',b1.rev,b2.rev,'fcfa','var(--teal)');
-  html+=kpiRow('\uD83D\uDCB8 D\u00e9penses',b1.dep,b2.dep,'fcfa','var(--red)',true);
-  html+=kpiRow('\uD83D\uDED2 Achats stock',b1.achat,b2.achat,'fcfa','var(--amber)',true);
-  html+=kpiRow('\u2705 B\u00e9n\u00e9fice net',b1.benefice,b2.benefice,'fcfa','var(--green)');
-  html+=kpiRow('\uD83D\uDCCA Marge nette',b1.marge,b2.marge,'pct','var(--purple)');
-  html+=kpiRow('\uD83D\uDD22 Transactions',b1.nbTx,b2.nbTx,'nb','var(--navy)');
-  html+=kpiRow('\uD83E\uDFBE Panier moyen',b1.panier,b2.panier,'fcfa','var(--blue,#1976d2)');
-  html+=kpiRow('\uD83D\uDCE6 Valeur stock',b1.stockVal,b2.stockVal,'fcfa','var(--teal)');
-  html+=kpiRow('\u26A0\uFE0F Clients impay\u00e9s',b1.dettesC,b2.dettesC,'fcfa','var(--red)',true);
-  html+='</table></div>';
+  // Tableau KPIs : une colonne par boutique + TOTAL
+  html+='<div class="card" style="margin-bottom:16px;padding:0;overflow-x:auto">';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:'+(200+(boutiques.length+1)*150)+'px">';
+  html+='<thead><tr style="background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff">';
+  html+='<th style="padding:14px 16px;font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.6px;text-align:left">INDICATEUR</th>';
+  data.forEach(function(d){ html+='<th style="'+thStyle+'">'+d.nom+'</th>'; });
+  html+='<th style="'+thStyle+';border-left:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12)">TOTAL</th>';
+  html+='</tr></thead><tbody>';
+  html+=kpiRow('💰 CA encaissé','ca','fcfa','var(--green)');
+  html+=kpiRow('📈 Revenus divers','rev','fcfa','var(--teal)');
+  html+=kpiRow('💸 Dépenses','dep','fcfa','var(--red)',true);
+  html+=kpiRow('🛒 Achats stock','achat','fcfa','var(--amber)',true);
+  html+=kpiRow('✅ Bénéfice net','benefice','fcfa','var(--green)');
+  html+=kpiRow('📊 Marge nette','marge','pct','var(--purple)');
+  html+=kpiRow('🔢 Transactions','nbTx','nb','var(--navy)');
+  html+=kpiRow('🧺 Panier moyen','panier','fcfa','var(--blue,#1976d2)');
+  html+=kpiRow('📦 Valeur stock','stockVal','fcfa','var(--teal)');
+  html+=kpiRow('⚠️ Clients impayés','dettesC','fcfa','var(--red)',true);
+  html+='</tbody></table></div>';
 
-  // Graphes
+  // Aperçu visuel (une barre par boutique)
   html+='<div class="card" style="margin-bottom:16px">';
-  html+='<div style="font-weight:700;font-size:13px;margin-bottom:12px">\uD83D\uDCCA Aper\u00e7u visuel</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  [{label:'CA encaissé',v1:b1.ca,v2:b2.ca,color:'var(--green)'},
-   {label:'D\u00e9penses',v1:b1.dep,v2:b2.dep,color:'var(--red)'},
-   {label:'B\u00e9n\u00e9fice',v1:b1.benefice,v2:b2.benefice,color:'var(--purple)'},
-   {label:'Transactions',v1:b1.nbTx,v2:b2.nbTx,color:'var(--navy)'}
+  html+='<div style="font-weight:700;font-size:13px;margin-bottom:12px">📊 Aperçu visuel</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">';
+  [{label:'CA encaissé',key:'ca',color:'var(--green)'},
+   {label:'Dépenses',key:'dep',color:'var(--red)'},
+   {label:'Bénéfice',key:'benefice',color:'var(--purple)'},
+   {label:'Transactions',key:'nbTx',color:'var(--navy)',nb:true}
   ].forEach(function(item){
-    var max=Math.max(item.v1,item.v2,1);
-    var p1=Math.round(Math.max(0,item.v1)/max*100);
-    var p2=Math.round(Math.max(0,item.v2)/max*100);
+    var max=Math.max.apply(null,data.map(function(d){return d[item.key];}).concat([1]));
     html+='<div style="background:var(--surface2);border-radius:8px;padding:12px">';
     html+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+item.label+'</div>';
     html+='<div style="display:flex;flex-direction:column;gap:6px">';
-    html+='<div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="font-weight:600">'+b1.nom+'</span><span style="color:'+item.color+';font-weight:700">'+F(item.v1)+'</span></div>';
-    html+='<div style="background:var(--border2);border-radius:3px;height:8px"><div style="width:'+p1+'%;background:'+item.color+';height:100%;border-radius:3px;transition:width .4s"></div></div></div>';
-    html+='<div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="font-weight:600">'+b2.nom+'</span><span style="color:'+item.color+';font-weight:700;opacity:.7">'+F(item.v2)+'</span></div>';
-    html+='<div style="background:var(--border2);border-radius:3px;height:8px"><div style="width:'+p2+'%;background:'+item.color+';opacity:.65;height:100%;border-radius:3px;transition:width .4s"></div></div></div>';
+    data.forEach(function(d,i){
+      var v=d[item.key];
+      var p=Math.round(Math.max(0,v)/max*100);
+      var op=Math.max(.35,1-i*.2);
+      html+='<div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="font-weight:600">'+d.nom+'</span><span style="color:'+item.color+';font-weight:700">'+(item.nb?v:F(v))+'</span></div>';
+      html+='<div style="background:var(--border2);border-radius:3px;height:8px"><div style="width:'+p+'%;background:'+item.color+';opacity:'+op+';height:100%;border-radius:3px;transition:width .4s"></div></div></div>';
+    });
     html+='</div></div>';
   });
   html+='</div></div>';
@@ -18802,26 +18843,26 @@ function rComparaison(){
   // Évolution jours (seulement si pas vue jour)
   if(_cmpPeriode!=='jour') html+=evolJours();
 
-  // Top articles
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">';
-  [b1,b2].forEach(function(b){
-    html+='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">\uD83C\uDFC6 Top articles \u2014 '+b.nom+'</div>'+topArtsHTML(b.topArts)+'</div>';
+  // Top articles : une carte par boutique + une pour le total
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">';
+  data.concat([tot]).forEach(function(b){
+    html+='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">🏆 Top articles — '+b.nom+'</div>'+topArtsHTML(b.topArts)+'</div>';
   });
   html+='</div>';
 
   // Synthèse
-  var winnerB=b1.benefice>=b2.benefice?b1:b2;
-  var loserB =b1.benefice>=b2.benefice?b2:b1;
-  var ecart=Math.abs(b1.benefice-b2.benefice);
+  var ranked = data.slice().sort(function(a,b){return b.benefice-a.benefice;});
+  var winnerB = ranked[0];
+  var topCA = data.slice().sort(function(a,b){return b.ca-a.ca;})[0];
   html+='<div class="card" style="background:var(--surface2);border-left:4px solid var(--green);margin-bottom:16px">';
-  html+='<div style="font-weight:700;font-size:13px;margin-bottom:8px">\uD83C\uDFC5 Synth\u00e8se</div>';
-  if(b1.ca===0&&b2.ca===0){
-    html+='<div style="font-size:13px;color:var(--text3)">Aucune vente enregistr\u00e9e pour cette p\u00e9riode.</div>';
-  } else if(b1.benefice===b2.benefice){
-    html+='<div style="font-size:13px">Les deux boutiques sont ex-aequo.</div>';
+  html+='<div style="font-weight:700;font-size:13px;margin-bottom:8px">🏅 Synthèse</div>';
+  if(tot.ca===0){
+    html+='<div style="font-size:13px;color:var(--text3)">Aucune vente enregistrée pour cette période.</div>';
   } else {
-    html+='<div style="font-size:13px"><b style="color:var(--green)">'+winnerB.nom+'</b> est plus rentable avec <b>'+F(winnerB.benefice)+'</b> de b\u00e9n\u00e9fice, soit <b style="color:var(--green)">'+F(ecart)+'</b> de plus que '+loserB.nom+'.</div>';
-    if(loserB.ca>winnerB.ca) html+='<div style="font-size:12px;color:var(--text3);margin-top:6px">Note : '+loserB.nom+' g\u00e9n\u00e8re plus de CA ('+F(loserB.ca)+') mais ses d\u00e9penses r\u00e9duisent la rentabilit\u00e9.</div>';
+    html+='<div style="font-size:13px"><b style="color:var(--green)">'+winnerB.nom+'</b> est la plus rentable avec <b>'+F(winnerB.benefice)+'</b> de bénéfice'
+      +(ranked.length>1?', devant '+ranked.slice(1).map(function(d){return d.nom+' ('+F(d.benefice)+')';}).join(', '):'')+'.</div>';
+    html+='<div style="font-size:13px;margin-top:6px">Total toutes boutiques : CA <b>'+F(tot.ca)+'</b> · bénéfice net <b>'+F(tot.benefice)+'</b>.</div>';
+    if(topCA!==winnerB && topCA.ca>winnerB.ca) html+='<div style="font-size:12px;color:var(--text3);margin-top:6px">Note : '+topCA.nom+' génère plus de CA ('+F(topCA.ca)+') mais ses dépenses réduisent la rentabilité.</div>';
   }
   html+='</div>';
   html+='</div>';
