@@ -18557,6 +18557,42 @@ function cmpNavMois(delta){
   }
 }
 
+function cmpExportExcel(){
+  var X = window._cmpXls;
+  if(!X){ toast('Rien à exporter'); return; }
+  var data = X.data, tot = X.tot;
+  var nb = function(v){ return [Math.round(v||0),'n']; };
+  var vide = function(){ return ['','t']; };
+  var headers = ['Indicateur ('+X.titre+')'].concat(data.map(function(d){return d.nom;}),['TOTAL']);
+  var widths = [38].concat(data.map(function(){return 20;}),[20]);
+  var line = function(label,key,cat){
+    return {cat:cat, cells:[[label,'t']].concat(data.map(function(d){return nb(d[key]);}),[nb(tot[key])])};
+  };
+  var rows = [
+    line('CA encaissé','ca','rev'),
+    line('Revenus divers','rev','rev'),
+    line('Dépenses','dep','dep'),
+    line('Achats stock','achat','ao'),
+    line('Bénéfice net','benefice', tot.benefice<0?'dep':'rev'),
+    line('Marge nette (%)','marge','tr'),
+    line('Transactions','nbTx','tr'),
+    line('Panier moyen','panier','tr'),
+    line('Valeur stock','stockVal','tr'),
+    line('Clients impayés','dettesC','np')
+  ];
+  var J = window._cmpJoursXls;
+  if(J && J.rows.length){
+    rows.push({cat:'np', cells:[vide()].concat(data.map(vide),[vide()])});
+    rows.push({cat:'tr', cells:[[X.annee?'CA par mois':'CA par jour','t']].concat(data.map(vide),[vide()])});
+    J.rows.forEach(function(r){
+      rows.push({cat:'rev', cells:[[r.label,'t']].concat(r.cas.map(nb),[nb(r.tj)])});
+    });
+    rows.push({cat:'tr', cells:[['TOTAL','t']].concat(J.sums.map(nb),[nb(J.sumAll)])});
+  }
+  var blob = _xlsxBlob('Comparaison', headers, widths, rows);
+  _xlsxTelecharger(X.fichier, blob);
+}
+
 // Comparaison de TOUTES les boutiques + colonne TOTAL
 function rComparaison(){
   var boutiques = S.boutiques || [];
@@ -18648,6 +18684,7 @@ function rComparaison(){
   }
 
   var data = boutiques.map(calcBoutique);
+  window._cmpJoursXls = null;
 
   // ── TOTAL toutes boutiques ──
   var tot = {nom:'TOTAL',ca:0,dep:0,rev:0,achat:0,benefice:0,nbTx:0,dettesC:0,artMap:{}};
@@ -18722,6 +18759,7 @@ function rComparaison(){
 
     var sums = boutiques.map(function(){return 0;});
     var sumAll = 0;
+    var xlsRows = [];
     jours.forEach(function(jour){
       var cas = boutiques.map(function(b){return caJour(b,jour);});
       var tj = cas.reduce(function(s,v){return s+v;},0);
@@ -18732,6 +18770,7 @@ function rComparaison(){
       var label=_cmpPeriode==='annee'
         ? new Date(jour+'-01').toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})
         : new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+      xlsRows.push({label:label,cas:cas,tj:tj});
       html+='<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:8px 10px;font-weight:600;white-space:nowrap">'+label+'</td>';
       cas.forEach(function(v,i){
@@ -18751,6 +18790,7 @@ function rComparaison(){
     });
     html+='<td style="text-align:right;padding:10px;border-left:2px solid var(--border2)">'+F(sumAll)+'</td><td></td></tr></tfoot>';
     html+='</table></div>';
+    window._cmpJoursXls = {rows:xlsRows, sums:sums, sumAll:sumAll};
     return html;
   }
 
@@ -18794,6 +18834,7 @@ function rComparaison(){
     html+='<button class="btn btn-sm" onclick="cmpNavMois(-1)" style="font-size:16px;padding:4px 12px" title="Mois précédent">◀</button>';
     html+='<button class="btn btn-sm" onclick="cmpNavMois(+1)" style="font-size:16px;padding:4px 12px" title="Mois suivant">▶</button>';
   }
+  html+='<button class="btn btn-sm" onclick="cmpExportExcel()" style="margin-left:auto" title="Télécharger ce tableau en fichier Excel">📊 Exporter Excel</button>';
   html+='</div>';
 
   // Tableau KPIs : une colonne par boutique + TOTAL
@@ -18866,6 +18907,8 @@ function rComparaison(){
   }
   html+='</div>';
   html+='</div>';
+  var fichierSuffix = _cmpPeriode==='jour' ? debut : _cmpPeriode==='mois' ? moisSel : _cmpPeriode==='semaine' ? 'semaine-'+debutSem : 'annee-'+now.getFullYear();
+  window._cmpXls = {data:data, tot:tot, titre:dateAffichee, annee:(_cmpPeriode==='annee'), fichier:'comparaison-boutiques-'+fichierSuffix+'.xlsx'};
   document.getElementById('content').innerHTML = html;
 }
 
