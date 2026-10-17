@@ -14381,12 +14381,12 @@ function _aioCollect(){
   (S.achats||[]).filter(a=>!a._deleted).forEach(a=>{
     const ar=ga(a.aid);
     const reste=(a.statut==='À payer')?resteAchat(a):0;
-    push({id:a.id,type:'achat',date:a.date,heure:a.heure,ts:a.ts||0,bid:a.bid,desc:(ar?ar.nom:'?')+(a.qte>1?' ×'+a.qte:''),tiers:fnom(a.fid)||a.four||'',compte:a.mode||'',mt:+a.mt||0,paye:Math.max(0,(+a.mt||0)-reste),statut:a.statut||'Payé',note:a.notes||''});
+    push({id:a.id,edit:(a.statut==='Payé'&&a.cid&&!(a.tranches&&a.tranches.length))?'achat':'',type:'achat',date:a.date,heure:a.heure,ts:a.ts||0,bid:a.bid,desc:(ar?ar.nom:'?')+(a.qte>1?' ×'+a.qte:''),tiers:fnom(a.fid)||a.four||'',compte:a.mode||'',mt:+a.mt||0,paye:Math.max(0,(+a.mt||0)-reste),statut:a.statut||'Payé',note:a.notes||''});
   });
   const reglements=[];
   (S.depenses||[]).filter(d=>!d._deleted).forEach(d=>{
     const reg=d.cat==='Règlement dette', n=d.notes||'', i=n.indexOf(' · ');
-    push({id:d.id,type:reg?'dette_paiement':'depense',date:d.date,heure:d.heure,ts:d.ts||0,bid:d.bid,desc:reg?'Règlement dette':(d.cat||'Dépense'),tiers:d.four||'',compte:d.mode||'',mt:+d.mt||0,note:reg?(i>=0?n.slice(i+3):''):n});
+    push({id:d.id,edit:'depense',type:reg?'dette_paiement':'depense',date:d.date,heure:d.heure,ts:d.ts||0,bid:d.bid,desc:reg?'Règlement dette':(d.cat||'Dépense'),tiers:d.four||'',compte:d.mode||'',mt:+d.mt||0,note:reg?(i>=0?n.slice(i+3):''):n});
     if(reg) reglements.push(d);
   });
   (S.fournisseurs||[]).filter(f=>!f._deleted).forEach(f=>{
@@ -14489,7 +14489,7 @@ function voirAllInOne(){
       ${chip('Solde de la période',(solde<0?'−':'')+F(Math.abs(solde)),solde<0?'var(--red)':'var(--green)')}
     </div>
     <div class="tbl-wrap" style="max-height:55dvh;overflow-y:auto"><table>
-      <thead><tr><th>Date</th><th>Boutique</th><th>Type</th><th>Description</th><th>Tiers</th><th>Compte</th><th>Montant</th><th>Statut</th><th>Remarque</th></tr></thead>
+      <thead><tr><th>Date</th><th>Boutique</th><th>Type</th><th>Description</th><th>Tiers</th><th>Compte</th><th>Montant</th><th>Statut</th><th>Remarque</th><th></th></tr></thead>
       <tbody>${shown.length?shown.map(l=>{
         const c=col[l.type]||'var(--text1)';
         let m;
@@ -14508,7 +14508,8 @@ function voirAllInOne(){
           <td style="font-weight:700;white-space:nowrap">${m}</td>
           <td>${st}</td>
           <td style="font-size:12px;min-width:160px">${l.note?_pfEsc(l.note):'<span style="color:var(--text3)">—</span>'}</td>
-        </tr>`;}).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Aucune transaction pour ces filtres</td></tr>'}</tbody>
+          <td>${l.edit?`<button class="btn btn-sm" title="Corriger le compte utilisé" onclick="aioChangerCompte('${_pfEsc(l.id)}','${l.edit}')">✏️ Compte</button>`:''}</td>
+        </tr>`;}).join(''):'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px">Aucune transaction pour ces filtres</td></tr>'}</tbody>
     </table></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:var(--text3);gap:8px;flex-wrap:wrap">
       <span>${shown.length} affichée${shown.length>1?'s':''} sur ${rows.length}</span>
@@ -14516,6 +14517,45 @@ function voirAllInOne(){
     </div>
   </div></div>`;
   document.getElementById('modal-root').innerHTML=html;
+}
+
+// ─── CORRIGER LE COMPTE D'UNE TRANSACTION (depuis All in One) ───
+// Rend le montant à l'ancien compte, le débite sur le nouveau, met à jour la transaction.
+function _aioTrouver(id,kind){
+  const liste=kind==='achat'?S.achats:S.depenses;
+  return (liste||[]).find(x=>String(x.id)===String(id));
+}
+function aioChangerCompte(id,kind){
+  const t=_aioTrouver(id,kind);
+  if(!t)return toast('❌ Transaction introuvable');
+  const titre=kind==='achat'?'Achat':(t.cat||'Dépense');
+  modal(`<div class="mft">✏️ Corriger le compte — ${_pfEsc(titre)}</div>
+    <div class="total-preview" style="margin-bottom:12px">
+      <div class="total-preview-row"><span>Date</span><span>${_pfDateFR(t.date)}</span></div>
+      <div class="total-preview-row"><span>Tiers</span><span>${_pfEsc(t.four||'—')}</span></div>
+      <div class="total-preview-row"><span>Montant</span><span>${F(t.mt)}</span></div>
+      <div class="total-preview-row"><span>Compte actuel</span><span style="color:var(--red)">${_pfEsc(nomCompte(t.cid)||t.mode||'—')}</span></div>
+    </div>
+    <div class="fg"><label class="fl">Nouveau compte (débité)</label>${selectComptes('aio-cid',t.cid,t.bid||undefined)}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">L'ancien compte est recrédité de ${F(t.mt)} et le nouveau compte est débité du même montant.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="voirAllInOne()">Annuler</button>
+      <button class="btn btn-primary" onclick="aioSaveCompte('${_pfEsc(id)}','${kind}')">✅ Enregistrer</button>
+    </div>`);
+}
+function aioSaveCompte(id,kind){
+  const t=_aioTrouver(id,kind);
+  if(!t)return toast('❌ Transaction introuvable');
+  const nouveau=document.getElementById('aio-cid').value;
+  if(!nouveau)return toast('❌ Choisissez un compte');
+  if(String(nouveau)===String(t.cid)){voirAllInOne();return;}
+  const mt=+t.mt||0;
+  if(t.cid) crediterCompte(t.cid,mt);
+  debiterCompte(nouveau,mt);
+  t.cid=nouveau;t.mode=nomCompte(nouveau);
+  saveData();
+  toast(`✅ Compte corrigé : ${t.mode}`);
+  voirAllInOne();
 }
 
 // ─── VUE UNIQUE : TOUS LES MOUVEMENTS DE DETTES FOURNISSEURS (paiements + ajouts + remarques) ───
