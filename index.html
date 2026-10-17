@@ -14555,6 +14555,7 @@ function aioSaveCompte(id,kind){
   t.cid=nouveau;t.mode=nomCompte(nouveau);
   saveData();
   toast(`✅ Compte corrigé : ${t.mode}`);
+  try{rafraichirPageCourante();}catch(e){}  // met à jour la page en arrière-plan (tableau de bord, comptes…)
   voirAllInOne();
 }
 
