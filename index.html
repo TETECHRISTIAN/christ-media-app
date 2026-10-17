@@ -18664,7 +18664,7 @@ function rComparaison(){
   tot.stockVal = (S.stock||[]).reduce(function(s,a){return s+sa(a)*(a.pa||0);},0);
   tot.topArts = Object.entries(tot.artMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,5);
 
-  var thStyle = 'padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12);text-align:right;white-space:nowrap';
+  var thStyle = 'padding:14px 16px;font-weight:800;font-size:15px;border-left:1px solid rgba(255,255,255,.12);text-align:right;white-space:nowrap;background:var(--navy);color:#fff;text-transform:none;letter-spacing:0';
 
   function kpiRow(label,key,fmt,color,inverse){
     var f = fmt==='pct' ? function(v){return v+'%';} : fmt==='nb' ? function(v){return String(v);} : F;
@@ -18800,9 +18800,9 @@ function rComparaison(){
   html+='<div class="card" style="margin-bottom:16px;padding:0;overflow-x:auto">';
   html+='<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:'+(200+(boutiques.length+1)*150)+'px">';
   html+='<thead><tr style="background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff">';
-  html+='<th style="padding:14px 16px;font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.6px;text-align:left">INDICATEUR</th>';
+  html+='<th style="padding:14px 16px;font-size:11px;background:var(--navy);color:rgba(255,255,255,.7);font-weight:700;text-transform:uppercase;letter-spacing:.6px;text-align:left">INDICATEUR</th>';
   data.forEach(function(d){ html+='<th style="'+thStyle+'">'+d.nom+'</th>'; });
-  html+='<th style="'+thStyle+';border-left:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12)">TOTAL</th>';
+  html+='<th style="'+thStyle+';border-left:2px solid rgba(255,255,255,.45);background:var(--navy2)">TOTAL</th>';
   html+='</tr></thead><tbody>';
   html+=kpiRow('💰 CA encaissé','ca','fcfa','var(--green)');
   html+=kpiRow('📈 Revenus divers','rev','fcfa','var(--teal)');
