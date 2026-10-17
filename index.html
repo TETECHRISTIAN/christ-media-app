@@ -18564,7 +18564,7 @@ function cmpExportExcel(){
   var nb = function(v){ return [Math.round(v||0),'n']; };
   var vide = function(){ return ['','t']; };
   var headers = ['Indicateur ('+X.titre+')'].concat(data.map(function(d){return d.nom;}),['TOTAL']);
-  var widths = [38].concat(data.map(function(){return 20;}),[20]);
+  var widths = [38].concat(data.map(function(){return 30;}),[20]);
   var line = function(label,key,cat){
     return {cat:cat, cells:[[label,'t']].concat(data.map(function(d){return nb(d[key]);}),[nb(tot[key])])};
   };
@@ -18573,7 +18573,7 @@ function cmpExportExcel(){
     line('Revenus divers','rev','rev'),
     line('Dépenses','dep','dep'),
     line('Achats stock','achat','ao'),
-    line('Bénéfice net','benefice', tot.benefice<0?'dep':'rev'),
+    line('Bénéfice net','benefice','tr'),
     line('Marge nette (%)','marge','tr'),
     line('Transactions','nbTx','tr'),
     line('Panier moyen','panier','tr'),
