@@ -17977,6 +17977,7 @@ function rRelances(){
 var _histClotBoutique = 'toutes';
 var _histClotMois = '';
 
+function caClot(c){ return (c.solde_theorique||0)-(c.solde_ouverture||0)+(+c.hors_caisse||0); }
 function exporterHistClotures(){
   var bid = _histClotBoutique==='toutes' ? null : _histClotBoutique;
   var rows = (S.clotures_caisse||[])
@@ -17987,7 +17988,7 @@ function exporterHistClotures(){
   rows.forEach(function(c){
     var bName = (S.boutiques||[]).find(function(b){ return b.id==c.bid; });
     bName = bName ? (bName.nom||bName.name) : c.bid||'—';
-    var ventes = c.solde_theorique - c.solde_ouverture;
+    var ventes = caClot(c);
     csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, retraitCloture(c), c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
   });
   var blob = new Blob([csv], {type:'text/csv'});
@@ -18022,11 +18023,11 @@ function rHistClotures(){
   var excedents  = filtered.filter(function(c){ return c.ecart>0; }).length;
   var deficits   = filtered.filter(function(c){ return c.ecart<0; }).length;
   var ecartTotal = filtered.reduce(function(s,c){ return s+(c.ecart||0); }, 0);
-  var totalVentes= filtered.reduce(function(s,c){ return s+(c.solde_theorique-c.solde_ouverture); }, 0);
+  var totalVentes= filtered.reduce(function(s,c){ return s+(caClot(c)); }, 0);
   var totalRetire= filtered.reduce(function(s,c){ return s+retraitCloture(c); }, 0);
   var meilleurJour = filtered.length ? filtered.reduce(function(best,c){
-    var v = c.solde_theorique-c.solde_ouverture;
-    return v > (best.solde_theorique-best.solde_ouverture) ? c : best;
+    var v = caClot(c);
+    return v > (caClot(best)) ? c : best;
   }) : null;
 
   // Mois disponibles
@@ -18069,7 +18070,7 @@ function rHistClotures(){
     html += '<div class="card"><div class="ct">CA Total période</div><div class="mv" style="color:var(--green)">'+F(totalVentes)+'</div></div>';
     html += '<div class="card"><div class="ct">Écart cumulé</div><div class="mv" style="color:'+(ecartTotal>=0?'var(--teal)':'var(--red)')+'">'+F(ecartTotal)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+(ecartTotal>0?'Excédent cumulé':ecartTotal<0?'Déficit cumulé':'Parfaitement équilibré')+'</div></div>';
     if(meilleurJour){
-      var mv = meilleurJour.solde_theorique - meilleurJour.solde_ouverture;
+      var mv = caClot(meilleurJour);
       html += '<div class="card"><div class="ct">🏆 Meilleur jour</div><div class="mv" style="color:var(--green)">'+F(mv)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+meilleurJour.date+'</div></div>';
     }
     html += '</div>';
@@ -18095,7 +18096,7 @@ function rHistClotures(){
     filtered.forEach(function(c){
       var bName = (boutiques).find(function(b){ return b.id==c.bid; });
       bName = bName ? ((bName.emoji||'🏪')+' '+(bName.nom||bName.name)) : (c.bid||'—');
-      var caJour = c.solde_theorique - c.solde_ouverture;
+      var caJour = caClot(c);
       var ecart = c.ecart||0;
       var ecartCol = ecart===0?'var(--green)':ecart>0?'var(--teal)':'var(--red)';
       var ecartTxt = ecart===0?'✅ 0':ecart>0?'+'+F(ecart):F(ecart);
@@ -18972,6 +18973,8 @@ function clotureDebut(bid,today){
 function dansPeriode(date,from,to){const d=String(date||'').slice(0,10);return !!d&&d>=from&&d<=to;}
 // Ajustements manuels de solde d'un compte « Vente … » faits dans la période (hors ceux créés par la clôture elle-même)
 function ajustementsManuelsJour(bid,day,from){
+  // « Ajuster solde » corrige le solde d'un compte : ce n'est pas un mouvement d'argent dans le tiroir. Toute différence ressort dans l'écart de clôture (cash compté − théorique).
+  return 0;
   from=from||day;
   const comptes=S.comptes||[];
   return (S.ajustements_solde||[]).filter(x=>{
@@ -19820,6 +19823,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     }
   }
 
+  const horsCaisse = bid ? tontineVerseeJour(bid,today,clotureDebut(bid,today)) : 0;
   // Retrait de caisse : virement automatique Vente → Investissement
   let retrait = 0, compteRetrait = null;
   const retEl = document.getElementById('cc-retrait');
@@ -19847,7 +19851,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     cash_compte: cashCompte,
     ecart: ecart,
     solde_fermeture: retEl ? (cashCompte - retrait) : (compteAjuste ? cashCompte : soldeTheorique), // ouverture du lendemain : cash restant après retrait, sinon argent compté (compte ajusté) ou théorique
-    retrait: retrait, compte_retrait: compteRetrait,
+    retrait: retrait, compte_retrait: compteRetrait, hors_caisse: horsCaisse,
     compte_ajuste: compteAjuste || null,
     notes: notes,
     par: S.session?.nom || 'Admin',
