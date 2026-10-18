@@ -19192,6 +19192,18 @@ function setSoldeOuvManuel(bid,v){
   if(!window._soldeOuvManuelParBid) window._soldeOuvManuelParBid={};
   if(v==null) delete window._soldeOuvManuelParBid[bid]; else window._soldeOuvManuelParBid[bid]=v;
 }
+// Une dépense / un paiement sort-il VRAIMENT du tiroir-caisse ? Seuls les comptes « Vente … » et les espèces comptent.
+// Les paiements faits depuis Investissement, Fonctionnement, banque ou mobile money ne réduisent pas l'argent de la caisse.
+function depenseSortDeCaisse(d){
+  if(!d) return false;
+  const comptes=S.comptes||[];
+  const c=(d.cid!=null&&d.cid!=='')?comptes.find(k=>String(k.id)===String(d.cid)):null;
+  const nom=String((c?c.nom:d.mode)||'').trim();
+  if(!nom||nom==='—'||nom==='-') return true; // compte inconnu : compté comme avant
+  if(/^vente\s+/i.test(nom)) return true;
+  if(/esp[èe]ces?/i.test(nom)) return true;
+  return false;
+}
 function rClotureCaisse(){
   if(!S.clotures_caisse) S.clotures_caisse = [];
   const today = new Date().toISOString().slice(0,10);
@@ -19212,8 +19224,9 @@ function rClotureCaisse(){
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0)
     + svcsPayesJour.reduce((s,v)=>s+v.mt,0)
     + svcsAvanceJour.reduce((s,v)=>s+(v.avance||0),0);
-  const totalAchatsJour = achatsPayesJour.reduce((s,a)=>s+a.mt,0);
-  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
+  const totalAchatsJour = achatsPayesJour.filter(depenseSortDeCaisse).reduce((s,a)=>s+a.mt,0);
+  const totalDepenses = depensesJour.filter(depenseSortDeCaisse).reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
+  const totalHorsCaisse = depensesJour.filter(d=>!depenseSortDeCaisse(d)).reduce((s,d)=>s+d.mt,0) + achatsPayesJour.filter(a=>!depenseSortDeCaisse(a)).reduce((s,a)=>s+a.mt,0);
 
   // ── Ventes par mode de paiement → compte ──
   const ventesParCompte = {};
@@ -19266,7 +19279,7 @@ function rClotureCaisse(){
     const bManuel = getSoldeOuvManuel(b.id); // correction manuelle propre à cette boutique
     const bOuverture = (bManuel != null) ? bManuel : (bHistorique[0] ? bHistorique[0].solde_fermeture : 0);
     const bVentesTotal = bVentes.reduce((s,v)=>s+v.mt,0) + bSvcsPayes.reduce((s,v)=>s+v.mt,0) + bSvcsAvance.reduce((s,v)=>s+(v.avance||0),0);
-    const bDepsTotal   = bDeps.reduce((s,d)=>s+d.mt,0);
+    const bDepsTotal   = bDeps.filter(depenseSortDeCaisse).reduce((s,d)=>s+d.mt,0);
     const bRevsTotal   = bRevs.reduce((s,r)=>s+r.mt,0);
     const bSolde = bOuverture + bVentesTotal + bRevsTotal - bDepsTotal + ajustementsManuelsJour(b.id,today,bStart) - tontineVerseeJour(b.id,today,bStart);
     totalTheorique += bSolde;
@@ -19303,7 +19316,8 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid var(--red)">
         <div class="ct">Dépenses</div>
         <div class="mv" style="color:var(--red)">${F(totalDepenses)}</div>
-        <div style="font-size:11px;color:var(--text3)">${depensesJour.length} dépense${depensesJour.length>1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text3)">${depensesJour.length} dépense${depensesJour.length>1?'s':''} · dépenses de la caisse</div>
+        ${totalHorsCaisse>0?`<div style="font-size:11px;color:var(--text3);margin-top:3px">+ ${F(totalHorsCaisse)} payés hors caisse (Investissement, Fonctionnement…), non déduits</div>`:''}
       </div>
       <div class="card" style="border-left:3px solid var(--navy)">
         <div class="ct">Solde ouverture</div>
@@ -19680,7 +19694,7 @@ function rClotureCaisse(){
           <tbody>
             ${depensesJour.sort((a,b)=>b.mt-a.mt).map(d=>`<tr style="border-bottom:1px solid var(--border2)">
               <td style="padding:8px 0">
-                <div style="font-weight:600">${d.desc||d.libelle||d.nom||"—"}</div>
+                <div style="font-weight:600">${d.desc||d.libelle||d.nom||"—"}${depenseSortDeCaisse(d)?'':' <span style="font-size:10px;font-weight:700;color:var(--text3);background:var(--surface2);padding:1px 6px;border-radius:20px">hors caisse</span>'}</div>
                 ${d.note||d.remarque||d.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">💬 ${d.note||d.remarque||d.notes}</div>` : ""}
               </td>
               <td style="padding:8px 0;font-size:11px;color:var(--text3)">${d.cat||d.categorie||"—"}</td>
@@ -19688,7 +19702,7 @@ function rClotureCaisse(){
             </tr>`).join("")}
           </tbody>
           <tfoot><tr style="background:var(--surface2)">
-            <td colspan="2" style="padding:8px 4px;font-weight:700">TOTAL DÉPENSES</td>
+            <td colspan="2" style="padding:8px 4px;font-weight:700">TOTAL DÉPENSES (de la caisse)</td>
             <td style="text-align:right;font-weight:700;color:var(--red)">-${F(totalDepenses)}</td>
           </tr></tfoot>
         </table>`
@@ -19848,8 +19862,9 @@ function ouvrirModalCloture(){
   const depensesJour = (S.depenses||[]).filter(d=>dansPeriode(d.date,start,today)&&(!bid||d.bid==bid));
   const achatsPayesJour = fluxPaiementsAchats(bid?getAchatsBoutique(bid):S.achats).filter(a=>dansPeriode(a.date,start,today));
   const totalVentes = ventesJour.reduce((s,v)=>s+v.mt,0) + svcsPayesJour2.reduce((s,v)=>s+v.mt,0) + svcsAvanceJour2.reduce((s,v)=>s+(v.avance||0),0);
-  const totalAchatsJour = achatsPayesJour.reduce((s,a)=>s+a.mt,0);
-  const totalDepenses = depensesJour.reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
+  const totalAchatsJour = achatsPayesJour.filter(depenseSortDeCaisse).reduce((s,a)=>s+a.mt,0);
+  const totalDepenses = depensesJour.filter(depenseSortDeCaisse).reduce((s,d)=>s+d.mt,0) + totalAchatsJour;
+  const totalHorsCaisse = depensesJour.filter(d=>!depenseSortDeCaisse(d)).reduce((s,d)=>s+d.mt,0) + achatsPayesJour.filter(a=>!depenseSortDeCaisse(a)).reduce((s,a)=>s+a.mt,0);
 
   const historique = (S.clotures_caisse||[]).filter(c=>!bid||c.bid==bid).sort((a,b)=>b.ts-a.ts);
   const derniere = historique[0];
