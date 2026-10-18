@@ -5570,11 +5570,17 @@ function addAchat(){
   if(!window.panierAchat) window.panierAchat=[];
   window.panierAchat=[];
   window.achatRecepDiff=false;
+  window._achatDraft=null;
   _renderModalAchat();
 }
 
 function _renderModalAchat(){
-  const fourOpts=getFournisseursActifs().map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
+  // Conserver fournisseur / compte / statut / date / notes lors d'un re-rendu (ajout d'article, retour d'une avance…)
+  if(document.getElementById('mfid')){
+    window._achatDraft={fid:document.getElementById('mfid').value,cid:document.getElementById('mmo')?.value,statut:document.getElementById('mstatut')?.value,date:document.getElementById('mda')?.value,notes:document.getElementById('mno')?.value};
+  }
+  const _dr=window._achatDraft||{};
+  const fourOpts=getFournisseursActifs().map(f=>`<option value="${f.id}"${String(f.id)===String(_dr.fid)?' selected':''}>${f.nom}</option>`).join('');
   const stockB=getStockBoutique(getBid());
   const artOpts=stockB.map(a=>`<option value="${a.id}">[${a.code}] ${a.nom}</option>`).join('');
   const panier=window.panierAchat||[];
@@ -5584,15 +5590,17 @@ function _renderModalAchat(){
     <!-- En-tête : fournisseur / date / compte / statut / notes -->
     <div class="fr">
       <div class="fg"><label class="fl">Fournisseur</label><select class="fs" id="mfid">${fourOpts}</select></div>
-      <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="mda" value="${D()}"></div>
+      <div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="mda" value="${_dr.date||D()}"></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="fl">Compte débit</label>${selectComptes('mmo', compteAchatId())}</div>
+      <div class="fg"><label class="fl">Compte débit</label>${selectComptes('mmo', _dr.cid||compteAchatId())}</div>
       <div class="fg"><label class="fl">Statut</label>
-        <select class="fs" id="mstatut"><option value="Payé">✅ Payé</option><option value="À payer">⏳ À payer</option></select>
+        <select class="fs" id="mstatut"><option value="Payé"${_dr.statut==='Payé'?' selected':''}>✅ Payé</option><option value="À payer"${_dr.statut==='À payer'?' selected':''}>⏳ À payer</option></select>
       </div>
     </div>
-    <div class="fg"><label class="fl">Notes (commune)</label><input class="fi" id="mno" placeholder="Réapprovisionnement..."></div>
+    <!-- Situation du fournisseur : ancien solde, argent disponible, nouveau solde -->
+    <div id="achat-situation" style="margin-bottom:12px"></div>
+    <div class="fg"><label class="fl">Notes (commune)</label><input class="fi" id="mno" placeholder="Réapprovisionnement..." value="${(_dr.notes||'').replace(/"/g,'&quot;')}"></div>
 
     <!-- Zone ajout article -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin:12px 0">
@@ -5662,6 +5670,8 @@ function _renderModalAchat(){
     </div>`);
 
   setTimeout(()=>{
+    ['mfid','mmo','mstatut'].forEach(id=>document.getElementById(id)?.addEventListener('change',majSituationAchat));
+    majSituationAchat();
     preRemplirPrixAchat();
     document.getElementById('mqte')?.addEventListener('input', updatePreviewAchat);
     document.getElementById('maid')?.addEventListener('change', ()=>{ preRemplirPrixAchat(); updatePreviewAchat(); });
@@ -5737,6 +5747,51 @@ function majLigneAchat(i,champ,val){
   if(elTotal) elTotal.textContent=F(total);
   const btn=document.querySelector('.btn.btn-primary[onclick*="saveAchatMulti"]');
   if(btn) btn.textContent=`✓ Valider — ${F(total)}`;
+  majSituationAchat();
+}
+
+// ─── SITUATION FOURNISSEUR dans le formulaire d'achat ───
+// Affiche : ancien solde dû, nouvelle commande, nouveau solde, et argent disponible sur le compte choisi.
+function majSituationAchat(){
+  const box=document.getElementById('achat-situation');if(!box)return;
+  const fid=+document.getElementById('mfid')?.value;
+  const f=getFournisseursActifs().find(x=>x.id==fid);
+  if(!f){box.innerHTML='';return;}
+  const cid=document.getElementById('mmo')?.value;
+  const compte=(S.comptes||[]).find(c=>c.id==cid);
+  const statut=document.getElementById('mstatut')?.value||'Payé';
+  const total=(window.panierAchat||[]).reduce((s,l)=>s+l.mt,0);
+  const ancien=f.dette||0;
+  const aCredit=statut==='À payer';
+  const nouveau=aCredit?ancien+total:ancien;
+  const dispo=compte?(compte.solde||0):0;
+  const lastP=(f.historiquePaiementsFour||[]).slice(-1)[0];
+  const insuffisant=!aCredit&&total>0&&compte&&total>dispo;
+  box.innerHTML=`
+    <div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;font-size:13px">
+      <div style="background:var(--surface2);padding:6px 12px;font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.5px">📒 Situation avec ${f.nom}</div>
+      <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+        <span>Ancien solde dû (avant cet achat)</span>
+        <strong style="color:${ancien>0?'var(--red)':'var(--green)'}">${F(ancien)}</strong>
+      </div>
+      ${lastP?`<div style="padding:0 12px 6px;font-size:11px;color:var(--text3)">Dernier paiement : ${F(lastP.montantPaye)} le ${lastP.date} → il restait ${F(lastP.apres)}</div>`:''}
+      ${aCredit&&total>0?`
+      <div style="padding:4px 12px;display:flex;justify-content:space-between"><span>+ Cette commande (à crédit)</span><strong style="color:var(--amber)">${F(total)}</strong></div>
+      <div style="padding:6px 12px;display:flex;justify-content:space-between;border-top:1px dashed var(--border);margin-top:4px"><span><strong>Nouveau solde dû</strong></span><strong style="color:var(--red)">${F(nouveau)}</strong></div>`:''}
+      <div style="padding:6px 12px;display:flex;justify-content:space-between;border-top:1px solid var(--border);background:var(--surface2)">
+        <span>💰 Disponible sur « ${compte?compte.nom:'—'} »</span>
+        <strong style="color:${insuffisant?'var(--red)':'var(--green)'}">${F(dispo)}</strong>
+      </div>
+      ${insuffisant?`<div style="padding:4px 12px 8px;font-size:12px;color:var(--red)">⚠️ Le compte ne couvre pas ce paiement comptant (manque ${F(total-dispo)}).</div>`:''}
+      ${ancien>0?`<div style="padding:8px 12px"><button class="btn btn-sm btn-success" onclick="verserAvanceDepuisAchat(${f.id})">💸 Verser une avance sur l'ancien solde</button></div>`:''}
+    </div>`;
+}
+// Ouvre le règlement de dette ; au retour, le formulaire d'achat se rouvre avec le panier et le nouveau solde.
+function verserAvanceDepuisAchat(fid){
+  if(document.getElementById('mfid')){
+    window._achatDraft={fid:document.getElementById('mfid').value,cid:document.getElementById('mmo')?.value,statut:document.getElementById('mstatut')?.value,date:document.getElementById('mda')?.value,notes:document.getElementById('mno')?.value};
+  }
+  reglerDette(fid,true);
 }
 
 function retirerLigneAchat(i){
@@ -5858,6 +5913,7 @@ function saveAchatMulti(){
   const _nbAttente=_diff?panier.filter(l=>(typeof l.recu==='number'?l.recu:l.qte)<l.qte).length:0;
   window.panierAchat=[];
   window.achatRecepDiff=false;
+  window._achatDraft=null;
   saveData(); closeModal();
   toast(`✅ ${panier.length} article${panier.length>1?'s':''} achetés — Total: ${F(total)}${_nbAttente?` · ${_nbAttente} en attente de réception`:''}`);
   rAchats();
@@ -7533,7 +7589,8 @@ function editerEmprunt(did){
   overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
 }
 
-function reglerDette(fid){
+function reglerDette(fid,retourAchat){
+  window._retourAchat=!!retourAchat;
   const f=getFournisseursActifs().find(f=>f.id==fid);if(!f)return;
   modal(`<div class="mft">💳 Régler dette — ${f.nom}</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:13px">
@@ -7550,7 +7607,7 @@ function reglerDette(fid){
       ${selectComptes('mmo', compteAchatId())}</div>
     <div class="fg"><label class="fl">Note / Justificatif (optionnel)</label>
       <input class="fi" id="mmt-note" placeholder="Ex: paiement partiel, solde reçu le..., reçu N°..."></div>
-    <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button>
+    <div class="mff"><button class="btn" onclick="if(window._retourAchat){window._retourAchat=false;_renderModalAchat();}else closeModal()">Annuler</button>
       <button class="btn btn-success" onclick="saveReglementDette(${fid})">✅ Confirmer paiement</button></div>`);
 }
 function saveReglementDette(fid){
@@ -7583,6 +7640,7 @@ function saveReglementDette(fid){
   try{ reconcilierDette(fid,true,{depenseId:depId,date:dateP}); }catch(e){ console.warn('[DETTES] Réconciliation auto ignorée:',e); }
   saveData();closeModal();
   toast(`✅ ${F(mt)} payé · Reste : ${F(apresDette)}${apresDette===0?' — Compte soldé !':''}`);
+  if(window._retourAchat){ window._retourAchat=false; _renderModalAchat(); return; }
   if(currentPage==='dettes') rDettes(); else rTresorerie();
 }
 
