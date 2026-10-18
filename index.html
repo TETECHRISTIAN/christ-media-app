@@ -196,6 +196,9 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .qb-center:hover{background:var(--navy2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,31,61,.3)}
 .qb-center.active{background:var(--navy2)}
 .qb-center svg{width:16px;height:16px}
+.qb-item[data-qb-index],.qb-center[data-qb-index]{cursor:grab}
+.qb-dragging{opacity:.45;transform:scale(.94)}
+.qb-drop-target{outline:2px dashed var(--navy);outline-offset:2px;background:var(--navy-bg)}
 .qb-edit-btn{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border2);background:none;cursor:pointer;color:var(--text3);font-size:13px;transition:all .15s;flex-shrink:0}
 .qb-edit-btn:hover{border-color:var(--navy);color:var(--navy);background:var(--navy-bg)}
 /* Modale gestionnaire raccourcis */
@@ -3786,17 +3789,18 @@ function renderQuickBar(){
       onclick = `nav(document.querySelector('[data-page=${item.page}]'),'${item.page}');qbActivate('${id}')`;
     }
     if(isCenter){
-      return `<div class="qb-center" id="${id}" onclick="${onclick}">
+      return `<div class="qb-center" id="${id}" data-qb-index="${i}" title="Glisser pour déplacer" onclick="${onclick}">
         <span style="font-size:16px;line-height:1">${def.emoji}</span>
         <span>${def.labelCourt}</span>
       </div>`;
     } else {
-      return `<div class="qb-item" id="${id}" onclick="${onclick}">
+      return `<div class="qb-item" id="${id}" data-qb-index="${i}" title="Glisser pour déplacer" onclick="${onclick}">
         <span style="font-size:15px;line-height:1">${def.emoji}</span>
         <span>${def.labelCourt}</span>
       </div>`;
     }
   }).join('') + `<button class="qb-edit-btn" onclick="ouvrirQBManager()" title="Personnaliser les raccourcis" style="margin-left:4px;flex-shrink:0">✏️</button>`;
+  initQuickBarDrag(bar);
 }
 function showQuickBar(page){
   const bar = document.getElementById('quick-bar');
@@ -3806,6 +3810,55 @@ function showQuickBar(page){
   } else {
     bar.style.display='none';
   }
+}
+
+// ─── GLISSER-DÉPOSER DIRECT SUR LA BARRE (souris : glisser · tactile : appui long puis glisser) ───
+let _qbJustDragged=false;
+function initQuickBarDrag(bar){
+  if(bar._dragInit) return; bar._dragInit=true;
+  bar.addEventListener('click',function(e){ if(_qbJustDragged){ e.stopPropagation(); e.preventDefault(); } },true);
+  bar.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    const it=e.target.closest('[data-qb-index]');
+    if(!it||!bar.contains(it)) return;
+    const st={from:+it.getAttribute('data-qb-index'),x:e.clientX,y:e.clientY,touch:e.pointerType!=='mouse',active:false,over:null,timer:null};
+    const clearMarks=()=>bar.querySelectorAll('.qb-drop-target').forEach(x=>x.classList.remove('qb-drop-target'));
+    const activate=()=>{ st.active=true; it.classList.add('qb-dragging'); document.body.style.cursor='grabbing'; if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(_){} } };
+    const move=function(ev){
+      if(!st.active){
+        const d=Math.hypot(ev.clientX-st.x,ev.clientY-st.y);
+        if(st.touch){ if(d>10) cleanup(); return; }
+        if(d>6) activate(); else return;
+      }
+      ev.preventDefault();
+      const el=document.elementFromPoint(ev.clientX,ev.clientY);
+      const tgt=el&&el.closest?el.closest('[data-qb-index]'):null;
+      clearMarks();
+      if(tgt&&bar.contains(tgt)&&tgt!==it){ tgt.classList.add('qb-drop-target'); st.over=+tgt.getAttribute('data-qb-index'); } else { st.over=null; }
+    };
+    const tm=function(ev){ if(st.active) ev.preventDefault(); };
+    const up=function(){
+      const was=st.active, to=st.over;
+      cleanup();
+      if(was){
+        _qbJustDragged=true; setTimeout(function(){ _qbJustDragged=false; },350);
+        if(to!=null && to!==st.from){
+          const cfg=getQBConfig(); const m=cfg.splice(st.from,1)[0]; cfg.splice(to,0,m);
+          setQBConfig(cfg); renderQuickBar();
+        }
+      }
+    };
+    function cleanup(){
+      clearTimeout(st.timer); clearMarks(); it.classList.remove('qb-dragging'); document.body.style.cursor='';
+      document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up);
+      document.removeEventListener('pointercancel',cleanup); document.removeEventListener('touchmove',tm);
+    }
+    if(st.touch) st.timer=setTimeout(activate,350);
+    document.addEventListener('pointermove',move);
+    document.addEventListener('pointerup',up);
+    document.addEventListener('pointercancel',cleanup);
+    document.addEventListener('touchmove',tm,{passive:false});
+  });
 }
 
 // ─── LISTE DES RACCOURCIS ACTIFS (avec déplacement) ───
@@ -4017,7 +4070,7 @@ function mnDynActivate(id){
 function _mnSlotsHTML(){
   return getMNC().map((item,i)=>{
     const def=QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',label:item.page};
-    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--surface2)"><span style="font-size:22px">${def.emoji}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${def.label}${item.center?'<span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:6px">Principal</span>':''}</div></div><button class="btn btn-sm" style="font-size:10px;white-space:nowrap;color:var(--navy);border-color:var(--navy-light)" onclick="mnToggleCenter(${i})">${item.center?'&#8595; Normal':'&#9733; Principal'}</button><button class="btn-icon" style="color:var(--red);font-size:16px" onclick="mnRemoveSlot(${i})">&#x2715;</button></div>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--surface2)"><span style="font-size:22px">${def.emoji}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${def.label}${item.center?'<span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:6px">Principal</span>':''}</div></div><div class="qb-move"><button onclick="mnMove(${i},-1)" title="Monter" ${i===0?'disabled':''}>▲</button><button onclick="mnMove(${i},1)" title="Descendre" ${i===getMNC().length-1?'disabled':''}>▼</button></div><button class="btn btn-sm" style="font-size:10px;white-space:nowrap;color:var(--navy);border-color:var(--navy-light)" onclick="mnToggleCenter(${i})">${item.center?'&#8595; Normal':'&#9733; Principal'}</button><button class="btn-icon" style="color:var(--red);font-size:16px" onclick="mnRemoveSlot(${i})">&#x2715;</button></div>`;
   }).join('')||'<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">Aucun raccourci</div>';
 }
 function _mnPagesHTML(){
@@ -4029,7 +4082,7 @@ function _mnPagesHTML(){
 }
 
 function ouvrirMNManager(){
-  const html=`<div id="mn-mgr" onclick="if(event.target===this)fermerMNManager()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:flex-end"><div style="background:var(--surface);width:100%;max-height:92dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden"><div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><div><div style="font-size:15px;font-weight:700">&#9998; Personnaliser la barre</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Max 5 ic\u00f4nes &bull; &#9733; pour choisir l&rsquo;ic\u00f4ne principale</div></div><button class="btn-icon" onclick="fermerMNManager()">&#x2715;</button></div><div style="overflow-y:auto;flex:1"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:12px 16px 4px">Raccourcis actifs</div><div id="mn-slots">${_mnSlotsHTML()}</div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:16px 16px 4px">Ajouter un menu</div><div id="mn-pages">${_mnPagesHTML()}</div></div><div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0"><button class="btn" onclick="mnReset()">&#8635; R\u00e9initialiser</button><button class="btn btn-primary" style="flex:1" onclick="fermerMNManager()">&#10003; Enregistrer</button></div></div></div>`;
+  const html=`<div id="mn-mgr" onclick="if(event.target===this)fermerMNManager()" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:flex-end"><div style="background:var(--surface);width:100%;max-height:92dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden"><div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><div><div style="font-size:15px;font-weight:700">&#9998; Personnaliser la barre</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Max 5 ic\u00f4nes &bull; &#9650;&#9660; pour changer l&rsquo;ordre &bull; &#9733; ic\u00f4ne principale</div></div><button class="btn-icon" onclick="fermerMNManager()">&#x2715;</button></div><div style="overflow-y:auto;flex:1"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:12px 16px 4px">Raccourcis actifs</div><div id="mn-slots">${_mnSlotsHTML()}</div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:16px 16px 4px">Ajouter un menu</div><div id="mn-pages">${_mnPagesHTML()}</div></div><div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0"><button class="btn" onclick="mnReset()">&#8635; R\u00e9initialiser</button><button class="btn btn-primary" style="flex:1" onclick="fermerMNManager()">&#10003; Enregistrer</button></div></div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
 function fermerMNManager(){const el=document.getElementById('mn-mgr');if(el)el.remove();renderMobileNav();}
@@ -4044,6 +4097,7 @@ function mnTogglePage(page){
   else{if(cfg.length>=5){toast('\u26a0\ufe0f Maximum 5 ic\u00f4nes dans la barre');return;}cfg.push({page,center:false});}
   setMNC(cfg);_mnRefresh();
 }
+function mnMove(i,d){let cfg=getMNC();const j=i+d;if(j<0||j>=cfg.length)return;const t=cfg[i];cfg[i]=cfg[j];cfg[j]=t;setMNC(cfg);_mnRefresh();renderMobileNav();}
 function mnRemoveSlot(i){let cfg=getMNC();cfg.splice(i,1);setMNC(cfg);_mnRefresh();}
 function mnToggleCenter(i){let cfg=getMNC();cfg.forEach((c,j)=>{c.center=(j===i?!c.center:false);});setMNC(cfg);_mnRefresh();}
 function mnReset(){if(!confirm('Remettre la barre par d\u00e9faut ?'))return;localStorage.removeItem('cm_mobilebar');_mnRefresh();toast('\u2705 R\u00e9initialis\u00e9');}
