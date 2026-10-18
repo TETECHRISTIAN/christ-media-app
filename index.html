@@ -5897,7 +5897,7 @@ function saveAchatMulti(){
       const f=getFournisseursActifs().find(f=>f.id==fid);
       if(f){
         const avantDette=f.dette||0;
-        f.dette=avantDette+l.mt;
+        f.dette=avantDette+l.mt;f.ts=Date.now()+2000;
         if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
         const artObj=ga(l.aid);
         const artNom=artObj?artObj.nom:(l.aid||'Article');
@@ -5942,7 +5942,7 @@ function delAchat(id){
       const totalPaye=ac.tranches?ac.tranches.reduce((s,t)=>s+t.mt,0):0;
       const restedu=ac.mt-totalPaye;
       const f=getFournisseursActifs().find(f=>f.id==ac.fid);
-      if(f) f.dette=Math.max(0,(f.dette||0)-restedu);
+      if(f){ f.dette=Math.max(0,(f.dette||0)-restedu);f.ts=Date.now()+2000; }
       // FIX soft delete : marquer _deleted au lieu de filter (évite réapparition après sync Firebase)
       if(S.dettesAchats){ const _daA=S.dettesAchats.find(d=>d.id==id); if(_daA){_daA._deleted=true;_daA.ts=Date.now();} }
     }
@@ -6803,7 +6803,7 @@ function editFour(id){
 function updateFour(id){
   const f=gf(id);if(!f)return;
   f.nom=document.getElementById('mn').value;f.tel=document.getElementById('mt').value;
-  f.secteur=document.getElementById('ms').value;f.dette=+document.getElementById('md').value||0;
+  f.secteur=document.getElementById('ms').value;f.dette=+document.getElementById('md').value||0;f.ts=Date.now()+2000;
   f.statut=document.getElementById('mst').value;
   f.bid=+document.getElementById('mb')?.value||f.bid||getBid();
   saveData();closeModal();toast('✅ Fournisseur modifié');rFour();
@@ -6873,7 +6873,7 @@ function _executerFusionFournisseurs(){
   doublons.forEach(groupe=>{
     const principal=groupe.reduce((best,f)=>(f.historiqueDetteAjouts||[]).length>(best.historiqueDetteAjouts||[]).length?f:best, groupe[0]);
     groupe.filter(f=>f.id!==principal.id).forEach(doublon=>{
-      principal.dette=(principal.dette||0)+(doublon.dette||0);
+      principal.dette=(principal.dette||0)+(doublon.dette||0);principal.ts=Date.now()+2000;
       if(doublon.historiqueDetteAjouts&&doublon.historiqueDetteAjouts.length){
         if(!principal.historiqueDetteAjouts) principal.historiqueDetteAjouts=[];
         principal.historiqueDetteAjouts=[...principal.historiqueDetteAjouts,...doublon.historiqueDetteAjouts];
@@ -7540,7 +7540,7 @@ function editerDetteFour(fid){
     const nom=document.getElementById('_ef_nom').value.trim();
     const dette=parseFloat(document.getElementById('_ef_dette').value)||0;
     if(!nom){alert('Le nom ne peut pas être vide');return;}
-    f.nom=nom; f.dette=dette;
+    f.nom=nom; f.dette=dette;f.ts=Date.now()+2000;
     sauvegarder('fournisseurs');
     overlay.remove();
     rTresorerie();
@@ -7618,7 +7618,7 @@ function saveReglementDette(fid){
   const dateP=(document.getElementById('mmt-date')||{}).value||D();
   if(!mt||mt<=0)return toast('❌ Montant invalide');
   const avantDette=f.dette||0;
-  f.dette=Math.max(0,f.dette-mt);
+  f.dette=Math.max(0,f.dette-mt);f.ts=Date.now()+2000;
   const apresDette=f.dette;
   // ── Historique traçabilité paiements ──
   const depId=genId(); // ID partagé entre historique et dépense pour éviter les doublons à la réconciliation
@@ -13065,7 +13065,7 @@ function saveTrancheAchat(acid){
   const f=S.fournisseurs&&getFournisseursActifs().find(f=>f.id==ac.fid);
   if(f){
     const avantF=f.dette||0;
-    f.dette=Math.max(0,avantF-mt);
+    f.dette=Math.max(0,avantF-mt);f.ts=Date.now()+2000;
     if(!f.historiquePaiementsFour)f.historiquePaiementsFour=[];
     const artObj=ga(ac.aid);
     f.historiquePaiementsFour.push({id:genId(),date:D(),montantPaye:mt,avant:avantF,apres:f.dette,compte:mode,cid,note:'Paiement achat — '+(artObj?artObj.nom:(ac.aid||'Article')),ts:Date.now()});
@@ -13431,7 +13431,7 @@ function savePayerGroupeFournisseur(idsStr, nomFour){
   const fG=(fidG!=null&&montantApplique>0)?getFournisseursActifs().find(x=>x.id==fidG):null;
   if(fG){
     const avantG=fG.dette||0;
-    fG.dette=Math.max(0,avantG-montantApplique);
+    fG.dette=Math.max(0,avantG-montantApplique);fG.ts=Date.now()+2000;
     if(!fG.historiquePaiementsFour) fG.historiquePaiementsFour=[];
     fG.historiquePaiementsFour.push({id:genId(),date,montantPaye:montantApplique,avant:avantG,apres:fG.dette,compte:nomCompte(cid),cid,note:notes,ts:Date.now()});
   }
@@ -14239,23 +14239,48 @@ function saveAugmentDette(fid){
   const date=document.getElementById('ad-date').value||D();
   if(!mt||mt<=0)return toast('❌ Montant invalide');
   const avantDette=f.dette||0;
-  f.dette=(f.dette||0)+mt;
+  f.dette=(f.dette||0)+mt;f.ts=Date.now()+2000;
   if(!f.historiqueDetteAjouts)f.historiqueDetteAjouts=[];
   f.historiqueDetteAjouts.push({id:genId(),date,mt,avant:avantDette,apres:f.dette,notes:notes||'—'});
   saveData();closeModal();toast(`➕ ${F(mt)} ajouté · Nouvelle dette : ${F(f.dette)}`);rDettes();
 }
 
+// Solde tel que le relevé le calcule (ajouts − paiements ± corrections), dans l'ordre chronologique
+function _soldeLedgerFour(f){
+  const L=[];
+  (f.historiqueDetteAjouts||[]).forEach(h=>L.push({ref:h,type:'ajout'}));
+  (f.historiquePaiementsFour||[]).forEach(p=>L.push({ref:p,type:'paiement'}));
+  (f.historiqueCorrectionsDette||[]).forEach(c=>L.push({ref:c,type:'correction'}));
+  L.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
+  let sd=0;
+  L.forEach(l=>{
+    if(l.type==='ajout') sd+=(l.ref.mt||0);
+    else if(l.type==='correction') sd=Math.max(0,sd+(l.ref.delta||0));
+    else sd=Math.max(0,sd-(l.ref.montantPaye||0));
+  });
+  return sd;
+}
 function corrigerSoldeManuellement(fid){
   const f=getFournisseursActifs().find(x=>x.id==fid);if(!f)return;
   const val=prompt(`Corriger le solde de la dette de ${f.nom}\nSolde actuel : ${f.dette} FCFA\n\nEntrer le nouveau solde exact (en FCFA) :`, f.dette);
   if(val===null) return; // annulé
   const nouveau=parseInt(val.replace(/\s/g,''),10);
   if(isNaN(nouveau)||nouveau<0) return toast('❌ Montant invalide');
-  f.dette=nouveau;
+  // Ligne « Correction » dans le relevé : le relevé doit toujours retomber sur le solde réel (preuve pour le fournisseur)
+  const ledger=_soldeLedgerFour(f);
+  if(nouveau!==ledger){
+    const ecart=nouveau-ledger;
+    const motif=prompt(`Le relevé affichait ${ledger} FCFA ; le solde réel sera ${nouveau} FCFA (écart : ${ecart>0?'+':''}${ecart} FCFA).\n\nMotif de la correction (sera écrit sur le relevé) :`,'Correction selon le cahier / les reçus');
+    if(motif===null) return; // annulé : rien n'est modifié
+    if(!f.historiqueCorrectionsDette) f.historiqueCorrectionsDette=[];
+    f.historiqueCorrectionsDette.push({id:genId(),date:D(),delta:ecart,avant:ledger,apres:nouveau,note:'Correction — '+(motif.trim()||'solde corrigé manuellement'),ts:Date.now()+1000});
+  }
+  f.dette=nouveau;f.ts=Date.now()+2000;
   saveData();
   toast(`✅ Solde de ${f.nom} corrigé à ${F(nouveau)}`);
   if(currentPage==='dettes') { rDettes(); voirHistoDette(fid); }
   else if(currentPage==='tresorerie') rTresorerie();
+  else voirHistoDette(fid);
 }
 
 // Correction manuelle des soldes réels issus des relevés Google Sheets
@@ -14268,7 +14293,7 @@ function corrigerTousLesSoldes(){
   const lignes=[];
   corrections.forEach(({nom,solde})=>{
     const f=getFournisseursActifs().find(x=>x.nom&&x.nom.trim().toLowerCase()===nom.trim().toLowerCase());
-    if(f){const avant=f.dette;f.dette=solde;lignes.push(nom+": "+avant+" → "+solde);}
+    if(f){const avant=f.dette;f.dette=solde;f.ts=Date.now()+2000;lignes.push(nom+": "+avant+" → "+solde);}
     else lignes.push("⚠️ "+nom+" introuvable");
   });
   saveData();
@@ -14355,16 +14380,18 @@ function reconcilierHistoDette(fid){
     const tousLignes=[];
     (f.historiqueDetteAjouts||[]).forEach(h=>tousLignes.push({ref:h,type:'ajout'}));
     (f.historiquePaiementsFour||[]).forEach(p=>tousLignes.push({ref:p,type:'paiement'}));
+    (f.historiqueCorrectionsDette||[]).forEach(c=>tousLignes.push({ref:c,type:'correction'}));
     tousLignes.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
     let solde=0;
     tousLignes.forEach(l=>{
       l.ref.avant=solde;
       const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||0);
       if(l.type==='ajout') solde+=mt;
+      else if(l.type==='correction') solde=Math.max(0,solde+(l.ref.delta||0));
       else solde=Math.max(0,solde-mt);
       l.ref.apres=solde;
     });
-    f.dette=solde;
+    f.dette=solde;f.ts=Date.now()+2000;
     saveData();
     toast(`✅ ${nb} achat(s) ajoutés au relevé de ${f.nom}`);
     voirHistoDette(fid);
@@ -14373,16 +14400,18 @@ function reconcilierHistoDette(fid){
     const tousLignes=[];
     (f.historiqueDetteAjouts||[]).forEach(h=>tousLignes.push({ref:h,type:'ajout'}));
     (f.historiquePaiementsFour||[]).forEach(p=>tousLignes.push({ref:p,type:'paiement'}));
+    (f.historiqueCorrectionsDette||[]).forEach(c=>tousLignes.push({ref:c,type:'correction'}));
     tousLignes.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
     let solde=0;
     tousLignes.forEach(l=>{
       l.ref.avant=solde;
       const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||0);
       if(l.type==='ajout') solde+=mt;
+      else if(l.type==='correction') solde=Math.max(0,solde+(l.ref.delta||0));
       else solde=Math.max(0,solde-mt);
       l.ref.apres=solde;
     });
-    f.dette=solde;
+    f.dette=solde;f.ts=Date.now()+2000;
     saveData();
     toast('✅ Soldes du relevé recalculés et corrigés');
     voirHistoDette(fid);
@@ -14804,12 +14833,14 @@ function voirHistoDette(fid){
   const lignes=[];
   ajouts.forEach(h=>lignes.push({id:h.id,date:h.date,type:'ajout',mt:h.mt,note:h.notes,ts:h.ts||0}));
   paiements.forEach(p=>lignes.push({id:p.id,date:p.date,type:'paiement',mt:p.montantPaye,note:p.note,compte:p.compte,ts:p.ts||0}));
+  (f.historiqueCorrectionsDette||[]).forEach(c=>lignes.push({id:c.id,date:c.date,type:'correction',mt:c.delta,note:c.note,ts:c.ts||0}));
   lignes.sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
   // Recalculer avant/après de façon strictement chronologique
   let _solde=0;
   lignes.forEach(l=>{
     l.avant=_solde;
     if(l.type==='ajout') _solde+=l.mt;
+    else if(l.type==='correction') _solde=Math.max(0,_solde+(l.mt||0));
     else{
       const effectif=Math.min(l.mt,_solde); // ce qui a réellement réduit la dette
       l.effectif=effectif;
@@ -14865,12 +14896,14 @@ function voirHistoDette(fid){
           <td style="padding:7px 8px">
             ${l.type==='ajout'
               ?'<span style="background:var(--red-bg);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">📈 Ajout</span>'
+              :l.type==='correction'
+              ?'<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">✏️ Correction</span>'
               :`<span style="background:var(--green-bg);color:var(--green);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">💳 Paiement</span>${l.fantome?'<span style="background:var(--amber-bg);color:var(--amber);font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;margin-left:4px" title="Paiement enregistré alors que le solde était déjà à 0 — n\'a pas réduit la dette">⚠️ Excédent</span>':''} ${l.compte?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+l.compte+'</div>':''}`}
           </td>
           <td style="padding:7px 8px;text-align:right;color:var(--text3)">${F(l.avant)}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.fantome?'var(--text3)':l.type==='ajout'?'var(--red)':'var(--green)'}">${l.type==='ajout'?'+':'−'}${F(l.mt)}</td>
+          <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.fantome?'var(--text3)':l.type==='correction'?'var(--amber)':l.type==='ajout'?'var(--red)':'var(--green)'}">${l.type==='correction'?(l.mt>=0?'+':'−'):l.type==='ajout'?'+':'−'}${F(Math.abs(l.mt))}</td>
           <td style="padding:7px 8px;text-align:right;font-weight:700;color:${l.apres>0?'var(--amber)':'var(--green)'}">${F(l.apres)}</td>
-          <td style="padding:7px 8px;color:var(--text2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.note}">${l.note}</td>
+          <td style="padding:7px 8px;color:var(--text2);${l.type==='correction'?'max-width:260px;white-space:normal;font-weight:600':'max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}" title="${l.note}">${l.note}</td>
           <td style="padding:4px 6px;text-align:center"><button onclick="supprimerLigneReleve(${fid},'${l.type}','${l.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:0.4;transition:opacity .2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4" title="Supprimer cette ligne">🗑️</button></td>
         </tr>`).join('')}
       </tbody>
@@ -14896,6 +14929,8 @@ function supprimerLigneReleve(fid, type, lid){
   if(!confirm('Supprimer cette ligne du relevé ?\nCette action est irréversible.'))return;
   if(type==='ajout'){
     f.historiqueDetteAjouts=(f.historiqueDetteAjouts||[]).filter(h=>String(h.id)!==sid);
+  } else if(type==='correction'){
+    f.historiqueCorrectionsDette=(f.historiqueCorrectionsDette||[]).filter(x=>String(x.id)!==sid);
   } else {
     const p=(f.historiquePaiementsFour||[]).find(x=>String(x.id)===sid);
     f.historiquePaiementsFour=(f.historiquePaiementsFour||[]).filter(x=>String(x.id)!==sid);
@@ -14905,15 +14940,16 @@ function supprimerLigneReleve(fid, type, lid){
   const lignes2=[];
   (f.historiqueDetteAjouts||[]).forEach(h=>lignes2.push({ref:h,type:'ajout'}));
   (f.historiquePaiementsFour||[]).forEach(p=>lignes2.push({ref:p,type:'paiement'}));
+  (f.historiqueCorrectionsDette||[]).forEach(c=>lignes2.push({ref:c,type:'correction'}));
   lignes2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
   let s=0;
   lignes2.forEach(l=>{
     l.ref.avant=s;
     const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);
-    if(l.type==='ajout') s+=mt; else s=Math.max(0,s-mt);
+    if(l.type==='ajout') s+=mt; else if(l.type==='correction') s=Math.max(0,s+(l.ref.delta||0)); else s=Math.max(0,s-mt);
     l.ref.apres=s;
   });
-  f.dette=s;
+  f.dette=s;f.ts=Date.now()+2000;
   saveData();
   toast('🗑️ Ligne supprimée · Solde recalculé : '+F(f.dette));
   voirHistoDette(fid);
@@ -14936,10 +14972,10 @@ function nettoyerDoublonsPaiements(fid){
   S.depenses=(S.depenses||[]).filter(d=>d.cat!=='Règlement dette'||d.four!==f.nom||!aSupprimer.has(String(d.id)));
   const l2=[];
   (f.historiqueDetteAjouts||[]).forEach(h=>l2.push({ref:h,type:'ajout'}));
-  f.historiquePaiementsFour.forEach(p=>l2.push({ref:p,type:'paiement'}));
+  f.historiquePaiementsFour.forEach(p=>l2.push({ref:p,type:'paiement'}));(f.historiqueCorrectionsDette||[]).forEach(c=>l2.push({ref:c,type:'correction'}));
   l2.sort((a,b)=>(a.ref.date||'').localeCompare(b.ref.date||'')||(a.ref.ts||0)-(b.ref.ts||0));
-  let s=0;l2.forEach(l=>{l.ref.avant=s;const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);if(l.type==='ajout')s+=mt;else s=Math.max(0,s-mt);l.ref.apres=s;});
-  f.dette=s;saveData();toast(`✅ ${aSupprimer.size} doublon(s) supprimé(s) · Solde : ${F(f.dette)}`);voirHistoDette(fid);
+  let s=0;l2.forEach(l=>{l.ref.avant=s;const mt=l.type==='ajout'?(l.ref.mt||0):(l.ref.montantPaye||l.ref.mt||0);if(l.type==='ajout')s+=mt;else if(l.type==='correction')s=Math.max(0,s+(l.ref.delta||0));else s=Math.max(0,s-mt);l.ref.apres=s;});
+  f.dette=s;f.ts=Date.now()+2000;saveData();toast(`✅ ${aSupprimer.size} doublon(s) supprimé(s) · Solde : ${F(f.dette)}`);voirHistoDette(fid);
 }
 
 // ─── RECONSTRUCTION HISTORIQUE DEPUIS EXCEL ───
@@ -15012,7 +15048,7 @@ function executerReconstructionExcel(fid){
   f.historiquePaiementsFour=nouvelPaiements;
   // Solde final = valeur saisie, sinon dernière valeur Reste à Payer
   const dernierReste=nouvelPaiements.length>0?nouvelPaiements[nouvelPaiements.length-1].apres:(nouvelAjouts.length>0?nouvelAjouts[nouvelAjouts.length-1].apres:0);
-  f.dette=(!isNaN(soldeFinal)&&soldeFinal>=0)?soldeFinal:dernierReste;
+  f.dette=(!isNaN(soldeFinal)&&soldeFinal>=0)?soldeFinal:dernierReste;f.ts=Date.now()+2000;
   f.ts=Date.now();
 
   saveData();closeModal();
