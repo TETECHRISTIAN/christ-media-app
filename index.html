@@ -17983,12 +17983,12 @@ function exporterHistClotures(){
     .filter(function(c){ return !bid || c.bid==bid; })
     .sort(function(a,b){ return b.ts-a.ts; });
   if(rows.length===0){ toast('Aucune clôture à exporter'); return; }
-  var csv = 'Date,Boutique,Solde ouverture,Ventes,Depenses,Solde theorique,Cash compte,Ecart,Cloture par,Notes\n';
+  var csv = 'Date,Boutique,Solde ouverture,Ventes,Depenses,Solde theorique,Cash compte,Ecart,Retire vers Investissement,Cloture par,Notes\n';
   rows.forEach(function(c){
     var bName = (S.boutiques||[]).find(function(b){ return b.id==c.bid; });
     bName = bName ? (bName.nom||bName.name) : c.bid||'—';
     var ventes = c.solde_theorique - c.solde_ouverture;
-    csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
+    csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, retraitCloture(c), c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
   });
   var blob = new Blob([csv], {type:'text/csv'});
   var a = document.createElement('a');
@@ -18023,6 +18023,7 @@ function rHistClotures(){
   var deficits   = filtered.filter(function(c){ return c.ecart<0; }).length;
   var ecartTotal = filtered.reduce(function(s,c){ return s+(c.ecart||0); }, 0);
   var totalVentes= filtered.reduce(function(s,c){ return s+(c.solde_theorique-c.solde_ouverture); }, 0);
+  var totalRetire= filtered.reduce(function(s,c){ return s+retraitCloture(c); }, 0);
   var meilleurJour = filtered.length ? filtered.reduce(function(best,c){
     var v = c.solde_theorique-c.solde_ouverture;
     return v > (best.solde_theorique-best.solde_ouverture) ? c : best;
@@ -18063,7 +18064,8 @@ function rHistClotures(){
 
   // Ligne résumé
   if(filtered.length>0){
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">';
+    html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">📤 Total retiré → Investissement</div><div class="mv" style="color:var(--navy)">'+F(totalRetire)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">sur la période affichée</div></div>';
     html += '<div class="card"><div class="ct">CA Total période</div><div class="mv" style="color:var(--green)">'+F(totalVentes)+'</div></div>';
     html += '<div class="card"><div class="ct">Écart cumulé</div><div class="mv" style="color:'+(ecartTotal>=0?'var(--teal)':'var(--red)')+'">'+F(ecartTotal)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+(ecartTotal>0?'Excédent cumulé':ecartTotal<0?'Déficit cumulé':'Parfaitement équilibré')+'</div></div>';
     if(meilleurJour){
@@ -18084,6 +18086,7 @@ function rHistClotures(){
     html += '<th style="text-align:right">Théorique</th>';
     html += '<th style="text-align:right">Cash compté</th>';
     html += '<th style="text-align:center">Écart</th>';
+    html += '<th style="text-align:right">Retiré → Investissement</th>';
     html += '<th>Clôturé par</th>';
     html += '<th>Notes</th>';
     html += '<th></th>';
@@ -18106,6 +18109,8 @@ function rHistClotures(){
       html += '<td style="text-align:right;padding:9px 12px;font-weight:700">'+F(c.solde_theorique)+'</td>';
       html += '<td style="text-align:right;padding:9px 12px">'+F(c.cash_compte||0)+'</td>';
       html += '<td style="text-align:center;padding:9px 12px;font-weight:700;color:'+ecartCol+'">'+ecartTxt+'</td>';
+      var _ret = retraitCloture(c);
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--navy)">'+(_ret>0?F(_ret):'—')+'</td>';
       html += '<td style="padding:9px 12px;font-size:12px;color:var(--text3)">'+( c.par||'—')+'</td>';
       html += '<td style="padding:9px 12px;font-size:11px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(c.notes||'')+'">'+( c.notes||'—')+'</td>';
       html += '<td style="padding:9px 8px"><button class="btn-icon btn-sm" onclick="supprimerCloture('+c.id+')" style="color:var(--red)" title="Supprimer">✕</button></td>';
@@ -18980,9 +18985,20 @@ function tontineVerseeJour(bid,day,from){
   from=from||day;
   const comptes=S.comptes||[];const def=(S.boutiques||[])[0]?.id||1;
   const get=id=>comptes.find(k=>String(k.id)===String(id));
-  const isT=id=>{const c=get(id);return !!c&&/tontine|carnet\s+scolaire/i.test(c.nom||'');};
+  const isT=id=>{const c=get(id);return !!c&&(/tontine|carnet\s+scolaire/i.test(c.nom||'')||isCompteInvestissement(c));};
   const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
-  return transfertsActifs().filter(t=>t.date&&dansPeriode(t.date,from,day)&&isV(t.de!=null?t.de:t.cidSrc)&&isT(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
+  return transfertsActifs().filter(t=>t.source!=='cloture'&&t.date&&dansPeriode(t.date,from,day)&&isV(t.de!=null?t.de:t.cidSrc)&&isT(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
+}
+// Retraits « Vente → Investissement » faits à la main (hors ceux créés par la clôture elle-même) sur une période
+function retraitsInvestissementManuels(bid,from,to){
+  const comptes=S.comptes||[];const def=(S.boutiques||[])[0]?.id||1;
+  const get=id=>comptes.find(k=>String(k.id)===String(id));
+  const isInv=id=>isCompteInvestissement(get(id));
+  const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
+  return transfertsActifs().filter(t=>t.source!=='cloture'&&t.date&&dansPeriode(t.date,from,to)&&isV(t.de!=null?t.de:t.cidSrc)&&isInv(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
+}
+function retraitCloture(c){
+  return (+c.retrait||0)+retraitsInvestissementManuels(c.bid,c.periode_debut||c.date,c.date);
 }
 // Correction manuelle du solde d'ouverture : propre à chaque boutique
 function getSoldeOuvManuel(bid){
@@ -19116,7 +19132,7 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid ${soldeTheorique>=0?'var(--green)':'var(--red)'}">
         <div class="ct">Solde théorique</div>
         <div class="mv" style="color:${soldeTheorique>=0?'var(--green)':'var(--red)'}">${F(soldeTheorique)}</div>
-        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}${tontJour?' − tontine versée ('+F(tontJour)+')':''}</div>
+        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}${tontJour?' − versé hors caisse : tontine / Investissement ('+F(tontJour)+')':''}</div>
       </div>
       <div class="card" style="border-left:3px solid var(--blue,#1976d2);background:var(--surface2)">
         <div class="ct">🏪 Total toutes boutiques</div>
@@ -19701,7 +19717,7 @@ function ouvrirModalCloture(){
         <span style="color:var(--green);font-weight:600">+${F(totalVentes)}</span>
       </div>
       ${ajustJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--amber)">± Ajustement de compte</span><span style="color:var(--amber);font-weight:600">${ajustJour>0?'+':'-'}${F(Math.abs(ajustJour))}</span></div>`:''}
-      ${tontJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--red)">− Tontine versée</span><span style="color:var(--red);font-weight:600">-${F(tontJour)}</span></div>`:''}
+      ${tontJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--red)">− Versé hors caisse (tontine / Investissement)</span><span style="color:var(--red);font-weight:600">-${F(tontJour)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2)">
         <span style="color:var(--red)">− Dépenses</span>
         <span style="color:var(--red);font-weight:600">-${F(totalDepenses)}</span>
@@ -19713,13 +19729,24 @@ function ouvrirModalCloture(){
     </div>
 
     <div style="margin-bottom:12px">
-      <div style="margin-top:8px;font-size:11px;color:var(--text3);border-top:1px dashed var(--border2);padding-top:8px">📌 Ce montant deviendra le <strong>solde d'ouverture de demain</strong> pour ${getBoutiqueName()}.${soldeTheorique<0?" <span style='color:var(--red);font-weight:600'>⚠️ Déficit — enregistre tout emprunt reçu avant de clôturer.</span>":""}</div></div><div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">💵 Cash compté — vérification uniquement (${dev})</label>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3);border-top:1px dashed var(--border2);padding-top:8px">📌 Sans retrait, ce montant devient le <strong>solde d'ouverture de demain</strong> pour ${getBoutiqueName()}. Avec un retrait, l'ouverture de demain = cash compté − retrait.${soldeTheorique<0?" <span style='color:var(--red);font-weight:600'>⚠️ Déficit — enregistre tout emprunt reçu avant de clôturer.</span>":""}</div></div><div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">💵 Cash compté — vérification uniquement (${dev})</label>
       <input type="number" id="cc-cash" min="0" step="1" placeholder="Entrez le montant compté"
         oninput="majEcartCloture(${soldeTheorique})"
         style="width:100%;padding:10px;border:2px solid var(--border2);border-radius:var(--rs);font-size:15px;font-weight:700;font-family:inherit;box-sizing:border-box;background:var(--surface)">
     </div>
 
     <div id="cc-ecart-zone" style="display:none;padding:12px 16px;border-radius:var(--rs);margin-bottom:14px;font-size:14px;font-weight:700;text-align:center"></div>
+
+    ${(()=>{const _de=premierCompteId(bid),_vers=compteAchatId(bid);
+      if(_de==null||_vers==null||_de==_vers) return '<div style="background:var(--amber-bg);color:var(--amber);padding:10px 14px;border-radius:var(--rs);margin-bottom:14px;font-size:12px">ℹ️ Aucun compte Investissement distinct trouvé pour cette boutique : le retrait de caisse automatique est indisponible.</div>';
+      return `<div style="margin-bottom:14px;padding:12px;border:1px dashed var(--border2);border-radius:var(--rs)">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">📤 Retiré de la caisse → <b>${nomCompte(_vers)}</b> (${dev})</label>
+        <input type="number" id="cc-retrait" min="0" step="1" placeholder="0 = rien retiré"
+          oninput="this.dataset.touched=1;majResteCaisse()"
+          style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:var(--rs);font-size:14px;font-weight:700;font-family:inherit;box-sizing:border-box;background:var(--surface)">
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Pré-rempli avec le cash compté (caisse vide). Le virement ${nomCompte(_de)} → ${nomCompte(_vers)} est créé automatiquement à l'enregistrement. Mettez 0 si vous ne retirez rien, ou le montant réellement retiré si vous gardez un fond de caisse.</div>
+        <div id="cc-reste" style="margin-top:8px;font-size:13px;font-weight:700"></div>
+      </div>`;})()}
 
     <div style="margin-bottom:14px">
       <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">📝 Notes (optionnel)</label>
@@ -19738,8 +19765,19 @@ function ouvrirModalCloture(){
   }, 100);
 }
 
+function majResteCaisse(){
+  const z=document.getElementById('cc-reste'); if(!z) return;
+  const c=parseFloat(document.getElementById('cc-cash').value)||0;
+  const r=parseFloat((document.getElementById('cc-retrait')||{}).value)||0;
+  const reste=c-r;
+  z.style.color=reste<0?'var(--red)':'var(--text)';
+  z.textContent='🧾 Reste en caisse (ouverture de demain) : '+F(reste)+(reste<0?' ⚠️ retrait supérieur au cash compté':'');
+}
 function majEcartCloture(soldeTheorique){
   const cash = parseFloat(document.getElementById('cc-cash').value) || 0;
+  const _r = document.getElementById('cc-retrait');
+  if(_r && !_r.dataset.touched) _r.value = cash>0 ? cash : '';
+  majResteCaisse();
   const ecart = cash - soldeTheorique;
   const zone = document.getElementById('cc-ecart-zone');
   if(!zone) return;
@@ -19782,6 +19820,22 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     }
   }
 
+  // Retrait de caisse : virement automatique Vente → Investissement
+  let retrait = 0, compteRetrait = null;
+  const retEl = document.getElementById('cc-retrait');
+  if(retEl){
+    const r = Math.max(0, Math.round(parseFloat(retEl.value)||0));
+    const deId = premierCompteId(bid), versId = compteAchatId(bid);
+    const cDe = (S.comptes||[]).find(c=>c.id==deId), cVers = (S.comptes||[]).find(c=>c.id==versId);
+    if(r>0 && cDe && cVers && cDe.id!=cVers.id){
+      cDe.solde = (+cDe.solde||0) - r;
+      cVers.solde = (+cVers.solde||0) + r;
+      if(!S.transferts) S.transferts = [];
+      S.transferts.push({id:genId(),date:today,de:cDe.id,vers:cVers.id,mt:r,notes:'Retrait de caisse à la clôture',heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),avance:false,rembourse:false,bid:bid,ts:Date.now(),source:'cloture'});
+      retrait = r; compteRetrait = cVers.nom;
+    }
+  }
+
   if(!S.clotures_caisse) S.clotures_caisse = [];
   const cloture = {
     id: genId(),
@@ -19792,7 +19846,8 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     solde_theorique: soldeTheorique,
     cash_compte: cashCompte,
     ecart: ecart,
-    solde_fermeture: compteAjuste ? cashCompte : soldeTheorique, // ouverture du lendemain (= argent compté si le compte a été ajusté)
+    solde_fermeture: retrait>0 ? (cashCompte - retrait) : (compteAjuste ? cashCompte : soldeTheorique), // ouverture du lendemain : cash restant après retrait, sinon argent compté (compte ajusté) ou théorique
+    retrait: retrait, compte_retrait: compteRetrait,
     compte_ajuste: compteAjuste || null,
     notes: notes,
     par: S.session?.nom || 'Admin',
@@ -19804,11 +19859,11 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
   closeModal();
 
   if(ecart === 0){
-    toast('✅ Clôture enregistrée — Caisse équilibrée !', 3000);
+    toast('✅ Clôture enregistrée — Caisse équilibrée !'+(retrait?' · '+F(retrait)+' retiré vers '+compteRetrait:''), 3000);
   } else if(ecart > 0){
-    toast(`✅ Clôture enregistrée — Excédent de ${F(ecart)}${compteAjuste?' · compte ajusté':''}`, 3500);
+    toast(`✅ Clôture enregistrée — Excédent de ${F(ecart)}${compteAjuste?' · compte ajusté':''}${retrait?' · '+F(retrait)+' retiré vers '+compteRetrait:''}`, 3500);
   } else {
-    toast(`✅ Clôture enregistrée — Manquant de ${F(Math.abs(ecart))}${compteAjuste?' · compte ajusté':''}`, 3500);
+    toast(`✅ Clôture enregistrée — Manquant de ${F(Math.abs(ecart))}${compteAjuste?' · compte ajusté':''}${retrait?' · '+F(retrait)+' retiré vers '+compteRetrait:''}`, 3500);
   }
   rClotureCaisse();
 }
