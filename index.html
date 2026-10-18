@@ -19846,7 +19846,7 @@ function confirmerCloture(soldeTheorique, soldeOuverture){
     solde_theorique: soldeTheorique,
     cash_compte: cashCompte,
     ecart: ecart,
-    solde_fermeture: retrait>0 ? (cashCompte - retrait) : (compteAjuste ? cashCompte : soldeTheorique), // ouverture du lendemain : cash restant après retrait, sinon argent compté (compte ajusté) ou théorique
+    solde_fermeture: retEl ? (cashCompte - retrait) : (compteAjuste ? cashCompte : soldeTheorique), // ouverture du lendemain : cash restant après retrait, sinon argent compté (compte ajusté) ou théorique
     retrait: retrait, compte_retrait: compteRetrait,
     compte_ajuste: compteAjuste || null,
     notes: notes,
