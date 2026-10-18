@@ -213,6 +213,12 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .qb-slot-remove{background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px;opacity:.6;transition:opacity .15s}
 .qb-slot-remove:hover{opacity:1;background:var(--red-bg)}
 .qb-slot.is-center{border-color:var(--navy);background:var(--navy-bg)}
+.qb-slot.drag-over{border-color:var(--navy);background:var(--navy-bg);box-shadow:0 0 0 2px var(--navy-light)}
+.qb-grip{cursor:grab;color:var(--text3);font-size:16px;padding:0 2px;flex-shrink:0;user-select:none}
+.qb-move{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+.qb-move button{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:9px;line-height:1;padding:2px 6px;color:var(--navy)}
+.qb-move button:hover:not(:disabled){background:var(--navy-bg);border-color:var(--navy)}
+.qb-move button:disabled{opacity:.3;cursor:default}
 .qb-slot.is-center .qb-slot-name{color:var(--navy)}
 .qb-page-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
 .qb-page-option{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:all .15s;font-size:12px;font-weight:500;color:var(--text2)}
@@ -3757,7 +3763,7 @@ function getQBConfig(){
     const raw = localStorage.getItem('cm_quickbar');
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return QB_DEFAULT;
+  return JSON.parse(JSON.stringify(QB_DEFAULT));
 }
 function setQBConfig(cfg){
   localStorage.setItem('cm_quickbar', JSON.stringify(cfg));
@@ -3802,24 +3808,57 @@ function showQuickBar(page){
   }
 }
 
-// ─── MODALE GESTIONNAIRE ───
-function ouvrirQBManager(){
-  const cfg = getQBConfig();
-  const renderSlots = (cfg) => cfg.map((item,i)=>{
+// ─── LISTE DES RACCOURCIS ACTIFS (avec déplacement) ───
+function qbSlotsHtml(cfg){
+  return cfg.map((item,i)=>{
     const def = QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',label:item.page};
-    return `<div class="qb-slot${item.center?' is-center':''}" id="qb-slot-${i}">
+    return `<div class="qb-slot${item.center?' is-center':''}" id="qb-slot-${i}" draggable="true"
+      ondragstart="qbDragStart(event,${i})" ondragover="qbDragOver(event,this)" ondragleave="this.classList.remove('drag-over')" ondrop="qbDrop(event,${i})" ondragend="qbDragEnd()">
+      <span class="qb-grip" title="Glisser pour déplacer">⠿</span>
       <span class="qb-slot-icon">${def.emoji}</span>
       <div class="qb-slot-info">
         <div class="qb-slot-name">${def.label}${item.center?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px">Principal</span>':''}</div>
         <div class="qb-slot-page">${String(item.page).indexOf('__')===0?'Action rapide':'Page : '+item.page}</div>
       </div>
-      <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--navy);border-color:var(--navy-light)" 
+      <div class="qb-move">
+        <button onclick="moveQBSlot(${i},-1)" title="Monter" ${i===0?'disabled':''}>▲</button>
+        <button onclick="moveQBSlot(${i},1)" title="Descendre" ${i===cfg.length-1?'disabled':''}>▼</button>
+      </div>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--navy);border-color:var(--navy-light)"
         onclick="toggleCenterSlot(${i})" title="${item.center?'Retirer du centre':'Mettre en avant'}">
         ${item.center?'↓ Normal':'★ Principal'}
       </button>
       <button class="btn-icon qb-slot-remove" onclick="removeQBSlot(${i})" title="Retirer">✕</button>
     </div>`;
   }).join('') || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">Aucun raccourci. Ajoutez-en ci-dessous.</div>';
+}
+function qbRefreshSlots(){
+  const l=document.getElementById('qb-slots-list');
+  if(l) l.innerHTML=qbSlotsHtml(getQBConfig());
+  renderQuickBar();
+}
+function moveQBSlot(i,d){
+  const cfg=getQBConfig(); const j=i+d;
+  if(j<0||j>=cfg.length) return;
+  const t=cfg[i]; cfg[i]=cfg[j]; cfg[j]=t;
+  setQBConfig(cfg); qbRefreshSlots();
+}
+let _qbDragFrom=null;
+function qbDragStart(e,i){ _qbDragFrom=i; try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',String(i)); }catch(_){} }
+function qbDragOver(e,el){ e.preventDefault(); el.classList.add('drag-over'); }
+function qbDragEnd(){ _qbDragFrom=null; document.querySelectorAll('.qb-slot.drag-over').forEach(x=>x.classList.remove('drag-over')); }
+function qbDrop(e,to){
+  e.preventDefault();
+  const from=_qbDragFrom; qbDragEnd();
+  if(from==null||from===to) return;
+  const cfg=getQBConfig(); const it=cfg.splice(from,1)[0]; cfg.splice(to,0,it);
+  setQBConfig(cfg); qbRefreshSlots();
+}
+
+// ─── MODALE GESTIONNAIRE ───
+function ouvrirQBManager(){
+  const cfg = getQBConfig();
+  const renderSlots = (cfg) => qbSlotsHtml(cfg);
 
   const renderPages = () => QB_PAGES.map(p => {
     const cfg2 = getQBConfig();
@@ -3837,7 +3876,7 @@ function ouvrirQBManager(){
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-size:15px;font-weight:700">✏️ Personnaliser les raccourcis</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">Choisissez jusqu'à 10 menus à afficher dans la barre du haut</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">Choisissez jusqu'à 10 menus. Glissez ⠿ ou utilisez ▲ ▼ pour changer l'ordre</div>
             </div>
             <button class="btn-icon" onclick="fermerQBManager()">✕</button>
           </div>
@@ -3879,22 +3918,7 @@ function toggleQBPage(page, btn){
   // Refresh slots list
   const slotsList = document.getElementById('qb-slots-list');
   if(slotsList){
-    const def2 = QB_PAGES.find(p=>p.page===page)||{emoji:'📌',label:page};
-    slotsList.innerHTML = cfg.map((item,i)=>{
-      const def = QB_PAGES.find(p=>p.page===item.page)||{emoji:'📌',label:item.page};
-      return `<div class="qb-slot${item.center?' is-center':''}" id="qb-slot-${i}">
-        <span class="qb-slot-icon">${def.emoji}</span>
-        <div class="qb-slot-info">
-          <div class="qb-slot-name">${def.label}${item.center?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px">Principal</span>':''}</div>
-          <div class="qb-slot-page">${String(item.page).indexOf('__')===0?'Action rapide':'Page : '+item.page}</div>
-        </div>
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--navy);border-color:var(--navy-light)" 
-          onclick="toggleCenterSlot(${i})" title="${item.center?'Retirer du centre':'Mettre en avant'}">
-          ${item.center?'↓ Normal':'★ Principal'}
-        </button>
-        <button class="btn-icon qb-slot-remove" onclick="removeQBSlot(${i})" title="Retirer">✕</button>
-      </div>`;
-    }).join('') || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">Aucun raccourci.</div>';
+    slotsList.innerHTML = qbSlotsHtml(cfg);
   }
 }
 
