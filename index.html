@@ -17984,12 +17984,12 @@ function exporterHistClotures(){
     .filter(function(c){ return !bid || c.bid==bid; })
     .sort(function(a,b){ return b.ts-a.ts; });
   if(rows.length===0){ toast('Aucune clôture à exporter'); return; }
-  var csv = 'Date,Boutique,Solde ouverture,Ventes,Depenses,Solde theorique,Cash compte,Ecart,Retire vers Investissement,Cloture par,Notes\n';
+  var csv = 'Date,Boutique,Solde ouverture,Ventes,Depenses,Solde theorique,Cash compte,Ecart,Retire vers Investissement,Retire vers Fonctionnement,Cloture par,Notes\n';
   rows.forEach(function(c){
     var bName = (S.boutiques||[]).find(function(b){ return b.id==c.bid; });
     bName = bName ? (bName.nom||bName.name) : c.bid||'—';
     var ventes = caClot(c);
-    csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, retraitCloture(c), c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
+    csv += [c.date, bName, c.solde_ouverture, ventes, '', c.solde_theorique, c.cash_compte, c.ecart, retraitCloture(c), retraitFoncCloture(c), c.par||'-', (c.notes||'').replace(/,/g,';')].join(',') + '\n';
   });
   var blob = new Blob([csv], {type:'text/csv'});
   var a = document.createElement('a');
@@ -18025,6 +18025,7 @@ function rHistClotures(){
   var ecartTotal = filtered.reduce(function(s,c){ return s+(c.ecart||0); }, 0);
   var totalVentes= filtered.reduce(function(s,c){ return s+(caClot(c)); }, 0);
   var totalRetire= filtered.reduce(function(s,c){ return s+retraitCloture(c); }, 0);
+  var totalRetireF= filtered.reduce(function(s,c){ return s+retraitFoncCloture(c); }, 0);
   var meilleurJour = filtered.length ? filtered.reduce(function(best,c){
     var v = caClot(c);
     return v > (caClot(best)) ? c : best;
@@ -18067,6 +18068,7 @@ function rHistClotures(){
   if(filtered.length>0){
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">';
     html += '<div class="card" style="border-left:4px solid var(--navy)"><div class="ct">📤 Total retiré → Investissement</div><div class="mv" style="color:var(--navy)">'+F(totalRetire)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">sur la période affichée</div></div>';
+    html += '<div class="card" style="border-left:4px solid var(--amber)"><div class="ct">🏠 Total retiré → Fonctionnement</div><div class="mv" style="color:var(--amber)">'+F(totalRetireF)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">dépenses courantes / famille</div></div>';
     html += '<div class="card"><div class="ct">CA Total période</div><div class="mv" style="color:var(--green)">'+F(totalVentes)+'</div></div>';
     html += '<div class="card"><div class="ct">Écart cumulé</div><div class="mv" style="color:'+(ecartTotal>=0?'var(--teal)':'var(--red)')+'">'+F(ecartTotal)+'</div><div style="font-size:11px;color:var(--text3);margin-top:4px">'+(ecartTotal>0?'Excédent cumulé':ecartTotal<0?'Déficit cumulé':'Parfaitement équilibré')+'</div></div>';
     if(meilleurJour){
@@ -18088,6 +18090,7 @@ function rHistClotures(){
     html += '<th style="text-align:right">Cash compté</th>';
     html += '<th style="text-align:center">Écart</th>';
     html += '<th style="text-align:right">Retiré → Investissement</th>';
+    html += '<th style="text-align:right">Retiré → Fonctionnement</th>';
     html += '<th>Clôturé par</th>';
     html += '<th>Notes</th>';
     html += '<th></th>';
@@ -18112,6 +18115,8 @@ function rHistClotures(){
       html += '<td style="text-align:center;padding:9px 12px;font-weight:700;color:'+ecartCol+'">'+ecartTxt+'</td>';
       var _ret = retraitCloture(c);
       html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--navy)">'+(_ret>0?F(_ret):'—')+'</td>';
+      var _retF = retraitFoncCloture(c);
+      html += '<td style="text-align:right;padding:9px 12px;font-weight:700;color:var(--amber)">'+(_retF>0?F(_retF):'—')+'</td>';
       html += '<td style="padding:9px 12px;font-size:12px;color:var(--text3)">'+( c.par||'—')+'</td>';
       html += '<td style="padding:9px 12px;font-size:11px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(c.notes||'')+'">'+( c.notes||'—')+'</td>';
       html += '<td style="padding:9px 8px"><button class="btn-icon btn-sm" onclick="supprimerCloture('+c.id+')" style="color:var(--red)" title="Supprimer">✕</button></td>';
@@ -18988,17 +18993,20 @@ function tontineVerseeJour(bid,day,from){
   from=from||day;
   const comptes=S.comptes||[];const def=(S.boutiques||[])[0]?.id||1;
   const get=id=>comptes.find(k=>String(k.id)===String(id));
-  const isT=id=>{const c=get(id);return !!c&&(/tontine|carnet\s+scolaire/i.test(c.nom||'')||isCompteInvestissement(c));};
+  const isT=id=>{const c=get(id);return !!c&&(/tontine|carnet\s+scolaire|fonctionnement/i.test(c.nom||'')||isCompteInvestissement(c));};
   const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
   return transfertsActifs().filter(t=>t.source!=='cloture'&&t.date&&dansPeriode(t.date,from,day)&&isV(t.de!=null?t.de:t.cidSrc)&&isT(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
 }
 // Retraits « Vente → Investissement » faits à la main (hors ceux créés par la clôture elle-même) sur une période
-function retraitsInvestissementManuels(bid,from,to){
+function retraitsInvestissementManuels(bid,from,to,kind){
   const comptes=S.comptes||[];const def=(S.boutiques||[])[0]?.id||1;
   const get=id=>comptes.find(k=>String(k.id)===String(id));
-  const isInv=id=>isCompteInvestissement(get(id));
+  const isInv=id=>kind==='fonc'?/fonctionnement/i.test((get(id)||{}).nom||''):isCompteInvestissement(get(id));
   const isV=id=>{const c=get(id);return !!c&&/^vente\s+/i.test((c.nom||'').trim())&&(c.bid||def)==bid;};
   return transfertsActifs().filter(t=>t.source!=='cloture'&&t.date&&dansPeriode(t.date,from,to)&&isV(t.de!=null?t.de:t.cidSrc)&&isInv(t.vers!=null?t.vers:t.cidDst)).reduce((s,t)=>s+(+t.mt||0),0);
+}
+function retraitFoncCloture(c){
+  return retraitsInvestissementManuels(c.bid,c.periode_debut||c.date,c.date,'fonc');
 }
 function retraitCloture(c){
   return (+c.retrait||0)+retraitsInvestissementManuels(c.bid,c.periode_debut||c.date,c.date);
@@ -19135,7 +19143,7 @@ function rClotureCaisse(){
       <div class="card" style="border-left:3px solid ${soldeTheorique>=0?'var(--green)':'var(--red)'}">
         <div class="ct">Solde théorique</div>
         <div class="mv" style="color:${soldeTheorique>=0?'var(--green)':'var(--red)'}">${F(soldeTheorique)}</div>
-        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}${tontJour?' − versé hors caisse : tontine / Investissement ('+F(tontJour)+')':''}</div>
+        <div style="font-size:11px;color:var(--text3)">Ouverture + Ventes − Dépenses${ajustJour?' '+(ajustJour>0?'+':'−')+' ajustement de compte ('+F(Math.abs(ajustJour))+')':''}${tontJour?' − versé hors caisse : tontine / Investissement / Fonctionnement ('+F(tontJour)+')':''}</div>
       </div>
       <div class="card" style="border-left:3px solid var(--blue,#1976d2);background:var(--surface2)">
         <div class="ct">🏪 Total toutes boutiques</div>
@@ -19720,7 +19728,7 @@ function ouvrirModalCloture(){
         <span style="color:var(--green);font-weight:600">+${F(totalVentes)}</span>
       </div>
       ${ajustJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--amber)">± Ajustement de compte</span><span style="color:var(--amber);font-weight:600">${ajustJour>0?'+':'-'}${F(Math.abs(ajustJour))}</span></div>`:''}
-      ${tontJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--red)">− Versé hors caisse (tontine / Investissement)</span><span style="color:var(--red);font-weight:600">-${F(tontJour)}</span></div>`:''}
+      ${tontJour?`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--red)">− Versé hors caisse (tontine / Investissement / Fonctionnement)</span><span style="color:var(--red);font-weight:600">-${F(tontJour)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border2)">
         <span style="color:var(--red)">− Dépenses</span>
         <span style="color:var(--red);font-weight:600">-${F(totalDepenses)}</span>
