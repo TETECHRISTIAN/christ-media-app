@@ -2520,7 +2520,7 @@ async function absorberPendingFirebase(deferCleanup){
                     (Array.isArray(lignesV) ? lignesV : []).forEach(l => {
                       if(!l || l.aid == null) return;
                       const art = (S.stock||[]).find(x => x.id == l.aid);
-                      if(art) art.qv = (art.qv||0) + (l.qte||1);
+                      if(art){ art.qv = (art.qv||0) + (l.qte||1); art.ts = Date.now(); }
                     });
                   }
                   // Créditer le compte si c'est une vente Payée nouvellement absorbée
@@ -5120,6 +5120,7 @@ function validerPanier(){
     if(l.type==='service') continue;
     const a=ga(l.aid);
     a.qv+=l.qte;
+    a.ts=Date.now(); // sans ça, les autres appareils ne voient jamais le nouveau stock
     addHistorique('Sortie',a,l.qte,`Vente à ${client||'client anonyme'}`);
   }
   // Vérifier alerte vente inhabituelle avant de finaliser
@@ -5488,7 +5489,7 @@ function sauvegarderModifVente(vid){
     const mt=qte*pu;
     // Ajuster le stock selon la différence de quantité
     const a=ga(l.aid);
-    if(a){const delta=qte-(l.qte||0);a.qv=Math.max(0,(a.qv||0)+delta);}
+    if(a){const delta=qte-(l.qte||0);a.qv=Math.max(0,(a.qv||0)+delta);a.ts=Date.now();}
     return {...l,qte,pu,mt};
   });
   const nouveauSousTotal=newLignes.reduce((s,l)=>s+l.mt,0);
@@ -8911,7 +8912,7 @@ function delEmploye(id){
 function recalculerStock(){
   if(!confirm('Recalculer le stock depuis les ventes et achats réels ?'))return;
   // Remettre qv à 0 pour tous les articles
-  S.stock.forEach(a=>{a.qv=0;a.ea=0;});
+  S.stock.forEach(a=>{a.qv=0;a.ea=0;a.ts=Date.now();});
   // Recalculer qv depuis les ventes
   S.ventes.forEach(v=>{
     const lignes=v.lignes||[{aid:v.aid,qte:v.qte||1}];
@@ -20750,6 +20751,7 @@ function crValider(){
   for(const l of crPanier){
     const a=ga(l.aid);
     a.qv+=l.qte;
+    a.ts=Date.now(); // sans ça, les autres appareils ne voient jamais le nouveau stock
     addHistorique('Sortie',a,l.qte,'Vente caisse rapide');
   }
   verifierAlerteVente(total, function(ok){
