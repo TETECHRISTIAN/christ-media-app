@@ -783,9 +783,22 @@ body.theme-teal{--navy:#1a5c5c;--navy2:#207070;--navy-bg:#e8f5f5;--navy-light:#a
 .cr-valider-btn:hover{opacity:.9;transform:translateY(-1px)}
 .cr-valider-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .cr-vider-btn{width:100%;padding:6px;background:none;color:var(--red);border:none;cursor:pointer;font-size:11px;font-family:inherit;margin-top:6px}
+.cr-mob-only{display:none}
 @media(max-width:768px){
-  .cr-right{width:220px}
-  .cr-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;padding:8px}
+  .cr-topbar{padding:8px 10px;gap:8px;flex-wrap:wrap}
+  .cr-topbar-title{font-size:13px;white-space:nowrap;flex:none}
+  .cr-body{flex-direction:column;position:relative}
+  .cr-left{border-right:none;min-height:0;min-width:0}
+  .cr-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;padding:8px 8px 84px}
+  .cr-mob-only{display:inline}
+  /* Panier : barre repliée en bas, s'ouvre en plein écran au toucher */
+  .cr-right{position:absolute;left:0;right:0;bottom:0;width:100%;max-height:100%;box-shadow:0 -4px 16px rgba(0,0,0,.2);border-top:1px solid var(--border);overflow:hidden}
+  .cr-right .cr-panier-header{cursor:pointer;padding:14px 16px;font-size:14px;background:var(--navy);color:#fff}
+  .cr-right .cr-panier-list,.cr-right .cr-footer{display:none}
+  .cr-right.open{top:0;overflow-y:auto}
+  .cr-right.open .cr-panier-list{display:block;flex:none;overflow:visible}
+  .cr-right.open .cr-footer{display:block}
+  .cr-right.open .cr-panier-header{position:sticky;top:0;z-index:2}
 }
 
 /* ─── MODE HORS LIGNE ─── */
@@ -20428,6 +20441,7 @@ function ouvrirCaisseRapide(){
   crClient = '';
   crMonnaie = 0;
   crCid = premierCompteId();
+  window.crPanierOuvert = false;
   // Créer l'overlay plein écran
   let overlay = document.getElementById('cr-overlay');
   if(!overlay){
@@ -20450,7 +20464,7 @@ function fermerCaisseRapide(){
   if(overlay) overlay.style.display = 'none';
 }
 
-function renderCaisseRapide(){
+function renderCaisseRapide(partiel){
   const overlay = document.getElementById('cr-overlay');
   if(!overlay) return;
   if(!crCid) crCid = premierCompteId();
@@ -20489,7 +20503,7 @@ function renderCaisseRapide(){
     return a.pv;
   };
 
-  overlay.innerHTML = `
+  const _html = `
   <div class="cr-topbar">
     <button onclick="fermerCaisseRapide()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">✕ Fermer</button>
     <div class="cr-topbar-title">⚡ Caisse Rapide</div>
@@ -20507,7 +20521,7 @@ function renderCaisseRapide(){
       <div class="cr-search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <input id="cr-search-inp" type="text" placeholder="Rechercher un article..." value="${crSearch}"
-          oninput="crSearch=this.value;renderCaisseRapide()"
+          oninput="crSearchInput(this)"
           onkeydown="if(event.key==='Escape'){crSearch='';renderCaisseRapide()}">
         ${crSearch?`<button onclick="crSearch='';renderCaisseRapide()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">✕</button>`:''}
       </div>
@@ -20528,7 +20542,7 @@ function renderCaisseRapide(){
             const inPan=crPanier.find(l=>l.aid===a.id);
             const icon=a.cat==='Lingerie'?'👗':a.cat==='Audio-Vidéo'?'🎧':'📦';
             const pu=getPrix(a);
-            return `<div class="cr-prod${inPan?' added':''}${dispo<=0?' rupture':''}" onclick="crAjouter(${a.id})">
+            return `<div class="cr-prod${inPan?' added':''}${dispo<=0?' rupture':''}" data-aid="${a.id}" onclick="crAjouter(${a.id})">
               ${inPan?`<div class="cr-prod-qty">${inPan.qte}</div>`:''}
               <div class="cr-prod-stock">${dispo}</div>
               <div class="cr-prod-icon">${a.photo?`<img src="${a.photo}" style="width:28px;height:28px;object-fit:cover;border-radius:4px" onerror="this.outerHTML='${icon}'">`:icon}</div>
@@ -20540,9 +20554,10 @@ function renderCaisseRapide(){
     </div>
 
     <!-- DROITE : PANIER + VALIDATION -->
-    <div class="cr-right">
-      <div class="cr-panier-header">
+    <div class="cr-right${window.crPanierOuvert?' open':''}">
+      <div class="cr-panier-header" onclick="crTogglePanier()">
         🛒 Panier ${nbItems>0?`(${nbItems} article${nbItems>1?'s':''})`:'— vide'}
+        <span class="cr-mob-only" style="float:right;font-weight:800">${nbItems>0?F(total)+' ':''}${window.crPanierOuvert?'▼':'▲'}</span>
       </div>
       <div class="cr-panier-list">
         ${crPanier.length===0
@@ -20582,7 +20597,7 @@ function renderCaisseRapide(){
         <div style="margin-bottom:8px">
           <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Remise</div>
           <div style="display:flex;gap:6px;align-items:center">
-            <select onchange="crRemise.type=this.value;renderCaisseRapide()"
+            <select onchange="crRemise.type=this.value;renderCaisseRapide(true)"
               style="padding:5px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface);color:var(--text)">
               <option value="%" ${crRemise.type==='%'?'selected':''}>%</option>
               <option value="FCFA" ${crRemise.type==='FCFA'?'selected':''}>Montant</option>
@@ -20604,7 +20619,7 @@ function renderCaisseRapide(){
         </div>
         <!-- Mode paiement -->
         <div class="cr-mode-btns" style="margin-top:8px">
-          ${modes.map(m=>`<button class="cr-mode-btn${crMode===m?' active':''}" onclick="crMode='${m}';renderCaisseRapide()">${m}</button>`).join('')}
+          ${modes.map(m=>`<button class="cr-mode-btn${crMode===m?' active':''}" onclick="crMode='${m}';renderCaisseRapide(true)">${m}</button>`).join('')}
         </div>
         <!-- Compte + Monnaie -->
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -20625,10 +20640,20 @@ function renderCaisseRapide(){
         <button class="cr-valider-btn" onclick="crValider()" ${crPanier.length===0?'disabled':''} style="margin-top:8px">
           ✓ Encaisser ${total>0?F(total):''}
         </button>
-        ${crPanier.length>0?`<button class="cr-vider-btn" onclick="crPanier=[];crRemise={type:'%',val:0};crClient='';crMonnaie=0;renderCaisseRapide()">🗑️ Vider le panier</button>`:''}
+        ${crPanier.length>0?`<button class="cr-vider-btn" onclick="crPanier=[];crRemise={type:'%',val:0};crClient='';crMonnaie=0;renderCaisseRapide(true)">🗑️ Vider le panier</button>`:''}
       </div>
     </div>
   </div>`;
+  if(partiel && overlay.querySelector('.cr-left')){
+    // Mise à jour légère : on ne remplace que la barre du haut et le panier (la grille d'articles,
+    // la recherche et le défilement restent en place → beaucoup plus rapide sur téléphone)
+    const tmp=document.createElement('div'); tmp.innerHTML=_html;
+    const oT=overlay.querySelector('.cr-topbar'), nT=tmp.querySelector('.cr-topbar'); if(oT&&nT) oT.replaceWith(nT);
+    const oR=overlay.querySelector('.cr-right'), nR=tmp.querySelector('.cr-right'); if(oR&&nR) oR.replaceWith(nR);
+    crMajCartes();
+  } else {
+    overlay.innerHTML=_html;
+  }
 
   setTimeout(()=>{
     const cidEl=document.getElementById('cr-cid');
@@ -20639,6 +20664,33 @@ function renderCaisseRapide(){
   },50);
 }
 
+function crTogglePanier(){
+  window.crPanierOuvert=!window.crPanierOuvert;
+  const r=document.querySelector('#cr-overlay .cr-right');
+  if(r) r.classList.toggle('open',window.crPanierOuvert);
+  const sp=document.querySelector('#cr-overlay .cr-panier-header .cr-mob-only');
+  if(sp) sp.textContent=sp.textContent.replace(/[▲▼]/,window.crPanierOuvert?'▼':'▲');
+}
+function crMajCartes(){
+  document.querySelectorAll('#cr-overlay .cr-prod[data-aid]').forEach(el=>{
+    const l=crPanier.find(x=>String(x.aid)===el.dataset.aid);
+    el.classList.toggle('added',!!l);
+    let q=el.querySelector('.cr-prod-qty');
+    if(l){ if(!q){ q=document.createElement('div'); q.className='cr-prod-qty'; el.insertBefore(q,el.firstChild); } q.textContent=l.qte; }
+    else if(q) q.remove();
+  });
+}
+let _crSearchTimer=null;
+function crSearchInput(el){
+  crSearch=el.value;
+  clearTimeout(_crSearchTimer);
+  _crSearchTimer=setTimeout(()=>{
+    const pos=el.selectionStart;
+    renderCaisseRapide();
+    const n=document.getElementById('cr-search-inp');
+    if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} }
+  },250);
+}
 function crMajTotal(){
   const sousTotal=crPanier.reduce((s,l)=>s+l.mt,0);
   const remiseMt=crRemise.type==='%'?Math.round(sousTotal*Math.min(crRemise.val||0,100)/100):Math.min(crRemise.val||0,sousTotal);
@@ -20727,8 +20779,12 @@ function crAjouter(aid){
     if(sa(a)<=0){ toast('❌ Rupture de stock'); return; }
     crPanier.push({aid:a.id, nom:a.nom, qte:1, pu, mt:pu, dispo:sa(a), typePrix:crTypePrix});
   }
-  renderCaisseRapide();
-  setTimeout(()=>{ const inp=document.getElementById('cr-search-inp'); if(inp) inp.focus(); }, 50);
+  renderCaisseRapide(true);
+  const _pl=document.querySelector('#cr-overlay .cr-panier-list'); if(_pl) _pl.scrollTop=_pl.scrollHeight;
+  // Sur téléphone, refocaliser la recherche ouvrirait le clavier à chaque article ajouté
+  if(!('ontouchstart' in window) && !(navigator.maxTouchPoints>0)){
+    setTimeout(()=>{ const inp=document.getElementById('cr-search-inp'); if(inp) inp.focus(); }, 50);
+  }
 }
 
 function crRetirer(i){
@@ -20736,7 +20792,7 @@ function crRetirer(i){
   crPanier[i].qte--;
   crPanier[i].mt = crPanier[i].qte * crPanier[i].pu;
   if(crPanier[i].qte <= 0) crPanier.splice(i, 1);
-  renderCaisseRapide();
+  renderCaisseRapide(true);
 }
 
 function crValider(){
@@ -20793,7 +20849,8 @@ function crValider(){
     crRemise={type:'%',val:0};
     crClient='';
     crMonnaie=0;
-    renderCaisseRapide();
+    window.crPanierOuvert=false;
+    renderCaisseRapide(true);
   });
 }
 
