@@ -12275,7 +12275,9 @@ function majBadgeUtilisateur(){
   document.getElementById('cu-nom').textContent=s.nom||'';
   document.getElementById('cu-role-badge').textContent=s.role==='admin'?'Admin':s.role==='caissier'?'Caissier':s.role==='superviseur'?'Superviseur':'Vendeur';
   // Remplir le pill topbar
-  const roleLabel=s.role==='admin'?('👑 Admin · '+b.emoji+' '+b.nom):s.role==='caissier'?('💰 Caissier · '+b.emoji+' '+b.nom):s.role==='superviseur'?('👁️ Superviseur · '+b.emoji+' '+b.nom):('🛒 Vendeur · '+b.emoji+' '+b.nom);
+  let roleLabel=s.role==='admin'?('👑 Admin · '+b.emoji+' '+b.nom):s.role==='caissier'?('💰 Caissier · '+b.emoji+' '+b.nom):s.role==='superviseur'?('👁️ Superviseur · '+b.emoji+' '+b.nom):('🛒 Vendeur · '+b.emoji+' '+b.nom);
+  const _rpn=(typeof getUserSession==='function'&&getUserSession())?getUserSession().role_perso_nom:null;
+  if(_rpn){roleLabel=_rpn+' · '+b.emoji+' '+b.nom;document.getElementById('cu-role-badge').textContent=_rpn;}
   const av=document.getElementById('up-avatar');const pn=document.getElementById('up-name');
   const pr=document.getElementById('up-role');const dn=document.getElementById('udd-name');
   const de=document.getElementById('udd-email');const dr=document.getElementById('udd-role');
@@ -12318,8 +12320,27 @@ const PERMISSIONS = {
   coach:()=>'<select id="coach-cat" onchange="rCoach()" style="padding:5px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-family:inherit;font-size:13px;background:var(--surface)"><option value="analyse">📊 Mon analyse</option><option value="lecons">📚 Leçons</option><option value="ia">🤖 Coach IA</option></select>'
 };
 
+// ─── RÔLES PERSONNALISÉS ───
+// Un rôle perso = nom + liste de sections + "fonctionne comme" (vendeur/caissier/superviseur).
+// Les rôles sont dans S.parametres.roles_custom ; chaque utilisateur garde aussi une copie de ses pages
+// (pages_perso) pour que l'accès reste correct même si les paramètres ne sont pas encore synchronisés.
+const PAGES_SENSIBLES = ['parametres','audit'];
+function getRolesCustom(){ return (S.parametres && S.parametres.roles_custom) || []; }
+function getUserSession(){ return (S.utilisateurs||[]).find(x=>x.id==(S.session&&S.session.uid)) || null; }
+function getPermsEffectives(role){
+  const base = PERMISSIONS[role] || PERMISSIONS['vendeur'];
+  if(role === 'admin') return base;
+  const u = getUserSession();
+  if(u && u.role_perso && Array.isArray(u.pages_perso)){
+    const rc = getRolesCustom().find(r=>r.id===u.role_perso);
+    const pages = (rc && Array.isArray(rc.pages)) ? rc.pages.slice() : u.pages_perso.slice();
+    return {pages:pages, label:(u.role_perso_nom || ((rc&&rc.emoji)||'🎭')+' '+(rc?rc.nom:'Personnalisé')), couleur:(rc&&rc.couleur)||'#c9a0ff', custom:true};
+  }
+  return base;
+}
+
 function appliquerAcces(role){
-  const perms = PERMISSIONS[role] || PERMISSIONS['vendeur'];
+  const perms = getPermsEffectives(role);
   const pagesAutorisees = perms.pages;
 
   // Sidebar desktop
@@ -12361,12 +12382,22 @@ function appliquerAcces(role){
   document.querySelectorAll('.admin-only').forEach(el=>{
     if(role === 'admin'){
       el.style.display = '';
-    } else if(role === 'superviseur' && el.classList.contains('superviseur-ok')){
+    } else if(role === 'superviseur' && !perms.custom && el.classList.contains('superviseur-ok')){
       el.style.display = ''; // page de consultation → visible
     } else {
       el.style.display = 'none';
     }
   });
+  // Rôle personnalisé : afficher exactement les sections cochées (même celles marquées admin-only)
+  if(perms.custom){
+    document.querySelectorAll('.ni[data-page]').forEach(el=>{
+      if(pagesAutorisees.includes(el.getAttribute('data-page'))) el.style.display = '';
+    });
+    document.querySelectorAll('.mn-dd-item').forEach(el=>{
+      const oc = el.getAttribute('onclick') || '';
+      if(pagesAutorisees.some(m => oc.includes("'"+m+"'"))) el.style.display = '';
+    });
+  }
 }
 
 function toggleUserMenu(){
@@ -12383,7 +12414,7 @@ document.addEventListener('click',function(e){
 
 function peutAcceder(page){
   const role = S.session?.role || 'vendeur';
-  const perms = PERMISSIONS[role] || PERMISSIONS['vendeur'];
+  const perms = getPermsEffectives(role);
   return perms.pages.includes(page);
 }
 
@@ -12504,7 +12535,7 @@ function rWorkspace(){
                 <span style="font-size:24px">${u.emoji||'👤'}</span>
                 <div>
                   <div style="font-weight:600;font-size:13px">${u.nom}</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:1px">${u.role==='admin'?'👑 Administrateur':u.role==='caissier'?'💰 Caissier':'🛒 Vendeur'}</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:1px">${u.role_perso_nom?u.role_perso_nom:u.role==='admin'?'👑 Administrateur':u.role==='caissier'?'💰 Caissier':u.role==='superviseur'?'👁️ Superviseur':'🛒 Vendeur'}</div>
                   <div style="font-size:11px;color:var(--navy);margin-top:2px">${u.email||'<em style=color:var(--red)>⚠ Email manquant</em>'}</div>
                   ${userBoutique?`<div style="font-size:10px;margin-top:2px;background:rgba(15,31,61,.08);border-radius:4px;padding:1px 6px;display:inline-block">${userBoutique.emoji||'🏪'} ${userBoutique.nom}</div>`:`<div style="font-size:10px;color:var(--text3);margin-top:2px">Toutes boutiques</div>`}
                 </div>
@@ -12515,6 +12546,7 @@ function rWorkspace(){
               </div>
             </div>`;}).join('')}
           <button class="btn btn-primary" onclick="addUserWS()" style="margin-top:8px">+ Ajouter utilisateur</button>
+          <button class="btn" onclick="gererRolesCustom()" style="margin-top:8px">🎭 Rôles personnalisés (${getRolesCustom().length})</button>
         </div>
       </div>
 
@@ -12574,6 +12606,135 @@ function appliquerMenusVisibles(){
   });
 }
 
+// ─── GESTION DES RÔLES PERSONNALISÉS ───
+function _optsRolesUser(u){
+  const cur = u ? (u.role_perso ? 'perso:'+u.role_perso : (u.role==='employe'?'vendeur':(u.role||'vendeur'))) : 'vendeur';
+  const sel = v => cur===v ? ' selected' : '';
+  let h = `<option value="vendeur"${sel('vendeur')}>🛒 Vendeur</option>
+    <option value="caissier"${sel('caissier')}>💰 Caissier</option>
+    <option value="superviseur"${sel('superviseur')}>👁️ Superviseur</option>
+    <option value="admin"${sel('admin')}>👑 Administrateur</option>`;
+  const rc = getRolesCustom();
+  if(rc.length) h += '<optgroup label="Rôles personnalisés">' + rc.map(r=>`<option value="perso:${r.id}"${sel('perso:'+r.id)}>${r.emoji||'🎭'} ${r.nom}</option>`).join('') + '</optgroup>';
+  return h;
+}
+function _appliquerRoleChoisi(u, val){
+  if(typeof val==='string' && val.indexOf('perso:')===0){
+    const rc = getRolesCustom().find(r=>r.id===val.slice(6));
+    if(rc){
+      u.role = rc.base || 'vendeur';
+      u.role_perso = rc.id;
+      u.role_perso_nom = (rc.emoji||'🎭')+' '+rc.nom;
+      u.pages_perso = (rc.pages||[]).slice();
+      return;
+    }
+    val = 'vendeur';
+  }
+  u.role = val;
+  delete u.role_perso; delete u.role_perso_nom; delete u.pages_perso;
+}
+function _listePagesSections(){
+  const out=[]; let groupe='';
+  document.querySelectorAll('nav.nav > *').forEach(el=>{
+    if(el.classList.contains('nav-sec')){ groupe=el.textContent.trim(); return; }
+    const pg = el.getAttribute && el.getAttribute('data-page');
+    if(!pg || pg==='workspace' || pg==='annuler_retablir') return;
+    const c = el.cloneNode(true);
+    c.querySelectorAll('svg,[id^="badge"],.badge').forEach(n=>n.remove());
+    const label = c.textContent.replace(/\s+/g,' ').trim();
+    if(label) out.push({k:pg,l:label,g:groupe||'Autres'});
+  });
+  if(!out.length) PERMISSIONS.admin.pages.filter(k=>k!=='workspace'&&k!=='annuler_retablir').forEach(k=>out.push({k:k,l:k,g:'Sections'}));
+  return out;
+}
+function gererRolesCustom(){
+  const roles = getRolesCustom();
+  const nbUsers = id => (S.utilisateurs||[]).filter(u=>u.role_perso===id).length;
+  modal(`<div class="mft">🎭 Rôles personnalisés</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Créez un rôle (ex : Graphiste, Gestionnaire stock…) en cochant les sections auxquelles il donne accès, puis attribuez-le à un utilisateur dans « Modifier ».</div>
+    ${roles.length ? roles.map(r=>`
+      <div class="employe-card" style="margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:13px">${r.emoji||'🎭'} ${r.nom}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${(r.pages||[]).length} sections · ${nbUsers(r.id)} utilisateur(s)</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="editerRoleCustom('${r.id}')">✏️</button>
+          <button class="btn btn-sm" onclick="supprimerRoleCustom('${r.id}')" style="color:var(--red)">✕</button>
+        </div>
+      </div>`).join('') : '<div class="empty"><p>Aucun rôle personnalisé pour le moment</p></div>'}
+    <div class="mff"><button class="btn" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-primary" onclick="editerRoleCustom(null)">+ Nouveau rôle</button></div>`);
+}
+function editerRoleCustom(id){
+  const rc = id ? getRolesCustom().find(r=>r.id===id) : null;
+  const pagesCochees = rc ? (rc.pages||[]) : PERMISSIONS.vendeur.pages;
+  const base = rc ? (rc.base||'vendeur') : 'vendeur';
+  const liste = _listePagesSections();
+  const groupes = []; liste.forEach(p=>{ if(!groupes.includes(p.g)) groupes.push(p.g); });
+  modal(`<div class="mft">${rc?'✏️ Modifier le rôle':'➕ Nouveau rôle'}</div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Nom du rôle</label><input class="fi" id="rc-nom" value="${rc?rc.nom:''}" placeholder="Ex: Graphiste"></div>
+      <div class="fg"><label class="fl">Emoji</label><input class="fi" id="rc-emoji" value="${rc?(rc.emoji||'🎭'):'🎭'}" maxlength="2"></div>
+    </div>
+    <div class="fg"><label class="fl">Fonctionne comme</label>
+      <select class="fs" id="rc-base">
+        <option value="vendeur"${base==='vendeur'?' selected':''}>🛒 Vendeur (prix d'achat et marges masqués)</option>
+        <option value="caissier"${base==='caissier'?' selected':''}>💰 Caissier (prix d'achat et marges masqués)</option>
+        <option value="superviseur"${base==='superviseur'?' selected':''}>👁️ Superviseur (voit prix d'achat et marges)</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Sections accessibles</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm" onclick="_rcCocher(true)">Tout cocher</button>
+        <button type="button" class="btn btn-sm" onclick="_rcCocher(false)">Tout décocher</button>
+      </div>
+      <div style="max-height:320px;overflow:auto;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px">
+        ${groupes.map(g=>`
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin:8px 0 4px">${g}</div>
+          ${liste.filter(p=>p.g===g).map(p=>`
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;font-size:13px">
+              <input type="checkbox" class="rc-page-cb" value="${p.k}" ${pagesCochees.includes(p.k)?'checked':''}> ${p.l}${PAGES_SENSIBLES.includes(p.k)?' <span title="Section sensible" style="font-size:11px">⚠️</span>':''}
+            </label>`).join('')}`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">⚠️ Section sensible. « Espace de travail » (gestion des utilisateurs) reste réservé à l'administrateur.</div>
+    </div>
+    <div class="mff"><button class="btn" onclick="gererRolesCustom()">Retour</button>
+      <button class="btn btn-primary" onclick="sauvegarderRoleCustom(${id?`'${id}'`:'null'})">Enregistrer</button></div>`);
+}
+function _rcCocher(v){ document.querySelectorAll('.rc-page-cb').forEach(cb=>cb.checked=v); }
+function sauvegarderRoleCustom(id){
+  const nom = (document.getElementById('rc-nom').value||'').trim();
+  if(!nom) return toast('❌ Nom du rôle requis');
+  const emoji = document.getElementById('rc-emoji').value || '🎭';
+  const base = document.getElementById('rc-base').value || 'vendeur';
+  const pages = Array.from(document.querySelectorAll('.rc-page-cb:checked')).map(cb=>cb.value);
+  if(!pages.length) return toast('❌ Cochez au moins une section');
+  if(!pages.includes('dashboard')) pages.unshift('dashboard');
+  if(!S.parametres) S.parametres = {};
+  if(!S.parametres.roles_custom) S.parametres.roles_custom = [];
+  const doublon = S.parametres.roles_custom.find(r=>r.id!==id && r.nom.toLowerCase()===nom.toLowerCase());
+  if(doublon) return toast('❌ Un rôle porte déjà ce nom');
+  let rc = id ? S.parametres.roles_custom.find(r=>r.id===id) : null;
+  if(rc){ rc.nom=nom; rc.emoji=emoji; rc.base=base; rc.pages=pages; }
+  else { rc = {id:'rc_'+Date.now().toString(36), nom, emoji, base, pages}; S.parametres.roles_custom.push(rc); }
+  // Propager aux utilisateurs qui ont ce rôle
+  (S.utilisateurs||[]).forEach(u=>{
+    if(u.role_perso===rc.id){ u.role=base; u.role_perso_nom=emoji+' '+nom; u.pages_perso=pages.slice(); }
+  });
+  saveData(); toast('✅ Rôle « '+nom+' » enregistré'); rWorkspace(); gererRolesCustom();
+}
+function supprimerRoleCustom(id){
+  const rc = getRolesCustom().find(r=>r.id===id); if(!rc) return;
+  const n = (S.utilisateurs||[]).filter(u=>u.role_perso===id).length;
+  if(!confirm('Supprimer le rôle « '+rc.nom+' » ?'+(n?'\n'+n+' utilisateur(s) reprendront le rôle « '+rc.base+' ».':''))) return;
+  S.parametres.roles_custom = S.parametres.roles_custom.filter(r=>r.id!==id);
+  (S.utilisateurs||[]).forEach(u=>{
+    if(u.role_perso===id){ u.role=rc.base||'vendeur'; delete u.role_perso; delete u.role_perso_nom; delete u.pages_perso; }
+  });
+  saveData(); toast('🗑️ Rôle supprimé'); rWorkspace(); gererRolesCustom();
+}
+
 function addUserWS(){
   const boutiques = S.boutiques || [];
   const boutiquesChecks = boutiques.map(b=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="wu-boutique-cb" value="${b.id}" style="cursor:pointer"> ${b.emoji||'🏪'} ${b.nom}</label>`).join('');
@@ -12581,8 +12742,7 @@ function addUserWS(){
     <div class="fr">
       <div class="fg"><label class="fl">Prénom / Nom</label><input class="fi" id="wu-nom" placeholder="Ex: Marie Kodjovi"></div>
       <div class="fg"><label class="fl">Rôle</label>
-        <select class="fs" id="wu-role"><option value="vendeur">🛒 Vendeur</option>
-                  <option value="superviseur">👁️ Superviseur</option><option value="caissier">💰 Caissier</option><option value="admin">👑 Administrateur</option></select>
+        <select class="fs" id="wu-role">${_optsRolesUser(null)}</select>
       </div>
     </div>
     <div class="fg"><label class="fl">🏪 Boutiques assignées</label>
@@ -12613,7 +12773,9 @@ function saveUserWS(){
   const roleVal = document.getElementById('wu-role').value;
   // Récupérer les boutiques sélectionnées via checkboxes
   const boutiques_ids = Array.from(document.querySelectorAll('.wu-boutique-cb:checked')).map(cb => +cb.value);
-  S.utilisateurs.push({id:genId(),nom,role:roleVal,email,password,pin:'0000',emoji:document.getElementById('wu-emoji').value||'👤',actif:true,boutique_id:null,boutiques_ids:boutiques_ids});
+  const _nu={id:genId(),nom,role:'vendeur',email,password,pin:'0000',emoji:document.getElementById('wu-emoji').value||'👤',actif:true,boutique_id:null,boutiques_ids:boutiques_ids};
+  _appliquerRoleChoisi(_nu, roleVal);
+  S.utilisateurs.push(_nu);
   saveData();closeModal();toast('✅ Utilisateur créé');rWorkspace();
 }
 function editUserWS(id){
@@ -12625,11 +12787,7 @@ function editUserWS(id){
     <div class="fr">
       <div class="fg"><label class="fl">Nom</label><input class="fi" id="wu-nom" value="${u.nom}"></div>
       <div class="fg"><label class="fl">Rôle</label>
-        <select class="fs" id="wu-role">
-          <option value="vendeur"${u.role==='vendeur'||u.role==='employe'?' selected':''}>🛒 Vendeur</option>
-          <option value="caissier"${u.role==='caissier'?' selected':''}>💰 Caissier</option>
-          <option value="admin"${u.role==='admin'?' selected':''}>👑 Administrateur</option>
-        </select>
+        <select class="fs" id="wu-role">${_optsRolesUser(u)}</select>
       </div>
     </div>
     <div class="fg"><label class="fl">🏪 Boutiques assignées</label>
@@ -12654,7 +12812,9 @@ function updateUserWS(id){
   // Vérifier unicité (sauf pour l'utilisateur lui-même)
   if(S.utilisateurs.find(x=>x.id!==id&&x.email&&x.email.toLowerCase()===email))return toast('❌ Cet email est déjà utilisé');
   u.nom=document.getElementById('wu-nom').value.trim();
-  u.role=document.getElementById('wu-role').value;
+  const _choix=document.getElementById('wu-role').value;
+  if(u.id===1 && _choix!=='admin') return toast('❌ Le compte administrateur principal doit rester Administrateur');
+  _appliquerRoleChoisi(u,_choix);
   u.email=email;
   u.emoji=document.getElementById('wu-emoji').value||'👤';
   // Récupérer les boutiques sélectionnées via checkboxes
