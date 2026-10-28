@@ -2289,6 +2289,47 @@ const FB_COLLECTIONS=[
   'locations_chaises'
 ];
 
+// ─── PROTECTION ANTI-ÉCRASEMENT (appareil admin pas à jour) ───
+// Chaque écriture admin laisse une signature (_dernier_ecrivain : appareil + heure).
+// Avant d'écrire, on vérifie qu'aucun AUTRE appareil n'a écrit depuis la dernière fois
+// que celui-ci a récupéré les données du cloud. Sinon l'écriture est bloquée.
+function _cmDeviceId(){
+  let d = localStorage.getItem('cm_device_id');
+  if(!d){ d = 'd_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem('cm_device_id', d); }
+  return d;
+}
+function _cmEcrivainVuTs(){ return +(localStorage.getItem('cm_vu_ecrivain_ts')||0); }
+function _marquerEcrivainVu(remote){
+  try{
+    const e = remote && remote._dernier_ecrivain;
+    if(e && e.ts) localStorage.setItem('cm_vu_ecrivain_ts', String(Math.max(_cmEcrivainVuTs(), e.ts)));
+  }catch(_){}
+}
+let _cmDerniereAlerteEcrasement = 0;
+async function _verifierEcritureAutorisee(){
+  try{
+    const snap = await Promise.race([
+      db.ref('christmedia/data/_dernier_ecrivain').once('value'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 5000))
+    ]);
+    const e = snap.val();
+    if(!e || !e.ts || e.device === _cmDeviceId()) return true;   // jamais écrit / c'est nous
+    if(e.ts <= _cmEcrivainVuTs()) return true;                    // on a déjà récupéré cette écriture
+    // Un autre appareil a écrit depuis notre dernière synchronisation → on bloque
+    const maintenant = Date.now();
+    if(maintenant - _cmDerniereAlerteEcrasement > 60000){
+      _cmDerniereAlerteEcrasement = maintenant;
+      setTimeout(()=>{
+        if(confirm('⛔ Protection anti-écrasement\n\nUn autre appareil (ex. votre PC) a enregistré des données depuis la dernière synchronisation de cet appareil'+(e.nom?' ('+e.nom+')':'')+'.\n\nPour ne pas écraser les vraies données, rien n\'a été envoyé.\n\nOK = recharger et récupérer les données à jour (recommandé).')) location.reload();
+      }, 50);
+    }
+    return false;
+  }catch(err){
+    console.warn('[PROTECTION] vérification impossible, écriture reportée :', err && err.message);
+    return false;
+  }
+}
+
 async function saveToFirebase(data){
   if(!fbReady||!db) return false;
   // ── PRINCIPE FONDAMENTAL ──
@@ -2296,6 +2337,7 @@ async function saveToFirebase(data){
   // Les vendeurs/caissiers travaillent uniquement en localStorage local.
   // Ils reçoivent la synchro via le listener masterSave (lecture seule).
   if(S.session?.role !== 'admin') return false;
+  if(!(await _verifierEcritureAutorisee())){ setSyncStatus('offline','⛔ Écriture bloquée — rechargez'); return false; }
 
   // ─── ADMIN : écriture complète ───
   function _cleanUndef(obj){
@@ -2315,11 +2357,13 @@ async function saveToFirebase(data){
     update['parametres']      = data.parametres || {};
     update['utilisateurs']    = data.utilisateurs || [];
     update['boutique_active'] = data.boutique_active || null;
+    const _tsEcr = Date.now();
+    update['_dernier_ecrivain'] = {device:_cmDeviceId(), ts:_tsEcr, nom:(S.session&&S.session.nom)||''};
     FB_COLLECTIONS.forEach(col=>{
       if(data[col] !== undefined) update[col] = _cleanUndef(data[col]);
     });
     db.ref('christmedia/data').update(_cleanUndef(update))
-      .then(()=>{ setSyncStatus('online','Synchronisé ✓'); resolve(true); })
+      .then(()=>{ try{localStorage.setItem('cm_vu_ecrivain_ts', String(_tsEcr));}catch(_){} setSyncStatus('online','Synchronisé ✓'); resolve(true); })
       .catch(e=>{ console.warn('Firebase write error:',e); setSyncStatus('offline','Hors ligne'); resolve(false); });
   });
 }
@@ -2331,15 +2375,18 @@ async function saveCollectionFirebase(col, data){
   if(!fbReady||!db)return false;
   // Seul l'admin écrit sur Firebase
   if(S.session?.role !== 'admin') return false;
+  if(!(await _verifierEcritureAutorisee())) return false;
   return new Promise(resolve=>{
     const update={};
     update[col] = data;
+    const _tsEcr = Date.now();
+    update['_dernier_ecrivain'] = {device:_cmDeviceId(), ts:_tsEcr, nom:(S.session&&S.session.nom)||''};
     // NE PAS toucher update['version'] ici — la version globale
     // est gérée uniquement par saveData() → saveToFirebase()
     // Cela évite qu'une sauvegarde rapide partielle écrase une
     // version complète déjà publiée par un autre appareil
     db.ref('christmedia/data').update(update)
-      .then(()=>resolve(true))
+      .then(()=>{ try{localStorage.setItem('cm_vu_ecrivain_ts', String(_tsEcr));}catch(_){} resolve(true); })
       .catch(e=>{console.warn('Firebase col error:',e);resolve(false);});
   });
 }
@@ -2771,6 +2818,7 @@ function activerListenerTempsReel(){
         S.version = remoteVer;
         saveLocal(S);
       }
+      _marquerEcrivainVu(remote);
       setSyncStatus('online','Synchronisé ✓');
 
     // CAS 2 : Même version → chercher de nouveaux IDs des deux côtés (conflit simultané)
@@ -3066,7 +3114,7 @@ async function manualSync(){
     // Vendeur/caissier : juste lire et fusionner (pas d'écriture)
     setSyncStatus('syncing','Réception...');
     const remote = await loadFromFirebase();
-    if(remote){ appliquerEtatFusionne(fusionnerDonnees(remote, S)); saveLocal(S); }
+    if(remote){ appliquerEtatFusionne(fusionnerDonnees(remote, S)); _marquerEcrivainVu(remote); saveLocal(S); }
     setSyncStatus('online','Synchronisé ✓');
     rafraichirPageCourante();
     return;
@@ -3075,7 +3123,7 @@ async function manualSync(){
   const remote = await loadFromFirebase();
   if(remote){
     const merged = fusionnerDonnees(S, remote);
-    appliquerEtatFusionne(merged);
+    appliquerEtatFusionne(merged); _marquerEcrivainVu(remote);
     genVersion(); // nouvelle version = fusion gagne sur tous les appareils
     saveLocal(S);
     await saveToFirebase(S);
@@ -3274,7 +3322,7 @@ async function startFirebaseSync(){
           // Local est plus récent (travail hors ligne) → fusionner local+remote
           merged = fusionnerDonnees(S, remote);
         }
-        appliquerEtatFusionne(merged);
+        appliquerEtatFusionne(merged); _marquerEcrivainVu(remote);
         // Supprimer Boutique B définitivement si elle revient de Firebase
         if((S.boutiques||[]).some(b=>b.id===2&&b.nom==='Boutique B')){
           S.boutiques = S.boutiques.filter(b=>!(b.id===2&&b.nom==='Boutique B'));
@@ -3393,7 +3441,7 @@ window.addEventListener('online', async()=>{
     const remote = await loadFromFirebase();
     if(remote){
       const merged = fusionnerDonnees(S, remote);
-      appliquerEtatFusionne(merged);
+      appliquerEtatFusionne(merged); _marquerEcrivainVu(remote);
     }
     // PRINCIPE : seul l'admin republie vers Firebase à la reconnexion
     const _roleReconnect = S.session?.role || null;
@@ -12215,7 +12263,7 @@ function _ouvrirSession(u){
         if(remote){
           const savedSession=S.session;
           const merged=fusionnerDonnees(S,remote);
-          appliquerEtatFusionne(merged);
+          appliquerEtatFusionne(merged); _marquerEcrivainVu(remote);
           if(savedSession&&savedSession.uid) S.session=savedSession;
           setSyncStatus('online','Synchronise ✓');
           if(!_realtimeListener) activerListenerTempsReel();
@@ -26693,7 +26741,7 @@ async function priseDeService(){
     const remote = await withTimeout(loadFromFirebase(), 20000, 'chargement Firebase');
     if(remote){
       const merged = fusionnerDonnees(S, remote);
-      appliquerEtatFusionne(merged);
+      appliquerEtatFusionne(merged); _marquerEcrivainVu(remote);
       saveLocal(S);
     }
 
