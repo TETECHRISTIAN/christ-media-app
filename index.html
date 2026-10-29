@@ -4775,6 +4775,83 @@ function setRemise(){
   rVente();
 }
 
+function _venteHtmlCarte(a){
+        const dispo=sa(a);
+        const inPanier=window.panier.find(l=>l.aid===a.id);
+        const qteInPanier=inPanier?inPanier.qte:0;
+        const imgEl=a.photo
+          ?`<img class="prod-card-img" src="${a.photo}" onerror="this.outerHTML='<div class=\'prod-card-img-placeholder\'>📦</div>'">`
+          :`<div class="prod-card-img-placeholder">${a.cat==='Lingerie'?'👗':a.cat==='Audio-Vidéo'?'🎧':'📦'}</div>`;
+        const prixPromo=getPrixPromo(a.id,window.typePrix||'detail');
+        const infoPromo=prixPromo!==null?getInfoPromo(a.id):null;
+        return`
+        <div class="prod-card${inPanier?' in-panier':''}${dispo<=0?' rupture':''}" data-aid="${a.id}" onclick="ajouterProduitRapide(${a.id})">
+          ${imgEl}
+          <div class="prod-card-stock${dispo<=a.seuil?' low':''}">Stock: ${dispo}</div>
+          ${qteInPanier>0?`<div class="prod-card-badge-panier">${qteInPanier}</div>`:''}
+          ${prixPromo!==null?`<div style="position:absolute;top:7px;right:7px;background:var(--red);color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">-${infoPromo?.remise}${infoPromo?.remiseType==='%'?'%':'F'}</div>`:''}
+          <div class="prod-card-body">
+            <div class="prod-card-nom" title="${a.nom}">${a.nom}</div>
+            <div class="prod-card-prix">
+              ${prixPromo!==null?`<span style="color:var(--red);font-weight:800">${F(prixPromo)}</span> <span style="text-decoration:line-through;font-size:10px;color:var(--text3);font-weight:400">${F(a.pv)}</span>`:`${F(a.pv)}`}
+            </div>
+            <div class="prod-card-actions">
+              <button class="prod-card-btn prod-card-btn-vendre" style="${dispo<=0?'background:var(--amber);border-color:var(--amber)':''}" onclick="event.stopPropagation();ajouterProduitRapide(${a.id})">${dispo<=0?'Vendre':'Ajouter'}</button>
+              ${qteInPanier>0?`<button class="prod-card-btn-plus" onclick="event.stopPropagation();retirerUnDuPanier(${a.id})">−</button>`:''}
+            </div>
+            ${dispo<=0?'<div style="font-size:10px;color:var(--amber);font-weight:600;margin-top:2px">⚠️ Stock épuisé</div>':''}
+          </div>
+        </div>`;
+}
+
+function _venteHtmlPanier(){
+  const sousTotal=window.panier.reduce((s,l)=>s+l.mt,0);
+  const remiseMt=window.remise.type==='%'?Math.round(sousTotal*Math.min(window.remise.val||0,100)/100):Math.min(window.remise.val||0,sousTotal);
+  const totalFinal=Math.max(0,sousTotal-remiseMt);
+  const totalQte=window.panier.reduce((s,l)=>s+l.qte,0);
+  return `
+    ${window.panier.length>0?`
+    <div class="panier-compact">
+      <div>
+        <div class="panier-compact-info">🛒 ${totalQte} article${totalQte>1?'s':''} dans le panier</div>
+        <div class="panier-compact-total">${F(totalFinal)}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="panier-compact-btn" onclick="ouvrirPanierModal()">
+          📋 Voir & Valider
+        </button>
+        <button onclick="viderPanier()" style="padding:8px 12px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">✕ Vider</button>
+      </div>
+    </div>`:`
+    <div style="background:var(--surface);border:1.5px dashed var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;color:var(--text3)">
+      <span style="font-size:24px">🛒</span>
+      <div><div style="font-weight:600;color:var(--text2)">Panier vide</div><div style="font-size:12px">Clique sur un article pour l'ajouter</div></div>
+    </div>`}`;
+}
+function rVenteMaj(aid){
+  // Mise à jour légère : seulement le bandeau panier + la carte touchée
+  const z=document.getElementById('vente-panier-zone');
+  if(!z||currentPage!=='vente'){ rVente(); return; }
+  z.innerHTML=_venteHtmlPanier();
+  const a=ga(aid);
+  const old=document.querySelector('.vente-rapide-grid .prod-card[data-aid="'+aid+'"]');
+  if(a&&old){
+    const t=document.createElement('div'); t.innerHTML=_venteHtmlCarte(a).trim();
+    const n=t.firstElementChild; if(n) old.replaceWith(n);
+  }
+}
+let _venteSearchTimer=null;
+function venteSearchInput(el){
+  window.venteSearch=el.value;
+  clearTimeout(_venteSearchTimer);
+  _venteSearchTimer=setTimeout(()=>{
+    const pos=el.selectionStart;
+    rVente();
+    const n=document.getElementById('vente-search-inp');
+    if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} }
+  },250);
+}
+
 function rVente(){
   if(!window.panier) window.panier=[];
   if(!window.remise) window.remise={type:'%',val:0};
@@ -4801,30 +4878,15 @@ function rVente(){
   stockFiltre=stockFiltre.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{sensitivity:'base'}));
 
   document.getElementById('content').innerHTML=`
-    <!-- PANIER COMPACT -->
-    ${window.panier.length>0?`
-    <div class="panier-compact">
-      <div>
-        <div class="panier-compact-info">🛒 ${totalQte} article${totalQte>1?'s':''} dans le panier</div>
-        <div class="panier-compact-total">${F(totalFinal)}</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="panier-compact-btn" onclick="ouvrirPanierModal()">
-          📋 Voir & Valider
-        </button>
-        <button onclick="viderPanier()" style="padding:8px 12px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">✕ Vider</button>
-      </div>
-    </div>`:`
-    <div style="background:var(--surface);border:1.5px dashed var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;color:var(--text3)">
-      <span style="font-size:24px">🛒</span>
-      <div><div style="font-weight:600;color:var(--text2)">Panier vide</div><div style="font-size:12px">Clique sur un article pour l'ajouter</div></div>
-    </div>`}
+    <div id="vente-panier-zone">
+${_venteHtmlPanier()}
+    </div>
 
     <!-- BARRE RECHERCHE -->
     <div class="vente-search-bar">
       <span style="font-size:18px">🔍</span>
-      <input type="text" placeholder="Rechercher un article..." value="${window.venteSearch||''}"
-        oninput="window.venteSearch=this.value;rVente()"
+      <input type="text" id="vente-search-inp" placeholder="Rechercher un article..." value="${window.venteSearch||''}"
+        oninput="venteSearchInput(this)"
         onkeydown="if(event.key==='Escape'){window.venteSearch='';rVente()}">
       ${window.venteSearch?`<button onclick="window.venteSearch='';rVente()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">✕</button>`:''}
       <button class="btn btn-sm" onclick="openScanner('vente')" title="Scanner">📷</button>
@@ -4841,34 +4903,7 @@ function rVente(){
     <!-- GRILLE PRODUITS -->
     <div class="vente-rapide-grid">
       ${stockFiltre.length===0?`<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text3)">Aucun article trouvé</div>`:''}
-      ${stockFiltre.map(a=>{
-        const dispo=sa(a);
-        const inPanier=window.panier.find(l=>l.aid===a.id);
-        const qteInPanier=inPanier?inPanier.qte:0;
-        const imgEl=a.photo
-          ?`<img class="prod-card-img" src="${a.photo}" onerror="this.outerHTML='<div class=\'prod-card-img-placeholder\'>📦</div>'">`
-          :`<div class="prod-card-img-placeholder">${a.cat==='Lingerie'?'👗':a.cat==='Audio-Vidéo'?'🎧':'📦'}</div>`;
-        const prixPromo=getPrixPromo(a.id,window.typePrix||'detail');
-        const infoPromo=prixPromo!==null?getInfoPromo(a.id):null;
-        return`
-        <div class="prod-card${inPanier?' in-panier':''}${dispo<=0?' rupture':''}" onclick="ajouterProduitRapide(${a.id})">
-          ${imgEl}
-          <div class="prod-card-stock${dispo<=a.seuil?' low':''}">Stock: ${dispo}</div>
-          ${qteInPanier>0?`<div class="prod-card-badge-panier">${qteInPanier}</div>`:''}
-          ${prixPromo!==null?`<div style="position:absolute;top:7px;right:7px;background:var(--red);color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700">-${infoPromo?.remise}${infoPromo?.remiseType==='%'?'%':'F'}</div>`:''}
-          <div class="prod-card-body">
-            <div class="prod-card-nom" title="${a.nom}">${a.nom}</div>
-            <div class="prod-card-prix">
-              ${prixPromo!==null?`<span style="color:var(--red);font-weight:800">${F(prixPromo)}</span> <span style="text-decoration:line-through;font-size:10px;color:var(--text3);font-weight:400">${F(a.pv)}</span>`:`${F(a.pv)}`}
-            </div>
-            <div class="prod-card-actions">
-              <button class="prod-card-btn prod-card-btn-vendre" style="${dispo<=0?'background:var(--amber);border-color:var(--amber)':''}" onclick="event.stopPropagation();ajouterProduitRapide(${a.id})">${dispo<=0?'Vendre':'Ajouter'}</button>
-              ${qteInPanier>0?`<button class="prod-card-btn-plus" onclick="event.stopPropagation();retirerUnDuPanier(${a.id})">−</button>`:''}
-            </div>
-            ${dispo<=0?'<div style="font-size:10px;color:var(--amber);font-weight:600;margin-top:2px">⚠️ Stock épuisé</div>':''}
-          </div>
-        </div>`;
-      }).join('')}
+      ${stockFiltre.map(_venteHtmlCarte).join('')}
     </div>
 
     <!-- HISTORIQUE VENTES -->
@@ -4879,6 +4914,9 @@ function rVente(){
         let vList=ventesB.slice().reverse();
         if(window.venteLivrFilter==='Non livré') vList=vList.filter(v=>v.livraison==='Non livré');
         else if(window.venteLivrFilter==='Livré') vList=vList.filter(v=>v.livraison==='Livré'||!v.livraison);
+        const _tot=vList.length, _lim=window.venteHistoLimite||50;
+        vList=vList.slice(0,_lim);
+        const _more=_tot>_lim?`<tr><td colspan="9" style="text-align:center;padding:12px"><button class="btn" onclick="window.venteHistoLimite=(window.venteHistoLimite||50)+100;rVente()">Afficher plus (${_tot-_lim} restantes)</button></td></tr>`:'';
         return vList.map(v=>{
         const lignes=v.lignes||[{aid:v.aid,qte:v.qte,pu:v.pu,mt:v.mt}];
         const noms=lignes.map(l=>{const a=ga(l.aid);return a?a.nom:'?'}).join(', ');
@@ -4906,7 +4944,7 @@ function rVente(){
             <button class="btn-icon btn-sm" onclick="ouvrirModifVente(${v.id})" title="Modifier la vente" style="color:var(--blue)">✏️</button>
             <button class="btn-icon btn-sm" onclick="delVente(${v.id})" title="Supprimer" style="color:var(--red)">✕</button>
           </div></td>
-        </tr>`;}).join('');
+        </tr>`;}).join('')+_more;
         })()}
       </tbody></table></div>`;
 }
@@ -4947,7 +4985,7 @@ function ajouterProduitRapide(aid){
     window.panier.push({aid:a.id,nom:a.nom,qte:1,pu,mt:pu,pa:a.pa||0,dispo,typePrix:type});
   }
   toast(`✅ ${a.nom} ajouté`);
-  rVente();
+  rVenteMaj(aid);
 }
 
 function retirerUnDuPanier(aid){
@@ -4956,7 +4994,7 @@ function retirerUnDuPanier(aid){
   window.panier[idx].qte--;
   window.panier[idx].mt=window.panier[idx].qte*window.panier[idx].pu;
   if(window.panier[idx].qte<=0) window.panier.splice(idx,1);
-  rVente();
+  rVenteMaj(aid);
 }
 
 function ouvrirPanierModal(){
@@ -20526,7 +20564,7 @@ function renderCaisseRapide(partiel){
         ${crSearch?`<button onclick="crSearch='';renderCaisseRapide()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">✕</button>`:''}
       </div>
       <!-- Type de prix -->
-      <div style="display:flex;gap:4px;padding:6px 0;flex-wrap:wrap">
+      <div style="display:flex;gap:4px;padding:6px 10px;flex-wrap:wrap">
         ${['detail','semi','gros'].map(t=>`<button onclick="crSetTypePrix('${t}')" style="flex:1;padding:5px;font-size:11px;font-weight:700;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:${crTypePrix===t?'var(--navy)':'var(--surface2)'};color:${crTypePrix===t?'#fff':'var(--text2)'}">${t==='detail'?'Détail':t==='semi'?'Semi-gros':'Gros'}</button>`).join('')}
       </div>
       <!-- Filtres catégorie -->
