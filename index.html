@@ -13010,6 +13010,7 @@ function appliquerTableauFECECAV(){
     d.notes=((d.notes?d.notes+' · ':'')+'CECAV La Grâce Tsévié · dossier G03PRT202601284 · effet 16/10/2026 · 12 échéances de 72 210 (dernière 73 200)');
     try{saveLocal(S);}catch(e){}
     try{ if(S.session?.role==='admin' && typeof saveCollectionFirebase==='function') saveCollectionFirebase('dettesPerso',S.dettesPerso); }catch(e){}
+    try{ syncAgendaPret(); }catch(e){}
     return true;
   }catch(e){console.warn('Tableau FECECAV:',e);return false;}
 }
@@ -13695,6 +13696,7 @@ function saveRembours(id){
       d.paiements.push({id:genId(),date:D(),cid,mt,capital,interet});
       d.interetsPayes=(d.interetsPayes||0)+interet;
       let cum=0;(d.echeancier||[]).forEach(e=>{cum+=(+e.capital||0);e.paye=(d.rembourse>=cum-1);});
+      (S.agenda||[]).forEach(a=>{ if(a.pretId==d.id&&!a.fait){const e=(d.echeancier||[]).find(x=>x.n==a.pretN); if(e&&e.paye){a.fait=true;a.dateFait=D();}} });
     } else {
       S.depenses.push({id:genId(),date:D(),four:d.personne,cat:'Remboursement emprunt',mt,mode:nomCompte(cid),cid,notes:`Remboursement emprunt — ${d.personne}`,heure:heureR,bid:getBid(),ts:Date.now()});
     }
@@ -13720,7 +13722,7 @@ function saveRembours(id){
       } else { toast('✅ Entièrement soldé !'); }
     } else { toast('✅ Entièrement soldé !'); }
   } else toast(`✅ ${F(mt)} · Reste: ${F(d.montant-d.rembourse)}`);
-  saveData();closeModal();rDettes();
+  saveData();closeModal();if(currentPage==='agenda')rAgenda();else rDettes();
 }
 function delDettePerso(id){
   if(!confirm('Supprimer ?'))return;
@@ -15393,8 +15395,42 @@ let agendaFiltrePeriode='semaine2';
 let agendaFiltreType='tout';
 let agendaFiltreCompte='tout';
 
+// ─── Échéances de crédit → « Opérations suivantes » (agenda) ───
+// Crée une ligne d'agenda par échéance non payée de chaque crédit formel (idempotent, sans doublon)
+function syncAgendaPret(){
+  try{
+    if(!S.agenda) S.agenda=[];
+    let modif=false;
+    (S.dettesPerso||[]).forEach(d=>{
+      if(!isCreditFormel(d)||d.statut==='Soldé'||!Array.isArray(d.echeancier)) return;
+      d.echeancier.forEach(e=>{
+        const ex=S.agenda.find(a=>a.pretId==d.id&&a.pretN==e.n);
+        if(e.paye){
+          if(ex&&!ex.fait&&!ex._deleted){ex.fait=true;ex.dateFait=D();modif=true;}
+          return;
+        }
+        if(ex) { // garder montant/date alignés sur le tableau tant que la ligne n'est pas faite
+          if(!ex.fait&&!ex._deleted&&(ex.montant!==e.mensualite||ex.date!==e.date)){ex.montant=e.mensualite;ex.date=e.date;modif=true;}
+          return;
+        }
+        S.agenda.push({
+          id:genId(),titre:`💳 Crédit ${d.personne} — échéance ${e.n}/${d.echeancier.length}`,
+          date:e.date,type:'depense',montant:e.mensualite,cat:'Remboursement crédit',
+          cid:d.cid||null,recurrence:null,modeleId:null,
+          notes:`dont ${F(e.interet)} d'intérêts · capital ${F(e.capital)} · reste ${F(e.solde)} après paiement`,
+          fait:false,pretId:d.id,pretN:e.n,ts:Date.now()
+        });
+        modif=true;
+      });
+    });
+    if(modif){ try{saveLocal(S);}catch(_){}
+      try{ if(S.session?.role==='admin'&&typeof saveCollectionFirebase==='function') saveCollectionFirebase('agenda',S.agenda); }catch(_){}
+    }
+  }catch(e){console.warn('syncAgendaPret:',e);}
+}
 function rAgenda(){
   if(!S.agenda)S.agenda=[];
+  syncAgendaPret();
   const today=D();
   const demain=new Date();demain.setDate(demain.getDate()+1);
   const demainStr=demain.toISOString().split('T')[0];
@@ -15639,6 +15675,7 @@ function saveEditAgenda(id){
 
 function marquerFait(id){
   const op=S.agenda.find(a=>a.id==id);if(!op)return;
+  if(op.pretId){ rembourserDette(op.pretId); return; }
   const devise=(S.parametres&&S.parametres.devise)||'FCFA';
 
   // Construire les options selon le type
