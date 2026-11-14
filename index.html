@@ -16246,7 +16246,7 @@ function appliquerModele(id, agendaOpId){
     <div class="fg"><label class="fl">Montant (modifiable)</label><input class="fi" type="number" id="app-mt" value="${m.montant}"></div>
     <div class="fg"><label class="fl">${m.type==='transfert'?'Compte source':'Compte'}</label>${selectComptes('app-cid', m.cid||premierCompteId())}</div>
     ${m.type==='transfert'?`<div class="fg"><label class="fl">Compte destination</label>${selectComptes('app-cid2', m.cid2||premierCompteId())}</div>`:''}
-    <div class="fg"><label class="fl">Notes</label><input class="fi" id="app-notes" value="${m.notes||''}"></div>
+    <div class="fg"><label class="fl">Notes</label><input class="fi" id="app-notes" value="${_escAg(m.notes)}"></div>
     <div class="mff"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-success" onclick="confirmerModele(${id},${_agendaRef})">✅ Confirmer</button></div>`);
 }
 function confirmerModele(id, agendaOpId){
@@ -16290,6 +16290,8 @@ function confirmerModele(id, agendaOpId){
   }else if(m.type==='transfert'){
     const cid2=document.getElementById('app-cid2')?.value||m.cid2||'';
     if(!cid2||cid2===cid)return toast('❌ Choisissez un compte destination différent');
+    const _dup=(S.transferts||[]).some(t=>!t._deleted&&t.date===date&&(+t.mt)===(+mt)&&(t.de??t.cidSrc)==cid&&(t.vers??t.cidDst)==cid2&&(t.desc||'')===m.nom&&(t.notes||'')===(notes||''));
+    if(_dup){ toast('⚠️ Ce transfert existe déjà pour cette date.'); return; }
     if(!S.transferts)S.transferts=[];
     S.transferts.push({id:genId(),date,desc:m.nom,mt,cidSrc:cid,cidDst:cid2,notes,heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
     debiterCompte(cid,mt);
@@ -16477,7 +16479,7 @@ function addAgenda(){
         <input class="fi" type="date" id="ag-date" value="${D()}">
       </div>
       <div class="fg"><label class="fl">Type</label>
-        <select class="fs" id="ag-type">
+        <select class="fs" id="ag-type" onchange="document.getElementById('ag-cid2-wrap').style.display=this.value==='transfert'?'':'none'">
           <option value="depense">💸 Dépense</option>
           <option value="revenu">💰 Revenu</option>
           <option value="achat">📦 Achat</option>
@@ -16493,6 +16495,9 @@ function addAgenda(){
       <div class="fg"><label class="fl">Compte lié</label>
         ${selectComptes('ag-cid', premierCompteId())}
       </div>
+    </div>
+    <div class="fg" id="ag-cid2-wrap" style="display:none"><label class="fl">Compte destination (transfert)</label>
+      ${selectComptes('ag-cid2', premierCompteId())}
     </div>
     <div class="fg"><label class="fl">Récurrence</label>
       <select class="fs" id="ag-rec">
@@ -16525,6 +16530,7 @@ function saveAgenda(){
     montant:+document.getElementById('ag-mt').value||0,
     cat:document.getElementById('ag-cat')?document.getElementById('ag-cat').value||'':'',
     cid:document.getElementById('ag-cid').value||null,
+    cid2:document.getElementById('ag-type').value==='transfert'?(document.getElementById('ag-cid2')?.value||null):null,
     recurrence:document.getElementById('ag-rec').value||null,
     modeleId,notes:document.getElementById('ag-notes').value,fait:false,
     ts:Date.now()
@@ -16538,14 +16544,14 @@ function editAgenda(id){
   const devise=(S.parametres&&S.parametres.devise)||'FCFA';
   modal(`<div class="mft">✏️ Modifier l'opération planifiée</div>
     <div class="fg"><label class="fl">Titre / Description</label>
-      <input class="fi" id="ag-titre" value="${op.titre}">
+      <input class="fi" id="ag-titre" value="${_escAg(op.titre)}">
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">Date</label>
         <input class="fi" type="date" id="ag-date" value="${op.date}">
       </div>
       <div class="fg"><label class="fl">Type</label>
-        <select class="fs" id="ag-type">
+        <select class="fs" id="ag-type" onchange="document.getElementById('ag-cid2-wrap').style.display=this.value==='transfert'?'':'none'">
           <option value="depense"${op.type==='depense'?' selected':''}>💸 Dépense</option>
           <option value="revenu"${op.type==='revenu'?' selected':''}>💰 Revenu</option>
           <option value="achat"${op.type==='achat'?' selected':''}>📦 Achat</option>
@@ -16562,6 +16568,9 @@ function editAgenda(id){
         ${selectComptes('ag-cid', op.cid||premierCompteId())}
       </div>
     </div>
+    <div class="fg" id="ag-cid2-wrap" style="display:${op.type==='transfert'?'':'none'}"><label class="fl">Compte destination (transfert)</label>
+      ${selectComptes('ag-cid2', op.cid2||((op.modeleId&&(S.modeles||[]).find(m=>m.id==op.modeleId)||{}).cid2)||premierCompteId())}
+    </div>
     <div class="fg"><label class="fl">Récurrence</label>
       <select class="fs" id="ag-rec">
         <option value=""${!op.recurrence?' selected':''}>Aucune (ponctuel)</option>
@@ -16576,7 +16585,7 @@ function editAgenda(id){
       </select>
     </div>`:''}
     <div class="fg"><label class="fl">Notes</label>
-      <input class="fi" id="ag-notes" value="${op.notes||''}">
+      <input class="fi" id="ag-notes" value="${_escAg(op.notes)}">
     </div>
     <div class="mff">
       <button class="btn" onclick="closeModal()">Annuler</button>
@@ -16593,12 +16602,14 @@ function saveEditAgenda(id){
   op.type=document.getElementById('ag-type').value;
   op.montant=+document.getElementById('ag-mt').value||0;
   op.cid=document.getElementById('ag-cid').value||null;
+  op.cid2=op.type==='transfert'?(document.getElementById('ag-cid2')?.value||null):null;
   op.recurrence=document.getElementById('ag-rec').value||null;
   op.modeleId=document.getElementById('ag-modele')?+document.getElementById('ag-modele').value||null:op.modeleId||null;
   op.notes=document.getElementById('ag-notes').value;
   saveData();closeModal();toast('✅ Opération modifiée');rAgenda();
 }
 
+function _escAg(t){return String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function marquerFait(id){
   const op=S.agenda.find(a=>a.id==id);if(!op)return;
   if(op.pretId){ rembourserDette(op.pretId); return; }
@@ -16607,10 +16618,14 @@ function marquerFait(id){
   // Construire les options selon le type
   const compteLabel=op.type==='transfert'?'Compte source':'Compte';
   const showCompteVers=op.type==='transfert';
+  // FIX : reprendre les comptes du modèle lié (source + destination) au lieu du 1er compte
+  const _mod=op.modeleId?(S.modeles||[]).find(m=>m.id==op.modeleId):null;
+  const _cidSrcDef=op.cid||(_mod&&_mod.cid)||premierCompteId();
+  const _cidDstDef=op.cid2||(_mod&&_mod.cid2)||premierCompteId();
 
   modal(`<div class="mft">✅ Confirmer l'opération</div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px">
-      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${op.titre}</div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${_escAg(op.titre)}</div>
       <div style="font-size:12px;color:var(--text3)">${op.date} · ${op.type}${op.recurrence?' · 🔁 '+op.recurrence:''}</div>
     </div>
     <div class="fr">
@@ -16627,10 +16642,10 @@ function marquerFait(id){
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Le montant total sera multiplié · les occurrences manquantes seront cochées automatiquement</div>
     </div>`:''}
     <div class="fg"><label class="fl">${compteLabel}</label>
-      ${selectComptes('cf-cid', op.cid||premierCompteId())}
+      ${selectComptes('cf-cid', _cidSrcDef)}
     </div>
     ${showCompteVers?`<div class="fg"><label class="fl">Compte destination</label>
-      ${selectComptes('cf-cid-vers', premierCompteId())}
+      ${selectComptes('cf-cid-vers', _cidDstDef)}
     </div>`:''}
     ${op.type==='depense'?`<div class="fg"><label class="fl">Catégorie</label>
       ${selectCatDep('cf-cat',(op.cat||''))}
@@ -16639,7 +16654,7 @@ function marquerFait(id){
       ${selectCatRev('cf-cat',(op.cat||''))}
     </div>`:''}
     <div class="fg"><label class="fl">Notes</label>
-      <input class="fi" id="cf-notes" value="${op.notes||''}" placeholder="Notes optionnelles...">
+      <input class="fi" id="cf-notes" value="${_escAg(op.notes)}" placeholder="Notes optionnelles...">
     </div>
     <div class="mff">
       <button class="btn" onclick="closeModal()">Annuler</button>
@@ -16666,7 +16681,7 @@ function _creerOccurrence(op, dateStr, parentId){
   if(existe) return null;
   const nouv={
     id:genId(), titre:op.titre, type:op.type, montant:op.montant,
-    cat:op.cat||'', cid:op.cid||null, notes:op.notes||'', recurrence:op.recurrence||null,
+    cat:op.cat||'', cid:op.cid||null, cid2:op.cid2||null, notes:op.notes||'', recurrence:op.recurrence||null,
     modeleId:op.modeleId||null, date:dateStr, fait:false, dateFait:null,
     parent_id:parentId, ts:Date.now()
   };
@@ -16702,7 +16717,7 @@ function confirmerFait(id){
         debiterCompte(cid,mtTotal);
         crediterCompte(cidVers,mtTotal);
         if(!S.transferts)S.transferts=[];
-        S.transferts.push({id:genId(),date,de:cid,vers:cidVers,mt:mtTotal,notes:notes+(nb>1?` (${nb} périodes)`:''),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+        S.transferts.push({id:genId(),date,desc:op.titre,de:cid,vers:cidVers,mt:mtTotal,notes:notes+(nb>1?` (${nb} périodes)`:''),heure:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),bid:getBid(),ts:Date.now()});
         toast(`✅ Transfert de ${F(mtTotal)} — ${nomCompte(cid)} → ${nomCompte(cidVers)}`);
       } else {
         return toast('❌ Comptes source et destination doivent être différents');
